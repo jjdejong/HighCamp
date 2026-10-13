@@ -33,6 +33,8 @@ struct GarminMapDrawing: Sendable {
     let features: MapFeatureSet
     let isOverlay: Bool
     let opacity: Double
+    /// Drawn with softer colours: patterned areas filled plainly, everything paler. See `GarminPainter.draw`.
+    var softColors = false
 }
 
 extension GarminMapConfiguration {
@@ -43,7 +45,10 @@ extension GarminMapConfiguration {
             let features = await MapFeatureCache.shared.features(
                 in: area, metersPerPoint: metersPerPoint, map: layer.url, finestLevel: layer.isOverlay, detailOffset: detailOffset
             )
-            drawings.append(GarminMapDrawing(features: features, isOverlay: layer.isOverlay, opacity: layer.opacity))
+            drawings.append(GarminMapDrawing(
+                features: features, isOverlay: layer.isOverlay, opacity: layer.opacity,
+                softColors: softColors && !layer.isOverlay
+            ))
         }
         return drawings
     }
@@ -118,6 +123,8 @@ enum WebMercator {
 enum GarminPainter {
     /// Inside a map's coverage, where no area is filled.
     static let land = NSColor(calibratedRed: 0.976, green: 0.973, blue: 0.949, alpha: 1)
+    /// With soft colours, how much white is laid over the full maps. Overlays, such as contours, stay as they are.
+    static let softening = 0.35
 
     /// Draws the maps bottom first: land where a full map draws something, then each map's features, with its
     /// opacity. Elsewhere the picture stays transparent, so whatever is under it shows. A map whose level here holds
@@ -128,6 +135,20 @@ enum GarminPainter {
         _ drawings: [GarminMapDrawing], in rect: NSRect, patternOrigin: NSPoint, step: Int = 1,
         project: (Coordinate) -> NSPoint
     ) {
+        let context = NSGraphicsContext.current?.cgContext
+        // Soft colours: the full maps are drawn in a layer, then paled with white where they drew something, the
+        // way IGN's plan is drawn lighter than a road map. The layer is closed before the first overlay.
+        var softening = drawings.contains { $0.softColors }
+        if softening {
+            context?.beginTransparencyLayer(auxiliaryInfo: nil)
+        }
+        func endSoftening() {
+            guard softening else { return }
+            NSColor.white.withAlphaComponent(Self.softening).setFill()
+            rect.fill(using: .sourceAtop)
+            context?.endTransparencyLayer()
+            softening = false
+        }
         land.setFill()
         for drawing in drawings where !drawing.isOverlay && !(drawing.features.lines.isEmpty && drawing.features.areas.isEmpty) {
             for bounds in drawing.features.coverage {
@@ -138,28 +159,32 @@ enum GarminPainter {
         }
         NSGraphicsContext.current?.patternPhase = NSPoint(x: -patternOrigin.x, y: -patternOrigin.y)
         for drawing in drawings {
-            let context = NSGraphicsContext.current?.cgContext
+            if drawing.isOverlay {
+                endSoftening()
+            }
             let faded = drawing.opacity < 1
             if faded {
                 context?.setAlpha(drawing.opacity)
                 context?.beginTransparencyLayer(auxiliaryInfo: nil)
             }
-            draw(drawing.features, step: step, project: project)
+            draw(drawing.features, plainAreas: drawing.softColors, step: step, project: project)
             if faded {
                 context?.endTransparencyLayer()
                 context?.setAlpha(1)
             }
         }
+        endSoftening()
     }
 
-    /// One map's areas in the map's order, then its lines in two passes (see below).
-    private static func draw(_ features: MapFeatureSet, step: Int, project: (Coordinate) -> NSPoint) {
+    /// One map's areas in the map's order, then its lines in two passes (see below). With `plainAreas`, patterned
+    /// areas (forest drawn as rows of trees, say) are filled plainly, which makes the map much less busy.
+    private static func draw(_ features: MapFeatureSet, plainAreas: Bool, step: Int, project: (Coordinate) -> NSPoint) {
         for group in features.areas {
             let path = NSBezierPath()
             for ring in group.rings {
                 add(ring, to: path, closed: true, step: step, project: project)
             }
-            fillColor(group.style).setFill()
+            (plainAreas ? plainColor(group.style) : fillColor(group.style)).setFill()
             path.fill()
         }
 
@@ -264,6 +289,17 @@ enum GarminPainter {
 
     private static let patternLock = NSLock()
     nonisolated(unsafe) private static var patterns: [AreaStyle: NSColor] = [:]
+
+    /// A patterned area's plain fill: the pattern's average colour, so a forest drawn as trees stays forest green.
+    /// Where the pattern's background is transparent, the colour is as transparent as the pattern is empty.
+    private static func plainColor(_ style: AreaStyle) -> NSColor {
+        guard let pattern = style.pattern, !pattern.bits.isEmpty else { return style.fill.nsColor }
+        let set = CGFloat(pattern.bits.filter { $0 }.count) / CGFloat(pattern.bits.count)
+        guard let background = style.background else {
+            return style.fill.nsColor.withAlphaComponent(set)
+        }
+        return background.nsColor.blended(withFraction: set, of: style.fill.nsColor) ?? background.nsColor
+    }
 
     /// The fill for an area: a plain colour, or its 32 by 32 pattern as a pattern colour, made once per style.
     private static func fillColor(_ style: AreaStyle) -> NSColor {

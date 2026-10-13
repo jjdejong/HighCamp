@@ -172,6 +172,10 @@ final class MapLayerSettings {
     var garminDetail: GarminDetail {
         didSet { UserDefaults.standard.set(garminDetail.rawValue, forKey: "map.garminDetailLevel") }
     }
+    /// Garmin maps drawn paler and with plain areas, nearer IGN's look than the maps' own strong style.
+    var garminSoftColors: Bool {
+        didSet { UserDefaults.standard.set(garminSoftColors, forKey: "map.garminSoftColors") }
+    }
     /// Dashed outlines and names for the area each map in the map folder covers.
     var showCoverage: Bool {
         didSet { UserDefaults.standard.set(showCoverage, forKey: "map.showCoverage") }
@@ -186,11 +190,12 @@ final class MapLayerSettings {
         contourOpacity = opacity > 0 ? opacity : 0.7
         showCoverage = defaults.bool(forKey: "map.showCoverage")
         garminDetail = GarminDetail(rawValue: defaults.string(forKey: "map.garminDetailLevel") ?? "") ?? .normal
+        garminSoftColors = defaults.object(forKey: "map.garminSoftColors") as? Bool ?? true
     }
 
     /// The base map for a picture of what the screen shows.
     func pictureBase(garmin: GarminMapListStore) -> PictureBase {
-        PictureBase(layer: base, contours: showContours, garmin: garmin.configuration(detail: garminDetail))
+        PictureBase(layer: base, contours: showContours, garmin: garmin.configuration(detail: garminDetail, softColors: garminSoftColors))
     }
 
     /// Attribution for the layers on screen.

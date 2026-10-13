@@ -18,7 +18,7 @@ struct MapPane: View {
     var body: some View {
         MapKitView(
             base: layers.base,
-            garmin: garminMaps.configuration(detail: layers.garminDetail),
+            garmin: garminMaps.configuration(detail: layers.garminDetail, softColors: layers.garminSoftColors),
             showContours: layers.showContours,
             contourOpacity: layers.contourOpacity,
             scene: scene,

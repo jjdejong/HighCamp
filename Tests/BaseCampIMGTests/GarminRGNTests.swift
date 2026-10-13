@@ -18,6 +18,31 @@ final class GarminRGNTests: XCTestCase {
     }
 
     /// A detailed map tile's coarsest level is inherited: it holds no geometry and only leads to finer levels.
+    /// The "same sign" flag of y follows the x flag even when x is signed. Reading it from the x bit made streets
+    /// zigzag. The bitstream is a street of OFM near Lans-en-Vercors, which runs north with x signed.
+    func testTheYSignFlagFollowsASignedX() throws {
+        let raw: [UInt8] = [
+            0x32, 0x00, 0x11, 0x08, 0xA1, 0x88, 0x65, 0x40, 0x92, 0x10, 0x22, 0x14, 0xC0, 0x8C, 0x24,
+            0xC6, 0x34, 0x08, 0x4F, 0x40, 0xDC, 0x70, 0x1B, 0xDE, 0x10, 0x87, 0x49, 0xD8, 0x03,
+        ]
+        let fields = try XCTUnwrap(GarminRGNDecoder.bitFields(base: 0x41, first: Int(raw[0]), version2: false))
+        XCTAssertTrue(fields.signs.xHasSign)
+        XCTAssertFalse(fields.signs.yHasSign)
+        XCTAssertFalse(fields.signs.negativeY)
+        XCTAssertEqual(fields.signs.signBits, 3)
+
+        var stream = CoordinateBits(
+            source: RGNBytes(base: 0, data: raw), start: 0, count: raw.count,
+            bitsX: fields.bitsX, bitsY: fields.bitsY, extraBit: true, signs: fields.signs
+        )
+        var deltas: [(x: Int, y: Int)] = []
+        while let delta = stream.next() {
+            deltas.append(delta)
+        }
+        XCTAssertGreaterThan(deltas.count, 10)
+        XCTAssertTrue(deltas.allSatisfy { $0.y >= 0 }, "\(deltas)")
+    }
+
     func testTheCoarsestLevelOfARealMapTileIsInherited() throws {
         guard let path = ProcessInfo.processInfo.environment["IMG_TEST_PATH"], !path.isEmpty else {
             throw XCTSkip("set IMG_TEST_PATH to a Garmin .img file")

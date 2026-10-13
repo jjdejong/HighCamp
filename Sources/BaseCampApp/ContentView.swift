@@ -100,6 +100,7 @@ struct ContentView: View {
                                         Text(detail.label).tag(detail)
                                     }
                                 }
+                                Toggle("Softer Colours", isOn: $mapLayers.garminSoftColors)
                             }
                             Divider()
                             Picker("Base map", selection: $mapLayers.base) {

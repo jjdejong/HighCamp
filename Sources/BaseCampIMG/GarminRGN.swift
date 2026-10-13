@@ -582,10 +582,12 @@ enum GarminRGNDecoder {
     /// Bit widths and sign conventions from the base byte and the first bitstream byte.
     static func bitFields(base: Int, first: Int, version2: Bool) -> (bitsX: Int, bitsY: Int, signs: SignInfo)? {
         var signs = SignInfo()
+        // Each "same sign" flag takes a bit, followed by the sign itself when it is set (QMapShack's bits_per_coord).
         var mask = 1
-        if first & mask != 0 {
+        let xSameSign = first & mask != 0
+        mask <<= 1
+        if xSameSign {
             signs.xHasSign = false
-            mask <<= 1
             signs.negativeX = first & mask != 0
             mask <<= 1
             signs.signBits += 1
@@ -594,9 +596,10 @@ enum GarminRGNDecoder {
         }
         var bitsX = bitsPerCoordinate(base & 0x0F, signed: signs.xHasSign)
 
-        if first & mask != 0 {
+        let ySameSign = first & mask != 0
+        mask <<= 1
+        if ySameSign {
             signs.yHasSign = false
-            mask <<= 1
             signs.negativeY = first & mask != 0
             mask <<= 1
             signs.signBits += 1

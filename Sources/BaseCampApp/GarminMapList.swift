@@ -96,8 +96,10 @@ final class GarminMapListStore {
     }
 
     /// What the renderer needs: the maps that are on, bottom first, with their files.
-    func configuration(detail: GarminDetail) -> GarminMapConfiguration {
-        guard let folder else { return GarminMapConfiguration(layers: [], detailOffset: detail.offset) }
+    func configuration(detail: GarminDetail, softColors: Bool) -> GarminMapConfiguration {
+        guard let folder else {
+            return GarminMapConfiguration(layers: [], detailOffset: detail.offset, softColors: softColors)
+        }
         return GarminMapConfiguration(
             layers: entries.filter(\.isEnabled).map { entry in
                 GarminMapLayer(
@@ -105,7 +107,8 @@ final class GarminMapListStore {
                     minimumZoom: entry.minimumZoom, maximumZoom: entry.maximumZoom, opacity: entry.opacity
                 )
             },
-            detailOffset: detail.offset
+            detailOffset: detail.offset,
+            softColors: softColors
         )
     }
 
@@ -142,4 +145,6 @@ struct GarminMapLayer: Equatable, Sendable {
 struct GarminMapConfiguration: Equatable, Sendable {
     var layers: [GarminMapLayer]
     var detailOffset: Int
+    /// Paler colours and plain areas instead of patterns, for a calmer map. Off draws the map's own style.
+    var softColors = false
 }

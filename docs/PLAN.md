@@ -177,8 +177,8 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
   "visible between scales"); and an opacity for overlays. Kept between launches.
 - Default: only the first full map on, so overlapping maps (OFM W and SW) are not drawn twice.
 - Overlay maps (TRE header flag 0x02 at the POI flags byte, QMapShack's `isTransparent`, as contour maps set it) are
-  drawn without a background and default to a close zoom range, where their finest level is used: their coarse
-  levels are roughly simplified and show as zigzags in steep terrain (found in G0).
+  drawn without a background and default to a close zoom range, where their finest level is used. (G0 blamed the
+  zigzags on rough coarse levels; they were a decoder bug, fixed 2026-10-13, so the overlay defaults can be relaxed.)
 - No `.gmap` support: the user's maps are published as `.img` too, with the same data (decided 2026-10-13).
 
 ### G4. The map's own elevations (DEM subfile), as BaseCamp uses them. Owner: Opus
@@ -268,7 +268,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G1 | Opus | done | 577e13a, 6ae12af | Garmin base map; overlay removed |
 | G2 | Opus | todo | | labels and icons |
 | G3 | Opus | done | bbfd0a3, 423ba46 | map list sheet; overlays use their finest level; default: first full map on |
-| G0 | Opus | closed | | not a decoder bug: the contour maps' coarse levels are roughly simplified (OFM's too, less); handled by G3 zoom ranges |
+| G0 | Opus | done | | was a decoder bug after all: the y "same sign" flag was read from the x bit when x was signed, so lines zigzagged (contours and roads); fixed 2026-10-13 with a test |
 | G4 | Opus | todo | | map DEM: relief shading and heights |
 | G5 | Opus | todo | | basemap when zoomed out |
 | C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |

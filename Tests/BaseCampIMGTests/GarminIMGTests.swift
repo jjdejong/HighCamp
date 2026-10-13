@@ -161,3 +161,18 @@ final class GarminIMGTests: XCTestCase {
         XCTAssertFalse(map.subfiles.isEmpty)
     }
 }
+
+final class GarminIMGOverlayTests: XCTestCase {
+    private let maps = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents/SynologyDrive/QMapShack/maps")
+
+    /// The user's contour maps are overlays; OFM is not. Skipped when the files are not on this Mac.
+    func testContourMapsAreTransparentAndOFMIsNot() throws {
+        let contours = maps.appendingPathComponent("Isere_contours_20m.img")
+        let ofm = maps.appendingPathComponent("OFM-EU2026_SW_GPS.img")
+        guard FileManager.default.fileExists(atPath: contours.path), FileManager.default.fileExists(atPath: ofm.path) else {
+            throw XCTSkip("the user's map folder is not on this Mac")
+        }
+        XCTAssertTrue(try GarminIMG(url: contours).isTransparent)
+        XCTAssertFalse(try GarminIMG(url: ofm).isTransparent)
+    }
+}

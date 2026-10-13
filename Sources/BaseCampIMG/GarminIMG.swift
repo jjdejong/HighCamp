@@ -56,6 +56,9 @@ public struct IMGSubfile: Equatable, Sendable {
     public let parts: [String]
     /// From the TRE header. Nil when the subfile has no TRE part or the header is empty.
     public let bounds: GeoBounds?
+    /// An overlay, such as a contour map, meant to be drawn over another map without a background. From bit 1 of
+    /// the TRE header's POI flags (byte 0x3F), as QMapShack's `isTransparent`.
+    public var isTransparent = false
 }
 
 /// A Garmin IMG map, read as a directory of subfiles. The file is read in place, not loaded whole.
@@ -68,6 +71,11 @@ public final class GarminIMG {
     /// The file reader and the directory, kept for reading subfile data on demand.
     let reader: IMGReader
     let directory: [String: [String: Part]]
+
+    /// True when any subfile is an overlay (see `IMGSubfile.isTransparent`). QMapShack treats such a map as transparent.
+    public var isTransparent: Bool {
+        subfiles.contains(where: \.isTransparent)
+    }
 
     /// The map area: the union of every subfile's bounds, or nil when there are none.
     public var coverage: GeoBounds? {
@@ -101,10 +109,14 @@ public final class GarminIMG {
         for name in directory.names {
             let parts = directory.parts[name] ?? [:]
             var bounds: GeoBounds?
+            var transparent = false
             if let tre = parts["TRE"], parts["RGN"] != nil {
                 bounds = try GarminIMG.treBounds(reader, part: tre)
+                if tre.size > 0x3F {
+                    transparent = try reader.read(tre.offset + 0x3F, 1)[0] & 0x02 != 0
+                }
             }
-            subfiles.append(IMGSubfile(name: name, parts: parts.keys.sorted(), bounds: bounds))
+            subfiles.append(IMGSubfile(name: name, parts: parts.keys.sorted(), bounds: bounds, isTransparent: transparent))
         }
         self.subfiles = subfiles
         self.reader = reader

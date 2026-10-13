@@ -21,6 +21,7 @@ clicking a stop; no right-click menu; "what is the inspector?".
   `addPlannedRoute`; the planner map layer is gone. Steep sections left after the detour passes are no longer shown.
 - Checked live with the local BRouter (scratch library): drag a stop, drag a handle, drag the line, click a stop,
   both context menus, the route tool (two clicks → Route 2, calculated, listed under Routes), and panning on empty map.
+- Confirmed by the user on 2026-10-14: dragging, the route tool, stop clicks and the context menus work.
 - Test tool note: synthetic drags need `mouseEventDeltaX/Y` set, or MapKit blanks its overlays; and the window may
   move between runs, so read its position from `listwin` each time.
 

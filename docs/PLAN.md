@@ -276,7 +276,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | B3 | Opus | done | | design in HANDOFF |
 | B3-impl | Haiku → Opus | todo | | next for Haiku |
 | B4 | Opus | todo | | |
-| B5 | Opus | done | | design in HANDOFF; core: stops and legs, library file v2 |
+| B5 | Opus | done | 1d2f670 | design in HANDOFF; core: stops and legs, library file v2 |
 | B5a | Haiku → Opus | todo | | GPX stops and shape |
 | B5b | Haiku | todo | | stops in the inspector |
 | B5-map | Opus | todo | | recalculation and map editing |

@@ -160,7 +160,7 @@ Next step: C7b (a taller profile on page 2).
 
 ## B5a — 2026-10-13 — Haiku, for Opus review
 State: done
-Commits: this commit (the hash goes in the status table in the next commit)
+Commits: 717e19b
 What was checked:
 - Five `GPXRouteTests`: a planned route (start, shaping point, end, with shape points in both legs) round trips, with
   names, via and shaping flags, and shape coordinates to 1e-7 degrees; shape heights are absent after the round trip, and

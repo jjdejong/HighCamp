@@ -66,7 +66,11 @@ enum MapImageExport {
         func draw(_ tiles: [TileKey: NSImage], alpha: CGFloat) {
             for (key, image) in tiles {
                 let at = NSPoint(x: (Double(key.column) * 256 - origin.x) * scale, y: (Double(key.row) * 256 - origin.y) * scale)
-                image.draw(in: NSRect(origin: at, size: NSSize(width: tileSize, height: tileSize)), from: .zero, operation: .sourceOver, fraction: alpha)
+                // The picture is flipped (origin top left); without respectFlipped each tile would be drawn upside down.
+                image.draw(
+                    in: NSRect(origin: at, size: NSSize(width: tileSize, height: tileSize)), from: .zero,
+                    operation: .sourceOver, fraction: alpha, respectFlipped: true, hints: nil
+                )
             }
         }
         let attribution = [base.attribution, contours ? MapTileURLs.contourAttribution : nil].compactMap { $0 }.joined(separator: " · ")

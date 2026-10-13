@@ -278,7 +278,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | B4 | Opus | todo | | |
 | B5 | Opus | done | 1d2f670 | design in HANDOFF; core: stops and legs, library file v2 |
 | B5a | Haiku → Opus | done | 717e19b | GPX stops and shape; for Opus review and a check in BaseCamp |
-| B5b | Haiku | done | this commit | stops in the inspector: name, via or shaping, distance, leg state, routing profile |
+| B5b | Haiku | done | 73b6393 | stops in the inspector: name, via or shaping, distance, leg state, routing profile |
 | B5-map | Opus | todo | | recalculation and map editing |
 | B5c | Haiku | blocked | | after B5-map |
 | B6 | Opus | todo | | |

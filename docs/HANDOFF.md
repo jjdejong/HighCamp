@@ -160,7 +160,7 @@ Next step: C7b (a taller profile on page 2).
 
 ## B5b — 2026-10-13 — Haiku
 State: done
-Commits: this commit (the hash goes in the status table in the next commit)
+Commits: 73b6393
 What was checked:
 - Six `RouteStopsTests`: the distance from the start to each stop follows the line, and the last stop's distance is the
   route's length; a route with no stops has none; the first and last stops cannot be shaping points, and setting the

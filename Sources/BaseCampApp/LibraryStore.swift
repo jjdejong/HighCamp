@@ -53,7 +53,17 @@ final class LibraryStore {
         self.fileURL = fileURL
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
         do {
-            history = UndoHistory(try LibraryFile.load(from: fileURL))
+            let stored = try LibraryFile.read(from: fileURL)
+            history = UndoHistory(stored.library)
+            if stored.version < LibraryFile.currentVersion {
+                // The next save writes the new format, which older versions of the app cannot read. Keep the
+                // file as it was, once, so going back to an older version stays possible.
+                let copy = fileURL.deletingLastPathComponent()
+                    .appendingPathComponent("Library-v\(stored.version).json")
+                if !FileManager.default.fileExists(atPath: copy.path) {
+                    try? FileManager.default.copyItem(at: fileURL, to: copy)
+                }
+            }
         } catch {
             // Keep the unreadable file, so the next save cannot overwrite it with an empty library.
             let stamp = Int(Date().timeIntervalSince1970)
@@ -632,26 +642,20 @@ final class LibraryStore {
         editSelection("Simplify", track: { $0.simplified(tolerance: tolerance) }, route: { $0.simplified(tolerance: tolerance) })
     }
 
-    /// Routes up to this many points show their points on the map as pins that can be dragged. Every point
-    /// can still be listed and deleted in the inspector, whatever the length.
-    static let draggableRoutePointLimit = 200
-
-    /// Moves one point of a route, for example by dragging it on the map. Its height is no longer known, so it is cleared.
-    func moveRoutePoint(_ id: UUID, at index: Int, to coordinate: Coordinate) {
+    /// Moves one stop of a route, for example by dragging it on the map. The legs on either side become straight
+    /// until they are recalculated (see `Route.moveStop`).
+    func moveRouteStop(_ id: UUID, at index: Int, to coordinate: Coordinate) {
         edit("Move Point") { library in
-            guard let routeIndex = library.routes.firstIndex(where: { $0.id == id }),
-                  library.routes[routeIndex].points.indices.contains(index) else { return }
-            library.routes[routeIndex].points[index].coordinate = coordinate
-            library.routes[routeIndex].points[index].elevation = nil
+            guard let routeIndex = library.routes.firstIndex(where: { $0.id == id }) else { return }
+            library.routes[routeIndex].moveStop(at: index, to: coordinate)
         }
     }
 
-    /// Deletes one point of a route.
-    func removeRoutePoint(_ id: UUID, at index: Int) {
+    /// Deletes one stop of a route.
+    func removeRouteStop(_ id: UUID, at index: Int) {
         edit("Delete Point") { library in
-            guard let routeIndex = library.routes.firstIndex(where: { $0.id == id }),
-                  library.routes[routeIndex].points.indices.contains(index) else { return }
-            library.routes[routeIndex].points.remove(at: index)
+            guard let routeIndex = library.routes.firstIndex(where: { $0.id == id }) else { return }
+            library.routes[routeIndex].removeStop(at: index)
         }
     }
 
@@ -674,7 +678,9 @@ final class LibraryStore {
             selection = .track(copy.id)
         case .route(let id)?:
             guard let route = route(id) else { return }
-            let copy = Route(name: route.name + " copy", points: route.points, color: route.color)
+            var copy = route
+            copy.id = UUID()
+            copy.name = route.name + " copy"
             edit("Duplicate") { $0.routes.append(copy) }
             selection = .route(copy.id)
         default:

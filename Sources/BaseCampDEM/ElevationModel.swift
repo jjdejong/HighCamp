@@ -188,19 +188,19 @@ public extension Track {
 
 public extension Route {
     func withElevations(from model: ElevationModel, replaceExisting: Bool) -> (Route, filled: Int, missing: Int) {
-        var copy = self
+        var points = self.points
         var filled = 0
         var missing = 0
-        for index in copy.points.indices {
-            if copy.points[index].elevation != nil && !replaceExisting { continue }
-            if let height = model.elevation(at: copy.points[index].coordinate) {
-                copy.points[index].elevation = height
+        for index in points.indices {
+            if points[index].elevation != nil && !replaceExisting { continue }
+            if let height = model.elevation(at: points[index].coordinate) {
+                points[index].elevation = height
                 filled += 1
             } else {
                 missing += 1
             }
         }
-        return (copy, filled, missing)
+        return (replacingPoints(points) ?? self, filled, missing)
     }
 }
 

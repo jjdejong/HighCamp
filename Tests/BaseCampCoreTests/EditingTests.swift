@@ -75,9 +75,13 @@ final class EditingTests: XCTestCase {
         XCTAssertTrue(simplified.segments[0].contains { $0.coordinate == points[49].coordinate })
     }
 
-    func testSimplifyOfAStraightRouteLeavesTwoPoints() {
-        let route = Route(name: "Straight", points: line(20).map { RoutePoint(coordinate: $0.coordinate, elevation: $0.elevation) })
-        XCTAssertEqual(route.simplified(tolerance: 1).points.count, 2)
+    func testSimplifyOfAStraightRouteLeavesItsStops() {
+        // A long line: its ends are stops, the rest is shape, which simplifies away.
+        let long = Route(name: "Straight", points: line(300).map { RoutePoint(coordinate: $0.coordinate, elevation: $0.elevation) })
+        XCTAssertEqual(long.simplified(tolerance: 1).points.count, 2)
+        // A short, hand-made route: every point is a stop, and stops are kept, as BaseCamp keeps via points.
+        let short = Route(name: "Clicked", points: line(5).map { RoutePoint(coordinate: $0.coordinate) })
+        XCTAssertEqual(short.simplified(tolerance: 1).points.count, 5)
     }
 
     func testCombinedJoinsSegments() {

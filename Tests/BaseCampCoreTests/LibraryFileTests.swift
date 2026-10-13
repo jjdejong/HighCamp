@@ -65,4 +65,31 @@ final class LibraryFileTests: XCTestCase {
             XCTAssertEqual(error as? LibraryFileError, .unsupportedVersion(99))
         }
     }
+
+    func testReadsAVersion1FileWithRoutesAsPoints() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("Old.json")
+        let id = UUID()
+        let json = """
+        {"version": 1, "library": {"waypoints": [], "tracks": [], "routes": [{"id": "\(id.uuidString)", "name": "Old",
+         "points": [{"coordinate": {"latitude": 45, "longitude": 6}, "name": "A", "elevation": 300},
+                    {"coordinate": {"latitude": 45.01, "longitude": 6}}]}]}}
+        """
+        try Data(json.utf8).write(to: url)
+
+        let stored = try LibraryFile.read(from: url)
+
+        XCTAssertEqual(stored.version, 1)
+        let route = try XCTUnwrap(stored.library.routes.first)
+        XCTAssertEqual(route.id, id)
+        XCTAssertEqual(route.stops.map(\.name), ["A", nil])
+        XCTAssertEqual(route.stops.first?.elevation, 300)
+        XCTAssertEqual(route.legs, [RouteLeg()])
+
+        // Saved again, it is version 2 and reads back the same.
+        try LibraryFile.save(stored.library, to: url)
+        let again = try LibraryFile.read(from: url)
+        XCTAssertEqual(again.version, 2)
+        XCTAssertEqual(again.library, stored.library)
+    }
 }

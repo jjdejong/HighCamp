@@ -42,7 +42,7 @@ struct MapPane: View {
                 store.viewBounds = bounds
             },
             onMovePoint: { reference, coordinate in
-                store.moveRoutePoint(reference.route, at: reference.index, to: coordinate)
+                store.moveRouteStop(reference.route, at: reference.index, to: coordinate)
             },
             locateRequest: store.locateRequest,
             onLocationProblem: { message in
@@ -122,10 +122,9 @@ struct MapPane: View {
             }
         }
 
-        // The points of the selected route can be dragged, when there are few enough to handle one by one.
-        if case .route(let id)? = store.selection, let selectedRoute = store.route(id),
-           selectedRoute.points.count <= LibraryStore.draggableRoutePointLimit {
-            for (index, point) in selectedRoute.points.enumerated() {
+        // The stops of the selected route can be dragged.
+        if case .route(let id)? = store.selection, let selectedRoute = store.route(id) {
+            for (index, point) in selectedRoute.stops.enumerated() {
                 content.pins.append(MapPin(
                     id: "route-point-\(selectedRoute.id)-\(index)",
                     coordinate: point.coordinate,

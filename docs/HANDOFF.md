@@ -2,6 +2,109 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## B5 design — 2026-10-13 — Opus
+State: decided; core done (this commit). Haiku tasks B5a and B5b are ready; B5c waits for B5-map.
+
+**Model** (`Sources/BaseCampCore/Route.swift`), as BaseCamp keeps routes:
+- `Route.stops: [RouteStop]`: the points the user places. A stop has an id, an optional name, a coordinate, an
+  optional height, and `isShaping` (a shaping point steers the route; a via point, the default, is also announced
+  on the device).
+- `Route.legs: [RouteLeg]`: always one fewer than the stops. A leg holds `shape` (the points strictly between its
+  two stops), `method` (`direct` straight line, `calculated` by the router, `imported` from a file or an old
+  library), the `profileID` it was calculated with, and `needsRecalculation`.
+- `Route.profileID`: the routing profile that recalculates changed legs. Nil: changed legs stay straight.
+- `Route.points` is read-only: the whole line, stops and shapes in order. Statistics, drawing, FIT courses and the
+  elevation profile use it unchanged.
+- Changes go through `moveStop`, `removeStop`, `insertStop`, `updateStop` (name and kind only), `setLeg` (a leg
+  the router calculated, taken only while its two stops are unchanged), `replacingPoints` (same number of points,
+  used for heights), `reversed`, `simplified` (shapes only; stops are kept, as BaseCamp keeps via points).
+- A stop that moves, is removed or is inserted makes its legs straight and, when the route has a
+  profile, `needsRecalculation`.
+
+**From a list of points** (`Route(name:points:)`: GPX routes without shape points, version 1 libraries, track to
+route): up to 200 points, every point is a stop and the legs are straight (routes clicked by hand). More, the ends
+and the named points are stops, and the points between are imported legs (planned or downloaded routes, which
+would otherwise get thousands of stops).
+
+**Planned routes** (`Route.planned`): the clicked points are the stops; the planned line is cut where it passes each
+stop (first point within 30 m after the previous cut, else the nearest), and each stop is moved onto the line.
+
+**Library file version 2.** A route is stored as `stops`, `legs`, `profileID`. A version 1 file is read by turning
+`points` into stops and legs as above. The first time the app opens a version 1 file it copies it, once, to
+`Library-v1.json` next to it, because the next save writes version 2, which older builds cannot read. New optional
+fields elsewhere (C2's sensor data on `TrackPoint`) need no version change: missing keys decode as nil.
+
+**GPX (task B5a)**, Garmin's extensions as BaseCamp writes them:
+- Namespaces on `<gpx>`: `xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3"`,
+  `xmlns:trp="http://www.garmin.com/xmlschemas/TripExtensions/v1"`.
+- One `<rtept>` per stop, with `ele` and `name` as now, then
+  `<extensions>`, `<trp:ViaPoint/>` or `<trp:ShapingPoint/>`, and `<gpxx:RoutePointExtension>` holding one
+  `<gpxx:rpt lat=".." lon=".."/>` per shape point of the leg that starts at this stop. The first and last stops are
+  always written as via points, which Garmin requires.
+- Import: `gpxx:rpt` inside a `rtept` becomes the shape of the leg after it, method `imported`; `trp:ShapingPoint`
+  sets `isShaping`. A route with no `rpt` at all keeps today's path, `Route(name:points:)`.
+- `gpxx:rpt` has no height, so shape heights are lost on a round trip. Say so in the commit; "Elevations from Model"
+  puts them back.
+- Tests: round trip of a planned route (stops, shaping flag, shape coordinates to 1e-7°); a file with `rpt`; a file
+  without (unchanged behaviour); namespace prefixes other than `gpxx` (match on the namespace URI if the parser makes
+  that easy, else on the local name).
+- Check by the user: import an exported route into BaseCamp and QMapShack. Write it in the handoff note; do not open
+  BaseCamp yourself for this.
+
+**Inspector (task B5b):**
+- The stops list (already there, with delete) gets: an editable name (one undo step per field, coalesced as the
+  waypoint name is), a Via / Shaping picker (first and last stops fixed to Via), and the distance from the start.
+- Between two stops, one secondary line for the leg: "Calculated (profile name)", "Straight", "Imported", or
+  "Waiting to be recalculated".
+- In the route details: a "Routing" picker, None (straight lines) or one of the profiles, which sets `profileID`. It
+  does not recalculate anything by itself.
+- New `LibraryStore` calls: `renameRouteStop`, `setRouteStopShaping`, `setRouteProfile`, each one `edit`.
+
+**Map and recalculation (B5-map, Opus):** a recalculator that runs changed legs through `ConstrainedRouter` with the
+route's profile in the background and puts them in with `setLeg` without a new undo step (`UndoHistory` gets a way
+to replace the current value); drag the line to insert a stop; click past the end to extend; changed legs dashed.
+Then B5c (Haiku): menu items over these calls.
+
+## B3 design — 2026-10-13 — Opus
+State: decided. Task B3-impl, owner Haiku → Opus review.
+
+Today every change calls `LibraryFile.save` on the main thread, pretty-printed, and there are no backups. Do this:
+
+1. **`LibrarySaver`**, new, in `Sources/BaseCampCore/LibrarySaver.swift` so it can be tested. A final class,
+   `@unchecked Sendable`, all state behind one private serial `DispatchQueue`. This queue is allowed for this task.
+   - `init(fileURL:backupFolder:idleDelay: = 0.5, maximumDelay: = 1.0, backupInterval: = 1800, keptBackups: = 5)`.
+   - `schedule(_ library: Library)`: keeps the newest value. The write happens `idleDelay` after the last call, but
+     never later than `maximumDelay` after the first unsaved change (so at least once a second while editing).
+   - `flush() throws`: writes the pending value now, synchronously (`queue.sync`). Nothing pending: does nothing.
+   - `onError: (@Sendable (Error) -> Void)?` for scheduled writes that fail; the value stays pending and is tried
+     again at the next `schedule` or `flush`.
+2. **Writing** (`LibraryFile.save`): encode with `.sortedKeys` only, no pretty printing. Write to
+   `Library.json.saving` in the same folder, `FileHandle.synchronize()`, then `rename(2)` it over `Library.json`.
+   On any failure, remove the `.saving` file and leave `Library.json` as it was. Reading is unchanged (both layouts
+   are JSON).
+   - At launch, a leftover `Library.json.saving` (a crash mid-write) is deleted, never read.
+3. **Backups** in `Backups/` next to the library file (so a `--library` test file gets its own):
+   - Before the first write of a session, copy the existing file to `Backups/Library-yyyyMMdd-HHmmss.json`.
+   - After that, again before a write when the newest backup is older than `backupInterval`.
+   - Keep the newest `keptBackups` by name; delete older ones. Touch nothing outside `Backups/` (`Library-v1.json`
+     and `Library-unreadable-*.json` stay).
+4. **Wiring** in `LibraryStore`: `save()` becomes `saver.schedule(library)`. Errors reach `errorMessage` on the main
+   actor, once per run of failures: shown for the first failure, then again only after a write has succeeded.
+   At quit, `BaseCampApp` already listens for `willTerminateNotification` (it stops BRouter there): also call a new
+   `store.flushSaving()`, which calls `saver.flush()` and logs a failure to stderr.
+5. **Tests** (core, temporary folders, short delays such as 0.05 and 0.2 s, waits with expectations):
+   - 20 `schedule` calls in a burst give one or two writes, and the file holds the last library.
+   - Calls every 0.05 s for 1 s with `maximumDelay` 0.3 give at least two writes during the burst.
+   - `flush` writes at once; `flush` with nothing pending writes nothing.
+   - A failing write (a directory where the file should be) calls `onError` and leaves no `.saving` file; the old
+     file is unchanged when there was one.
+   - A leftover `.saving` file is removed and not read.
+   - Backups: one before the first write; none again within the interval; at most `keptBackups` kept, newest kept.
+   - The written file has no pretty-printing newlines and loads back equal.
+6. **Measure and note** in the handoff: encode and write time for a library of 50 tracks of 20 000 points, before
+   (pretty) and after (compact), and both file sizes.
+7. **Stop** if `UndoHistory` or the edit flow would have to change, or if the library file version would.
+
 ## Opus review of C3b, C3c, C7b — 2026-10-13
 State: accepted. Gate green: 167 tests, 3 skipped, no DIAG. Checked a saved picture with a selected track on the Garmin base: the white halo shows on both sides of the line.
 Found while checking, not from Haiku's work:

@@ -49,7 +49,8 @@ public extension Track {
         return copy
     }
 
-    /// The track as a route: every point, with its elevation.
+    /// The track as a route, with its elevations: a short track's points are all stops, a long one keeps its ends
+    /// as stops and the rest as the shape between them (see `Route.init(name:points:)`).
     func asRoute() -> Route {
         Route(name: name, points: segments.flatMap { $0 }.map {
             RoutePoint(coordinate: $0.coordinate, elevation: $0.elevation)
@@ -74,21 +75,11 @@ public extension Track {
 }
 
 public extension Route {
-    /// The same route run the other way.
-    func reversed() -> Route {
-        Route(id: id, name: name, points: points.reversed(), color: color)
-    }
-
     /// The route as a track: one segment with its points.
     func asTrack() -> Track {
         Track(name: name, segments: [points.map {
             TrackPoint(coordinate: $0.coordinate, elevation: $0.elevation)
         }], color: color)
-    }
-
-    /// Fewer points, with the shape kept to within `tolerance` metres.
-    func simplified(tolerance: Double) -> Route {
-        Route(id: id, name: name, points: DouglasPeucker.simplify(points, tolerance: tolerance, coordinate: \.coordinate), color: color)
     }
 }
 
@@ -261,8 +252,6 @@ public extension Route {
             coordinate: \.coordinate,
             elevation: \.elevation
         ) else { return nil }
-        var copy = self
-        copy.points = updated
-        return copy
+        return replacingPoints(updated)
     }
 }

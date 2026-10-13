@@ -141,15 +141,16 @@ final class RoutePlanner {
         isPlanning = false
     }
 
-    /// Adds the planned route to the library as a route with heights.
+    /// Adds the planned route to the library: the clicked points as its stops, and the planned line, with
+    /// heights, cut into calculated legs between them. The route keeps the profile, to recalculate changed legs.
     func addPlannedRoute(to store: LibraryStore) {
         guard let plan else { return }
         let profile = selectedProfile
-        let route = Route(
+        let route = Route.planned(
             name: Self.routeName(for: profile),
-            points: plan.geometry.points.map {
-                RoutePoint(coordinate: $0.coordinate, elevation: $0.elevation)
-            }
+            stops: via.map { RouteStop(coordinate: $0) },
+            line: plan.geometry.points.map { RoutePoint(coordinate: $0.coordinate, elevation: $0.elevation) },
+            profileID: profile.id
         )
         store.addRoute(route)
     }

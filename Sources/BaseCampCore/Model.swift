@@ -43,19 +43,6 @@ public struct Waypoint: Identifiable, Equatable, Codable, Sendable {
     }
 }
 
-public struct RoutePoint: Equatable, Codable, Sendable {
-    public var name: String?
-    public var coordinate: Coordinate
-    /// Set for calculated routes, which carry the terrain height at each point.
-    public var elevation: Double?
-
-    public init(name: String? = nil, coordinate: Coordinate, elevation: Double? = nil) {
-        self.name = name
-        self.coordinate = coordinate
-        self.elevation = elevation
-    }
-}
-
 /// The colour an item is drawn in on the map. Components run from 0 to 1.
 public struct ItemColor: Equatable, Codable, Sendable {
     public var red: Double
@@ -66,21 +53,6 @@ public struct ItemColor: Equatable, Codable, Sendable {
         self.red = red
         self.green = green
         self.blue = blue
-    }
-}
-
-public struct Route: Identifiable, Equatable, Codable, Sendable {
-    public var id: UUID
-    public var name: String
-    public var points: [RoutePoint]
-    /// The colour the route is drawn in. Nil means the default colour. Files from before colours have none.
-    public var color: ItemColor?
-
-    public init(id: UUID = UUID(), name: String, points: [RoutePoint] = [], color: ItemColor? = nil) {
-        self.id = id
-        self.name = name
-        self.points = points
-        self.color = color
     }
 }
 

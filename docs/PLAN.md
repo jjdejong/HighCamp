@@ -140,6 +140,9 @@ Next step: <one concrete step>
   - Crash-safe atomic writes.
   - Possibly a non-pretty encoder for large libraries.
 - Opus writes the design in `docs/HANDOFF.md`; Haiku implements it as task B3-impl.
+- **Design done** (HANDOFF, "B3 design"). B3-impl, owner Haiku → Opus review: `LibrarySaver` in core with a serial
+  queue, compact atomic writes with fsync, backups, flush at quit. This task may add that queue as designed; any other
+  concurrency change is a stop condition as usual.
 
 ### B4. Planner DEM work off the main thread. Owner: Opus
 - `RoutePlanner.planRoute` opens the DEM folder and samples points on the main actor. Move this to a background context without sharing GDAL handles across concurrent tasks. Decide model caching per folder.
@@ -152,6 +155,15 @@ The largest change.
   - GPX mapping (`rtept` = via, `gpxx:rpt` = shape)
   - the editing interactions (drag line to insert via, drag via, delete via, recalculate)
 - **Opus then splits it** into Haiku tasks (migration tests, GPX mapping, inspector list, menu items) and keeps the map interaction for itself.
+- **Decided and core done** (HANDOFF, "B5 design"): `Route` is `stops` (`RouteStop`, via or shaping) plus `legs`
+  (`RouteLeg`: shape, method, profile, needs-recalculation), with `points` as the whole line. Library file version 2;
+  version 1 files are read and a copy kept as `Library-v1.json`. Tasks that follow:
+  - **B5a. GPX routes with stops and shape.** Owner: Haiku → Opus review. Export and import `gpxx:rpt` shape points
+    and `trp:ViaPoint` / `trp:ShapingPoint`, as set out in the design.
+  - **B5b. Stops in the inspector.** Owner: Haiku. Rename a stop, via or shaping, distances, leg state, route profile.
+  - **B5-map. Recalculating and editing on the map.** Owner: Opus. Background recalculation of changed legs, drag
+    the line to insert a stop, extend the route, changed legs drawn dashed.
+  - **B5c. Route menu.** Owner: Haiku, after B5-map. Recalculate Route, Insert Stop at Cursor, and the like.
 
 ### B6. Release packaging. Owner: Opus
 - Signed release `.app` with bundled libmtp, GDAL and PROJ data, rpath fixes, and a GPL source offer.
@@ -261,9 +273,14 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | A10 | Haiku | done | c2028ea | on-device check by user (not sent to the device) |
 | B1 | Opus | done | 8247d30 | Replace checked on the Edge with EdgeSend; in-app dialog by user |
 | B2 | Opus | done | 7ffe83e, b87aa68 | hover 61 → 2.5 ms; area fills only on Apple bases |
-| B3 | Opus → Haiku | todo | | |
+| B3 | Opus | done | | design in HANDOFF |
+| B3-impl | Haiku → Opus | todo | | next for Haiku |
 | B4 | Opus | todo | | |
-| B5 | Opus → Haiku | todo | | |
+| B5 | Opus | done | | design in HANDOFF; core: stops and legs, library file v2 |
+| B5a | Haiku → Opus | todo | | GPX stops and shape |
+| B5b | Haiku | todo | | stops in the inspector |
+| B5-map | Opus | todo | | recalculation and map editing |
+| B5c | Haiku | blocked | | after B5-map |
 | B6 | Opus | todo | | |
 | G1 | Opus | done | 577e13a, 6ae12af | Garmin base map; overlay removed |
 | G2 | Opus | todo | | labels and icons |
@@ -277,7 +294,8 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | C7b | Haiku | reviewed | 068596c | profile on page 2 is 400 points high; 170 on page 1 |
 | C3b | Haiku | reviewed | 5922795 | saved pictures and reports draw the map's markers, with symbols |
 | C3c | Haiku | reviewed | ea02d0b | selected items keep their colour, with a white halo under the line |
-| C1, C2, C4 | see above | blocked | | after B5 |
+| C1 | Haiku → Opus | blocked | | after B5a (shares the GPX route code) |
+| C2, C4 | Haiku → Opus | todo | | unblocked: new optional `TrackPoint` fields need no file version change |
 | C6 | — | moved | | to G2 |
 
-Suggested order for Haiku now: C5, C7, C3. Phase A is done. Phase G is Opus only; Haiku does not touch the map renderer or the IMG decoder.
+Suggested order for Haiku now: B3-impl, B5a, B5b, then C2, C4. Phase A is done. Phase G is Opus only; Haiku does not touch the map renderer or the IMG decoder.

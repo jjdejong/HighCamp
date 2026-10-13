@@ -314,14 +314,14 @@ struct InspectorView: View {
         return nil
     }
 
-    /// Every point of the route, each with a button to delete it. The list scrolls and builds its rows as they
-    /// appear, so long routes, such as planned ones, stay quick. Points can be dragged on the map up to a limit.
+    /// The route's stops, each with a button to delete it. The list scrolls and builds its rows as they appear.
+    /// Stops can also be dragged on the map.
     @ViewBuilder
     private func routePointList(_ route: Route) -> some View {
-        Section("Points (\(route.points.count))") {
+        Section("Stops (\(route.stops.count))") {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(route.points.enumerated()), id: \.offset) { index, point in
+                    ForEach(Array(route.stops.enumerated()), id: \.offset) { index, point in
                         HStack {
                             Text("\(index + 1)")
                                 .monospacedDigit()
@@ -336,7 +336,7 @@ struct InspectorView: View {
                                     .monospacedDigit()
                             }
                             Button(role: .destructive) {
-                                store.removeRoutePoint(route.id, at: index)
+                                store.removeRouteStop(route.id, at: index)
                             } label: {
                                 Image(systemName: "trash")
                             }
@@ -346,11 +346,7 @@ struct InspectorView: View {
                     }
                 }
             }
-            .frame(height: min(260, CGFloat(route.points.count) * 24 + 8))
-            if route.points.count > LibraryStore.draggableRoutePointLimit {
-                Text("Points can be dragged on the map for routes of up to \(LibraryStore.draggableRoutePointLimit) points.")
-                    .foregroundStyle(.secondary)
-            }
+            .frame(height: min(260, CGFloat(route.stops.count) * 24 + 8))
         }
     }
 

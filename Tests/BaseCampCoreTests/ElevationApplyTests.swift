@@ -66,7 +66,7 @@ final class ElevationApplyTests: XCTestCase {
     func testRouteHeightsAreAppliedAndEditsKept() throws {
         let original = Route(name: "Loop", points: [RoutePoint(coordinate: Coordinate(latitude: 45, longitude: 5)), RoutePoint(coordinate: Coordinate(latitude: 45.001, longitude: 5))])
         var current = original
-        current.points[0].name = "Start"
+        current.updateStop(at: 0) { $0.name = "Start" }
         let filled = Route(id: original.id, name: "Loop", points: [
             RoutePoint(coordinate: Coordinate(latitude: 45, longitude: 5), elevation: 300),
             RoutePoint(coordinate: Coordinate(latitude: 45.001, longitude: 5), elevation: 310),
@@ -83,7 +83,7 @@ final class ElevationApplyTests: XCTestCase {
         let original = Route(name: "Loop", points: [RoutePoint(coordinate: Coordinate(latitude: 45, longitude: 5))])
         let filled = Route(name: "Loop", points: [RoutePoint(coordinate: Coordinate(latitude: 45, longitude: 5), elevation: 300)])
         var current = original
-        current.points[0].coordinate = Coordinate(latitude: 46, longitude: 5)
+        current.moveStop(at: 0, to: Coordinate(latitude: 46, longitude: 5))
 
         XCTAssertNil(current.applyingElevations(from: filled, computedFrom: original))
     }

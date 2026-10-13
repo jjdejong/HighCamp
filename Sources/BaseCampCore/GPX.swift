@@ -35,6 +35,8 @@ private final class GPXReader: NSObject, XMLParserDelegate {
     private var waypoint: Waypoint?
     private var route: Route?
     private var routePoint: RoutePoint?
+    /// The points of the route being read. The route is made from them at its end.
+    private var routePoints: [RoutePoint] = []
     private var track: Track?
     private var segment: [TrackPoint]?
     private var trackPoint: TrackPoint?
@@ -119,11 +121,12 @@ private final class GPXReader: NSObject, XMLParserDelegate {
         case ("ele", "rtept"):
             routePoint?.elevation = Double(value)
         case ("rtept", _):
-            if let routePoint { route?.points.append(routePoint) }
+            if let routePoint { routePoints.append(routePoint) }
             routePoint = nil
         case ("rte", _):
-            if let route { library.routes.append(route) }
+            if let route { library.routes.append(Route(id: route.id, name: route.name, points: routePoints)) }
             route = nil
+            routePoints = []
 
         case ("name", "trk"):
             track?.name = value

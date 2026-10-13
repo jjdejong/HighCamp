@@ -277,7 +277,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | B3-impl | Haiku → Opus | reviewed | eed7750 | accepted; a failed backup no longer blocks the save |
 | B4 | Opus | todo | | |
 | B5 | Opus | done | 1d2f670 | design in HANDOFF; core: stops and legs, library file v2 |
-| B5a | Haiku → Opus | done | 717e19b | GPX stops and shape; for Opus review and a check in BaseCamp |
+| B5a | Haiku → Opus | done | 717e19b | GPX stops and shape; reviewed; user to check the import in BaseCamp and QMapShack |
 | B5b | Haiku | done | 73b6393 | stops in the inspector: name, via or shaping, distance, leg state, routing profile |
 | B5-map | Opus | todo | | recalculation and map editing |
 | B5c | Haiku | blocked | | after B5-map |
@@ -294,8 +294,8 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | C7b | Haiku | reviewed | 068596c | profile on page 2 is 400 points high; 170 on page 1 |
 | C3b | Haiku | reviewed | 5922795 | saved pictures and reports draw the map's markers, with symbols |
 | C3c | Haiku | reviewed | ea02d0b | selected items keep their colour, with a white halo under the line |
-| C1 | Haiku → Opus | blocked | | after B5a (shares the GPX route code) |
+| C1 | Haiku → Opus | todo | | unblocked: B5a is done |
 | C2, C4 | Haiku → Opus | todo | | unblocked: new optional `TrackPoint` fields need no file version change |
 | C6 | — | moved | | to G2 |
 
-Suggested order for Haiku now: B5a, B5b, then C2, C4. Phase A is done. Phase G is Opus only; Haiku does not touch the map renderer or the IMG decoder.
+Suggested order for Haiku now: C2, C4, then C1. Phase A is done. Phase G is Opus only; Haiku does not touch the map renderer or the IMG decoder.

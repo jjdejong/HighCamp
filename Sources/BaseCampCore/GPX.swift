@@ -174,13 +174,19 @@ private final class GPXReader: NSObject, XMLParserDelegate {
         }
     }
 
-    /// The point's coordinate. A point whose lat or lon is missing or out of range gives nil and is counted as skipped.
-    /// The route from its points. A route with no shape points is read as a plain list of points, as before. Otherwise
-    /// each point is a stop, and the shape points after a stop are the imported leg to the next stop. The first and last
-    /// stops are always via points, as the writer makes them.
+    /// The route from its points. A route with no shape points is read as a plain list of points, as before, keeping
+    /// the shaping markers when every point became a stop. Otherwise each point is a stop, and the shape points after a
+    /// stop are the imported leg to the next stop. The first and last stops are always via points, as the writer makes
+    /// them.
     private static func route(id: UUID, name: String, points: [ReadRoutePoint]) -> Route {
         guard points.contains(where: { !$0.shape.isEmpty }) else {
-            return Route(id: id, name: name, points: points.map(\.point))
+            var route = Route(id: id, name: name, points: points.map(\.point))
+            if route.stops.count == points.count {
+                for (index, read) in points.enumerated() where read.isShaping {
+                    route.setShaping(true, at: index)
+                }
+            }
+            return route
         }
         let last = points.count - 1
         let stops = points.enumerated().map { index, read in
@@ -191,11 +197,17 @@ private final class GPXReader: NSObject, XMLParserDelegate {
                 isShaping: read.isShaping && index != 0 && index != last
             )
         }
-        // The shape points of the last point have no leg after them, so they are not used.
-        let legs = points.dropLast().map { RouteLeg(shape: $0.shape, method: .imported) }
+        // The shape points of the last point have no leg after them, so they are not used. BaseCamp repeats a stop as
+        // the first shape point of its leg, and sometimes the next stop as the last; those repeats are dropped.
+        let legs = points.indices.dropLast().map { index in
+            let start = points[index].point.coordinate, end = points[index + 1].point.coordinate
+            let shape = points[index].shape.filter { $0.coordinate != start && $0.coordinate != end }
+            return RouteLeg(shape: shape, method: .imported)
+        }
         return Route(id: id, name: name, stops: stops, legs: legs)
     }
 
+    /// The point's coordinate. A point whose lat or lon is missing or out of range gives nil and is counted as skipped.
     private func coordinate(_ attributes: [String: String]) -> Coordinate? {
         guard let latitudeText = attributes["lat"], let longitudeText = attributes["lon"],
               let latitude = Double(latitudeText), let longitude = Double(longitudeText) else {

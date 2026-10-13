@@ -2,6 +2,18 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Opus review of B5a and B5b — 2026-10-13
+State: accepted, with three import changes (this commit). Gate green: 207 tests, 3 skipped, no DIAG.
+- BaseCamp repeats a stop as the first `gpxx:rpt` of its leg (with `gpxx:Subclass` children), and sometimes the next
+  stop as the last. Shape points equal to either stop of their leg are now dropped on import. Test with a
+  BaseCamp-style route.
+- A route with shaping markers but no `rpt` now keeps its markers when every point became a stop (up to 200 points).
+- Test that an undeclared prefix inside `<extensions>` still imports, as the note said; it does.
+- The doc comment of `coordinate(_:)` had been pushed onto `route(id:name:points:)`; put back.
+- B5b: fine. A route whose profile was deleted shows an empty Routing picker; harmless, left.
+Still for the user: import an exported route into BaseCamp and QMapShack; click through the stop controls and undo.
+Haiku next: C2, C4, then C1. Opus next: B5-map.
+
 ## Opus review of B3-impl — 2026-10-13
 State: accepted, with one change (this commit). Gate green: 194 tests, 3 skipped, no DIAG. (The note's "242 tests"
 was a miscount; the suite had 193.)

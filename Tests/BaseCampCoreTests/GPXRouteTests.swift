@@ -116,5 +116,42 @@ final class GPXRouteTests: XCTestCase {
         XCTAssertEqual(read.stops.count, 3)
         XCTAssertEqual(read.points.count, 3)
         XCTAssertTrue(read.legs.allSatisfy { $0.shape.isEmpty })
+        XCTAssertEqual(read.stops.map(\.isShaping), [false, true, false])
+    }
+
+    func testBaseCampsRepeatedStopsAndSubclassesAreDroppedFromTheShape() throws {
+        let text = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" creator="Garmin Desktop App" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" xmlns:trp="http://www.garmin.com/xmlschemas/TripExtensions/v1">
+          <rte>
+            <name>From BaseCamp</name>
+            <rtept lat="45.5" lon="6.25"><extensions><trp:ViaPoint/><gpxx:RoutePointExtension><gpxx:Subclass>000000000000FFFFFFFFFFFFFFFFFFFFFFFF</gpxx:Subclass><gpxx:rpt lat="45.5" lon="6.25"><gpxx:Subclass>000000000000</gpxx:Subclass></gpxx:rpt><gpxx:rpt lat="45.55" lon="6.27"/><gpxx:rpt lat="45.6" lon="6.3"/></gpxx:RoutePointExtension></extensions></rtept>
+            <rtept lat="45.6" lon="6.3"><extensions><trp:ViaPoint/></extensions></rtept>
+          </rte>
+        </gpx>
+        """
+
+        let read = try readBack(text)
+
+        XCTAssertEqual(read.legs.map { $0.shape.count }, [1])
+        XCTAssertEqual(read.points.count, 3)
+    }
+
+    func testAnUndeclaredPrefixInAnExtensionStillImports() throws {
+        let text = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" creator="other" xmlns="http://www.topografix.com/GPX/1/1">
+          <rte>
+            <name>Odd</name>
+            <rtept lat="45.5" lon="6.25"><extensions><odd:Thing>1</odd:Thing></extensions></rtept>
+            <rtept lat="45.6" lon="6.3"/>
+          </rte>
+        </gpx>
+        """
+
+        let read = try readBack(text)
+
+        XCTAssertEqual(read.name, "Odd")
+        XCTAssertEqual(read.stops.count, 2)
     }
 }

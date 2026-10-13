@@ -171,9 +171,10 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 - LBL subfile: names of points, lines and areas (QMapShack's CGarminStrTbl). Line labels along roads, area and
   point labels, POI icons from the TYP point section. Replaces C6.
 
-### G3. Map products, as BaseCamp's map menu. Owner: Opus
-- Read the `.gmap` bundles in `~/Library/Application Support/Garmin/Maps` (loose TRE/RGN/LBL/NET/DEM files per tile,
-  Info.xml, TYP) as well as `.img` files. Choose one product at a time, as BaseCamp does.
+### G3. Map choice, as BaseCamp's map menu. Owner: Opus
+- Choose which `.img` map in the map folder is drawn, one at a time as in BaseCamp, so overlapping maps (OFM W and
+  SW) are not drawn twice. Contour-only maps can be added on top.
+- No `.gmap` support: the user's maps are published as `.img` too, with the same data (decided 2026-10-13).
 
 ### G4. Relief shading. Owner: Opus
 - From the DEM subfile of the map, or the DEM folder, under the map as BaseCamp shades it.
@@ -243,7 +244,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | B6 | Opus | todo | | |
 | G1 | Opus | done | 577e13a, 6ae12af | Garmin base map; overlay removed |
 | G2 | Opus | todo | | labels and icons |
-| G3 | Opus | todo | | .gmap products |
+| G3 | Opus | todo | | map choice (.img only) |
 | G4 | Opus | todo | | relief shading |
 | G5 | Opus | todo | | basemap when zoomed out |
 | C1–C7 | see above | blocked | | after B5 / B2; C6 moved to G2 |

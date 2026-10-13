@@ -10,7 +10,7 @@ State: accepted. Gate green: 167 tests, 3 skipped, no DIAG. Checked a PDF for T0
 
 ## C3b — 2026-10-13 — Haiku
 State: done
-Commits: this commit (the hash goes in the status table in the next commit)
+Commits: 5922795
 What was checked:
 - Export picture (`--map-image`, Apple base) of the five symbol waypoints from `symbols.gpx`: the summit, food, flag and
   unknown-name pins show their glyphs, and the waypoint with no symbol keeps its dot. Markers are centred on their

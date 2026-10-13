@@ -271,83 +271,51 @@ private struct FetchedTiles {
 
 /// Maps coordinates to a picture of a given size, in Web Mercator. The area is the requested bounds, made taller or
 /// wider as needed so the picture is not stretched. Apple's snapshot is asked for the same area.
+/// The picture's projection, for the app: the Mercator maths is in core, and this adds the AppKit and MapKit types.
 private struct ImageProjection {
-    /// The area the picture covers, in degrees.
-    let bounds: GeoBounds
+    private let projection: PictureProjection
     let size: CGSize
-    /// Mercator x and y, normalised to 0...1 across the world, for the edges of the picture.
-    private let left: Double
-    private let right: Double
-    private let top: Double
-    private let bottom: Double
 
     init(bounds: GeoBounds, size: CGSize) {
         self.size = size
-        let left = Self.mercatorX(bounds.west)
-        let right = Self.mercatorX(bounds.east)
-        var top = Self.mercatorY(bounds.north)
-        var bottom = Self.mercatorY(bounds.south)
-        // Widen the area in the direction that is too short for the picture's shape.
-        let neededHeight = (right - left) * Double(size.height / size.width)
-        let extra = (neededHeight - (bottom - top)) / 2
-        if extra > 0 {
-            top -= extra
-            bottom += extra
-        }
-        self.left = left
-        self.right = right
-        self.top = top
-        self.bottom = bottom
-        self.bounds = GeoBounds(
-            north: Self.latitude(fromMercatorY: top),
-            east: bounds.east,
-            south: Self.latitude(fromMercatorY: bottom),
-            west: bounds.west
+        projection = PictureProjection(
+            north: bounds.north, east: bounds.east, south: bounds.south, west: bounds.west,
+            width: size.width, height: size.height
         )
+    }
+
+    /// The area the picture covers, in degrees.
+    var bounds: GeoBounds {
+        GeoBounds(north: projection.north, east: projection.east, south: projection.south, west: projection.west)
     }
 
     /// The region for Apple's snapshot.
     var region: MKCoordinateRegion {
         MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: (bounds.north + bounds.south) / 2, longitude: (bounds.east + bounds.west) / 2),
-            span: MKCoordinateSpan(latitudeDelta: bounds.north - bounds.south, longitudeDelta: bounds.east - bounds.west)
+            center: CLLocationCoordinate2D(latitude: (projection.north + projection.south) / 2, longitude: (projection.east + projection.west) / 2),
+            span: MKCoordinateSpan(latitudeDelta: projection.north - projection.south, longitudeDelta: projection.east - projection.west)
         )
     }
 
     /// The picture position of a coordinate, with the origin at the top left.
     func point(_ coordinate: Coordinate) -> NSPoint {
-        NSPoint(
-            x: (Self.mercatorX(coordinate.longitude) - left) / (right - left) * size.width,
-            y: (Self.mercatorY(coordinate.latitude) - top) / (bottom - top) * size.height
-        )
+        let point = projection.point(coordinate)
+        return NSPoint(x: point.x, y: point.y)
     }
 
     /// The zoom level at which one tile pixel is about one picture pixel, capped by `maximum`.
     func zoom(maximum: Int) -> Int {
-        let zoom = log2(Double(size.width) / (right - left) / 256)
-        return min(maximum, max(1, Int(zoom.rounded())))
+        projection.zoom(maximum: maximum)
     }
 
-    /// The top left corner of the area in world pixels at a given world size (256 times 2 to the zoom).
+    /// The top left corner of the area in world pixels at a given world size.
     func topLeftWorld(worldSize: Double) -> NSPoint {
-        NSPoint(x: left * worldSize, y: top * worldSize)
+        let corner = projection.topLeftWorld(worldSize: worldSize)
+        return NSPoint(x: corner.x, y: corner.y)
     }
 
     /// The width of the area in world pixels.
     func widthWorld(worldSize: Double) -> Double {
-        (right - left) * worldSize
-    }
-
-    private static func mercatorX(_ longitude: Double) -> Double {
-        (longitude + 180) / 360
-    }
-
-    private static func mercatorY(_ latitude: Double) -> Double {
-        let clamped = max(-85.0511, min(85.0511, latitude)) * .pi / 180
-        return (1 - log(tan(clamped) + 1 / cos(clamped)) / .pi) / 2
-    }
-
-    private static func latitude(fromMercatorY y: Double) -> Double {
-        atan(sinh(.pi * (1 - 2 * y))) * 180 / .pi
+        projection.widthWorld(worldSize: worldSize)
     }
 }

@@ -178,8 +178,13 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 - Default: only the first full map on, so overlapping maps (OFM W and SW) are not drawn twice.
 - No `.gmap` support: the user's maps are published as `.img` too, with the same data (decided 2026-10-13).
 
-### G4. Relief shading. Owner: Opus
-- From the DEM subfile of the map, or the DEM folder, under the map as BaseCamp shades it.
+### G4. The map's own elevations (DEM subfile), as BaseCamp uses them. Owner: Opus
+- QMapShack ignores the DEM part of IMG maps (its heights come only from a separate DEM list); BaseCamp uses it.
+  Every OFM tile has one (369 in SW, 332 in W); Utagawa France has 437.
+- Decoder for the DEM subfile, from open references only: mkgmap (writes it) and GPXSee (reads it), both GPL;
+  attribution in NOTICE.md as for QMapShack. Test against heights from the user's DEM folder at known points.
+- Uses: relief shading under the Garmin base map; heights for "Elevations from Model", waypoint heights and the
+  planner's steep-climb check where the map has them, with the DEM folder as fallback (or first, by setting).
 
 ### G5. Zoomed-out view. Owner: Opus
 - Use the product's basemap (overview) tiles when zoomed out past the detailed tiles' levels.
@@ -247,7 +252,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G1 | Opus | done | 577e13a, 6ae12af | Garmin base map; overlay removed |
 | G2 | Opus | todo | | labels and icons |
 | G3 | Opus | todo | | map list: on/off, order, zoom range, opacity |
-| G4 | Opus | todo | | relief shading |
+| G4 | Opus | todo | | map DEM: relief shading and heights |
 | G5 | Opus | todo | | basemap when zoomed out |
 | C1–C7 | see above | blocked | | after B5 / B2; C6 moved to G2 |
 

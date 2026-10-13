@@ -282,7 +282,10 @@ struct MapPane: View {
     }
 
     private var attribution: some View {
-        Text(layers.attribution)
+        Text(layers.base == .garmin
+            ? (garminMaps.enabledTitles.isEmpty ? "No Garmin map is ticked in the Map menu" : garminMaps.enabledTitles.joined(separator: " · "))
+                + (layers.showContours ? " · " + MapTileURLs.contourAttribution : "")
+            : layers.attribution)
             .font(.caption2)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)

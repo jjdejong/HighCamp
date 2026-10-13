@@ -155,7 +155,7 @@ struct MapKitView: NSViewRepresentable {
     let onMovePoint: (RoutePointRef, Coordinate) -> Void
 
     func makeNSView(context: Context) -> MKMapView {
-        let map = MKMapView()
+        let map = ScrollZoomMapView()
         map.delegate = context.coordinator
         map.showsCompass = true
         map.showsScale = true
@@ -437,6 +437,30 @@ struct MapKitView: NSViewRepresentable {
             guard let pin = view.annotation as? PinAnnotation, let item = pin.item else { return }
             parent.onSelect(item)
         }
+    }
+}
+
+/// A map that zooms with the scroll wheel or two-finger scrolling, around the pointer, and moves by dragging, as
+/// BaseCamp and QMapShack do. Pinching still zooms.
+final class ScrollZoomMapView: MKMapView {
+    override func scrollWheel(with event: NSEvent) {
+        let delta = event.scrollingDeltaY
+        guard delta != 0 else { return }
+        // Trackpads report points, mouse wheels report lines; one wheel notch zooms by about a quarter.
+        let perUnit = event.hasPreciseScrollingDeltas ? 0.01 : 0.25
+        let factor = exp(-Double(delta) * perUnit)
+        let point = convert(event.locationInWindow, from: nil)
+        let anchor = MKMapPoint(convert(point, toCoordinateFrom: self))
+        let rect = visibleMapRect
+        let zoomed = MKMapRect(
+            x: anchor.x - (anchor.x - rect.minX) * factor,
+            y: anchor.y - (anchor.y - rect.minY) * factor,
+            width: rect.width * factor,
+            height: rect.height * factor
+        )
+        // Not closer than about a building, and not farther out than the whole world.
+        guard zoomed.width > 50, zoomed.width < MKMapRect.world.width * 1.5 else { return }
+        setVisibleMapRect(zoomed, animated: false)
     }
 }
 

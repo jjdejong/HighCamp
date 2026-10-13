@@ -16,7 +16,7 @@ enum BaseMapLayer: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .garmin: "Garmin maps (map folder)"
+        case .garmin: "Garmin maps (ticked above)"
         case .appleStandard: "Apple Maps"
         case .appleHybrid: "Apple Maps, satellite"
         case .ignPlan: "IGN Plan (France, trails and spot heights)"

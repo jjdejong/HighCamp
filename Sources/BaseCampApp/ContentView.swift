@@ -77,6 +77,27 @@ struct ContentView: View {
                         .disabled(!device.isConnected)
 
                         Menu {
+                            Section("Garmin maps, from the map folder") {
+                                if garminMaps.entries.isEmpty {
+                                    Text(garminMaps.problem ?? "No .img maps in the map folder")
+                                }
+                                ForEach(garminMaps.topFirst) { entry in
+                                    Toggle(GarminMapListStore.title(entry), isOn: Binding(
+                                        get: { mapLayers.base == .garmin && entry.isEnabled },
+                                        set: { on in
+                                            garminMaps.setEnabled(on, for: entry.fileName)
+                                            if on { mapLayers.base = .garmin }
+                                        }
+                                    ))
+                                }
+                                Button("Map List: Order, Zoom Range, Opacity…") { showMapList = true }
+                                Picker("Detail", selection: $mapLayers.garminDetail) {
+                                    ForEach(GarminDetail.allCases) { detail in
+                                        Text(detail.label).tag(detail)
+                                    }
+                                }
+                            }
+                            Divider()
                             Picker("Base map", selection: $mapLayers.base) {
                                 ForEach(BaseMapLayer.allCases) { layer in
                                     Text(layer.label).tag(layer)
@@ -93,15 +114,6 @@ struct ContentView: View {
                             .disabled(!mapLayers.showContours)
                             Divider()
                             Toggle("Show map coverage", isOn: $mapLayers.showCoverage)
-                            Button("Garmin Map List…") { showMapList = true }
-                                .disabled(mapLayers.base != .garmin)
-                            Picker("Garmin map detail", selection: $mapLayers.garminDetail) {
-                                ForEach(GarminDetail.allCases) { detail in
-                                    Text(detail.label).tag(detail)
-                                }
-                            }
-                            .pickerStyle(.inline)
-                            .disabled(mapLayers.base != .garmin)
                         } label: {
                             Label("Map", systemImage: "square.3.layers.3d")
                         }

@@ -72,6 +72,17 @@ final class GarminMapListStore {
         change(fileName) { $0.opacity = min(1, max(0, opacity)) }
     }
 
+    /// A map's name for menus: the file name without `.img`, marked when it is an overlay.
+    static func title(_ entry: MapListEntry) -> String {
+        let name = (entry.fileName as NSString).deletingPathExtension
+        return entry.isOverlay ? "\(name) (overlay)" : name
+    }
+
+    /// The names of the maps that are on, top first, for the label on the map.
+    var enabledTitles: [String] {
+        topFirst.filter(\.isEnabled).map { ($0.fileName as NSString).deletingPathExtension }
+    }
+
     /// The list as shown, top first: the top map is drawn on top, as in QMapShack.
     var topFirst: [MapListEntry] {
         entries.reversed()

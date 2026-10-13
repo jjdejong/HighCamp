@@ -1,7 +1,8 @@
 // Garmin style file (TYP): the colours and widths that a map is drawn with.
-// Ported from QMapShack's map/garmin/CGarminTyp.cpp (Copyright 2008-2014 Oliver Eichler, GPL-3.0-or-later).
-// Only the day colours of lines, their widths, and the fill colours of polygons are read. Bitmap patterns and
-// labels are skipped, and types with other encodings get the default style.
+// Ported from QMapShack's map/garmin/CGarminTyp.cpp, and the polygon draw order from map/CMapIMG.cpp
+// (Copyright 2008-2014 Oliver Eichler, GPL-3.0-or-later).
+// Only the day colours of lines, their widths, the fill colours of polygons and the polygon draw order are read.
+// Bitmap patterns and labels are skipped, and types with other encodings get the default style.
 
 import BaseCampCore
 import Foundation
@@ -27,6 +28,9 @@ public struct GarminTypStyle: Sendable {
     public private(set) var lines: [Int: Line] = [:]
     /// Fill colour by feature type, for polygons.
     public private(set) var fills: [Int: RGB] = [:]
+    /// The entries of the style's draw order section, in file order: a type, and for version 2 types a mask of
+    /// subtypes (bit n set for subtype n). See `polygonDrawOrder`.
+    public private(set) var orderEntries: [(type: Int, subtypes: UInt32)] = []
 
     public init(bytes: [UInt8]) throws {
         guard bytes.count >= 0x5b, Array(bytes[2..<12]) == Array("GARMIN TYP".utf8) else {
@@ -47,6 +51,32 @@ public struct GarminTypStyle: Sendable {
                 fills[entry.type] = fill
             }
         }
+        orderEntries = Self.orderEntries(bytes, array: Array(bytes[0x51..<0x5b]))
+    }
+
+    /// The polygon types in the order they are drawn, bottom first, as QMapShack's `CMapIMG` draws them: types 0x00
+    /// to 0x7F in turn, then the types of the style's draw order section on top, later entries above earlier ones.
+    /// Version 2 types are drawn only when the section lists them.
+    public static func polygonDrawOrder(_ style: GarminTypStyle?) -> [Int] {
+        polygonDrawOrder(entries: style?.orderEntries ?? [])
+    }
+
+    /// The polygon draw order for these draw order entries. See `polygonDrawOrder(_:)`.
+    public static func polygonDrawOrder(entries: [(type: Int, subtypes: UInt32)]) -> [Int] {
+        // QMapShack's list runs from the top type to the bottom one; it is reversed at the end.
+        var list = Array((0..<0x80).reversed())
+        for entry in entries where entry.type != 0 {
+            if entry.subtypes == 0 {
+                if let index = list.firstIndex(of: entry.type) {
+                    list.insert(list.remove(at: index), at: 0)
+                }
+            } else {
+                for subtype in 0..<32 where entry.subtypes & (1 << subtype) != 0 {
+                    list.insert(0x10000 | (entry.type << 8) | subtype, at: 0)
+                }
+            }
+        }
+        return list.reversed()
     }
 
     // MARK: Reading
@@ -75,6 +105,19 @@ public struct GarminTypStyle: Sendable {
             result.append((type, dataOffset + recordOffset))
         }
         return result
+    }
+
+    /// The draw order section: five bytes per entry, a type and a mask of subtypes. Same checks as QMapShack's
+    /// `CGarminTyp::parseDrawOrder`.
+    private static func orderEntries(_ bytes: [UInt8], array: [UInt8]) -> [(type: Int, subtypes: UInt32)] {
+        let offset = Int(u32(array, 0))
+        let modulo = Int(u16(array, 4))
+        let size = Int(u32(array, 6))
+        guard size > 0, modulo == 5, size % modulo == 0 else { return [] }
+        return (0..<(size / modulo)).map { element in
+            let position = offset + modulo * element
+            return (Int(u8(bytes, position)), u32(bytes, position + 1))
+        }
     }
 
     /// The day line colour and width of a polyline record. Records with a bitmap pattern are skipped.

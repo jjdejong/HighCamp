@@ -115,11 +115,13 @@ actor MapFeatureCache {
         let image: GarminIMG
         /// The map's own style (TYP), or nil when the map has none.
         let style: GarminTypStyle?
+        /// The drawing position of each polygon type, bottom first. Types missing here are not drawn.
+        let areaRanks: [Int: Int]
         var tables: [String: Tables] = [:]
     }
 
     /// Identifies a style: colour in 0 to 255, and width in tenths of a point.
-    private struct StyleKey: Hashable {
+    private struct StyleKey: Hashable, Comparable {
         let red: Int
         let green: Int
         let blue: Int
@@ -131,6 +133,20 @@ actor MapFeatureCache {
             blue = Int((rgb.blue * 255).rounded())
             self.width = Int((width * 10).rounded())
         }
+
+        static func < (left: StyleKey, right: StyleKey) -> Bool {
+            (left.red, left.green, left.blue, left.width) < (right.red, right.green, right.blue, right.width)
+        }
+    }
+
+    /// One group per feature type and style. Grouping by type keeps each type's place in the drawing order.
+    private struct GroupKey: Hashable, Comparable {
+        let type: Int
+        let style: StyleKey
+
+        static func < (left: GroupKey, right: GroupKey) -> Bool {
+            left.type != right.type ? left.type < right.type : left.style < right.style
+        }
     }
 
     private var maps: [String: OpenMap] = [:]
@@ -138,8 +154,8 @@ actor MapFeatureCache {
     func features(in viewport: GeoBounds, metersPerPoint: Double, folder: URL, maximumBits: Int) -> MapFeatureSet {
         guard let files = try? MapFolder.imgMaps(in: folder) else { return MapFeatureSet() }
         let wantedBits = min(MapFeatureReader.detailBits(metersPerPoint: metersPerPoint), maximumBits)
-        var lineGroups: [StyleKey: LineGroup] = [:]
-        var areaGroups: [StyleKey: AreaGroup] = [:]
+        var lineGroups: [GroupKey: LineGroup] = [:]
+        var areaGroups: [GroupKey: (rank: Int, group: AreaGroup)] = [:]
         var linePaths = 0
         var areaRings = 0
 
@@ -162,15 +178,16 @@ actor MapFeatureCache {
                             found = true
                             if geometry.isPolygon {
                                 guard areaRings < Self.maximumAreaRings,
+                                      let rank = open.areaRanks[geometry.type],
                                       let fill = MapFeatureReader.fill(for: geometry.type, style: open.style),
                                       geometry.coordinates.count >= 3 else { continue }
-                                let key = StyleKey(fill, width: 0)
-                                areaGroups[key, default: AreaGroup(fill: fill, rings: [])].rings.append(geometry.coordinates)
+                                let key = GroupKey(type: geometry.type, style: StyleKey(fill, width: 0))
+                                areaGroups[key, default: (rank, AreaGroup(fill: fill, rings: []))].group.rings.append(geometry.coordinates)
                                 areaRings += 1
                             } else if geometry.coordinates.count >= 2 {
                                 guard linePaths < Self.maximumLinePaths else { return Self.set(lineGroups, areaGroups) }
                                 let line = MapFeatureReader.lineStyle(for: geometry.type, style: open.style)
-                                let key = StyleKey(line.rgb, width: line.width)
+                                let key = GroupKey(type: geometry.type, style: StyleKey(line.rgb, width: line.width))
                                 lineGroups[key, default: LineGroup(rgb: line.rgb, width: line.width, paths: [])].paths.append(geometry.coordinates)
                                 linePaths += 1
                             }
@@ -186,8 +203,12 @@ actor MapFeatureCache {
         return Self.set(lineGroups, areaGroups)
     }
 
-    private static func set(_ lines: [StyleKey: LineGroup], _ areas: [StyleKey: AreaGroup]) -> MapFeatureSet {
-        MapFeatureSet(lines: Array(lines.values), areas: Array(areas.values))
+    /// The groups in drawing order, bottom first, the same for every load: areas in the map's draw order, and lines
+    /// by type, as QMapShack draws them.
+    private static func set(_ lines: [GroupKey: LineGroup], _ areas: [GroupKey: (rank: Int, group: AreaGroup)]) -> MapFeatureSet {
+        let orderedAreas = areas.sorted { ($0.value.rank, $0.key) < ($1.value.rank, $1.key) }.map(\.value.group)
+        let orderedLines = lines.sorted { $0.key < $1.key }.map(\.value)
+        return MapFeatureSet(lines: orderedLines, areas: orderedAreas)
     }
 
     /// The open map for a file, reusing it while the file's size and date do not change.
@@ -201,7 +222,9 @@ actor MapFeatureCache {
             return nil
         }
         let style = try? image.typStyle()
-        let open = OpenMap(size: file.size, modified: file.modified, image: image, style: style)
+        let order = GarminTypStyle.polygonDrawOrder(style)
+        let ranks = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        let open = OpenMap(size: file.size, modified: file.modified, image: image, style: style, areaRanks: ranks)
         maps[key] = open
         return open
     }
@@ -263,7 +286,12 @@ enum MapFeatureReader {
     }
 
     /// The fill of a polygon. With a style, only the types it fills are drawn. Without one, a rough colour by family.
+    /// The definition area (0x4A) and background (0x4B) polygons only mark where the map has data, so they are
+    /// never filled, as in QMapShack.
     static func fill(for type: Int, style: GarminTypStyle?) -> MapRGB? {
+        if type == 0x4A || type == 0x4B {
+            return nil
+        }
         if let style {
             return style.fills[type].map(MapRGB.init)
         }

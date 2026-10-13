@@ -11,7 +11,8 @@ See `LICENSE`.
     `src/qmapshack/helpers/Platform.h`.
   - `GarminRGN.swift`: `src/qmapshack/map/CMapIMG.cpp`, `src/qmapshack/map/garmin/CGarminPolygon.cpp`,
     `src/qmapshack/map/CMapIMG.h`.
-  - `GarminTyp.swift`: `src/qmapshack/map/garmin/CGarminTyp.cpp`.
+  - `GarminTyp.swift`: `src/qmapshack/map/garmin/CGarminTyp.cpp`, and the polygon draw order from
+    `src/qmapshack/map/CMapIMG.cpp`.
   Each file names its source in the header.
 
 ## Map and data sources

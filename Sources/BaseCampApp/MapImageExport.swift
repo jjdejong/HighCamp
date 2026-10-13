@@ -138,7 +138,7 @@ enum MapImageExport {
             addPath(line.coordinates, to: path, projection: projection, closed: false)
             path.lineWidth = 3
             path.lineJoinStyle = .round
-            line.color.nsColor.setStroke()
+            (line.rgb?.nsColor ?? line.color.nsColor).setStroke()
             path.stroke()
         }
         for pin in scene.pins {

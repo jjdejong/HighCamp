@@ -34,6 +34,21 @@ State: A1–A10 accepted. Gate green: 147 tests, 3 skipped, no DIAG.
 - For B2: two exports of the same view drew the IMG roads in different colours (red, then grey). Check whether the TYP or draw order is chosen nondeterministically. In the same exports a pale IMG area fill washes over most of the tiles, which is the known area-fill item.
 - Still with the user: A5 real offline export, A9 fill from a real DEM folder plus one undo, A10 virtual partner pace on the Edge.
 
+## C3 — 2026-10-13 — Haiku
+State: done, with follow-ups
+Commits: 2b4a79c (waypoint symbols), 5d80925 (colour model), and the commit that draws the colours
+What was checked:
+- Symbols: the map pane of the running app with five waypoints (summit, food, flag, unknown name, no symbol). The first three show their glyphs, the unknown name shows the pin, and the one without a symbol keeps the plain dot.
+- Colour: an export of a scratch library with a green track, a purple route, and a track with no colour. The green and purple lines are drawn in their colours, and the uncoloured track keeps the default orange. The export had to be changed to read the colour (it drew every line in the default colour before).
+- Inspector: the Colour section for the green track, with the swatch and an enabled "Use Default Colour".
+- Gate green (163 tests); release build compiles.
+Open questions and follow-ups:
+- The image export draws waypoints as plain dots, so its pictures do not show the symbols. The on-screen map does.
+- The ColorPicker itself was not clicked through, since there is no UI automation here. The store action uses the same edit and undo path as the waypoint fields.
+- GPX does not carry colours yet. C1 reads `DisplayColor`, so the colour will come from files then.
+- A selected track or route is still drawn red, so a red item looks the same when it is selected.
+Next step: none of the Haiku tasks is ready now. C1, C2 and C4 wait for B5. C7 waits for a decision on the page breaks (see the C7 note above).
+
 ## C7 — 2026-10-13 — Haiku
 State: partial: the scale bar is done; the page breaks are open
 Commits: this commit (scale bar and the report's layout)

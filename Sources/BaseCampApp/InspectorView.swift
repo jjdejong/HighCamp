@@ -214,6 +214,7 @@ struct InspectorView: View {
         Section("Route") {
             LabeledContent("Points", value: "\(route.points.count)")
         }
+        colourSection(.route(route.id), color: route.color, defaultColour: MapLineColor.blue)
         editSection(canSplit: false)
         routePointList(route)
         statisticsSections(route.statistics, profile: route.elevationProfile)
@@ -225,8 +226,24 @@ struct InspectorView: View {
             LabeledContent("Segments", value: "\(track.segments.count)")
             LabeledContent("Points", value: "\(track.pointCount)")
         }
+        colourSection(.track(track.id), color: track.color, defaultColour: MapLineColor.orange)
         editSection(canSplit: true)
         statisticsSections(track.statistics, profile: track.elevationProfile)
+    }
+
+    /// The colour the item is drawn in on the map, and a way back to the default.
+    @ViewBuilder
+    private func colourSection(_ item: LibraryItem, color: ItemColor?, defaultColour: MapLineColor) -> some View {
+        Section("Colour") {
+            ColorPicker("Line colour", selection: Binding(
+                get: { color?.swiftUIColor ?? Color(nsColor: defaultColour.nsColor) },
+                set: { store.setColor(of: item, to: ItemColor($0)) }
+            ), supportsOpacity: false)
+            Button("Use Default Colour") {
+                store.setColor(of: item, to: nil)
+            }
+            .disabled(color == nil)
+        }
     }
 
     /// Editing actions for the selected track or route. The same actions are in the Track menu.
@@ -400,5 +417,18 @@ struct InspectorView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+extension ItemColor {
+    /// The colour as SwiftUI shows it.
+    var swiftUIColor: Color {
+        Color(red: red, green: green, blue: blue)
+    }
+
+    /// The colour a SwiftUI colour picker chose, in sRGB.
+    init(_ color: Color) {
+        let components = NSColor(color).usingColorSpace(.sRGB) ?? .black
+        self.init(red: components.redComponent, green: components.greenComponent, blue: components.blueComponent)
     }
 }

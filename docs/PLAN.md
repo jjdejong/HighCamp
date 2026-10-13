@@ -254,7 +254,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G3 | Opus | todo | | map list: on/off, order, zoom range, opacity |
 | G4 | Opus | todo | | map DEM: relief shading and heights |
 | G5 | Opus | todo | | basemap when zoomed out |
-| C3 | Haiku | partial | | symbols done; colour model done, map and inspector next |
+| C3 | Haiku | done | 2b4a79c, 5d80925, this commit | export still shows plain dots, see HANDOFF |
 | C5 | Haiku | done | | table next to the list, with a filter field; `--sidebar table` hook (debug) |
 | C7 | Haiku | partial | | scale bar done; page breaks open, see HANDOFF |
 | C1, C2, C4 | see above | blocked | | after B5 |

@@ -60,6 +60,16 @@ struct MapRGB: Hashable, Sendable {
     var green: Double
     var blue: Double
 
+    init(red: Double, green: Double, blue: Double) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+    }
+
+    init(_ color: ItemColor) {
+        self.init(red: color.red, green: color.green, blue: color.blue)
+    }
+
     var nsColor: NSColor {
         NSColor(calibratedRed: red, green: green, blue: blue, alpha: 1)
     }

@@ -100,7 +100,12 @@ struct MapPane: View {
         var selectedLines: [MapLine] = []
         for route in store.library.routes {
             let selected = store.selectedItems.contains(.route(route.id))
-            let line = MapLine(id: "route-\(route.id)", coordinates: route.points.map(\.coordinate), color: selected ? .red : .blue)
+            let line = MapLine(
+                id: "route-\(route.id)",
+                coordinates: route.points.map(\.coordinate),
+                color: selected ? .red : .blue,
+                rgb: selected ? nil : route.color.map(MapRGB.init)
+            )
             if selected {
                 selectedLines.append(line)
             } else {
@@ -129,7 +134,8 @@ struct MapPane: View {
                 let line = MapLine(
                     id: "track-\(track.id)-\(index)",
                     coordinates: segment.map(\.coordinate),
-                    color: selected ? .red : .orange
+                    color: selected ? .red : .orange,
+                    rgb: selected ? nil : track.color.map(MapRGB.init)
                 )
                 if selected {
                     selectedLines.append(line)

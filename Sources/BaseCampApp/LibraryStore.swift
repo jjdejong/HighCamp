@@ -550,6 +550,22 @@ final class LibraryStore {
         }
     }
 
+    /// Sets the colour a track or route is drawn in. Nil goes back to the default. Choosing colours in a row is one undo step.
+    func setColor(of item: LibraryItem, to color: ItemColor?) {
+        edit("Change Colour", coalesceKey: "color-\(item)") { library in
+            switch item {
+            case .track(let id):
+                guard let index = library.tracks.firstIndex(where: { $0.id == id }) else { return }
+                library.tracks[index].color = color
+            case .route(let id):
+                guard let index = library.routes.firstIndex(where: { $0.id == id }) else { return }
+                library.routes[index].color = color
+            case .waypoint:
+                return
+            }
+        }
+    }
+
     /// Renames a collection. Typing into the name is one undo step.
     func renameCollection(_ id: UUID, to name: String) {
         edit("Rename Collection", coalesceKey: "collection-\(id)") { library in

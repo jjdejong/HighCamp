@@ -12,13 +12,13 @@ struct MapPane: View {
     @Environment(MapCoverageStore.self) private var coverage
     @Environment(MapSettings.self) private var mapSettings
     @Environment(DisplaySettings.self) private var display
+    @Environment(GarminMapListStore.self) private var garminMaps
     @State private var libraryLayer = LibraryLayerCache()
 
     var body: some View {
         MapKitView(
             base: layers.base,
-            garminFolder: mapSettings.folder,
-            garminDetail: layers.garminDetail,
+            garmin: garminMaps.configuration(detail: layers.garminDetail),
             showContours: layers.showContours,
             contourOpacity: layers.contourOpacity,
             scene: scene,
@@ -57,6 +57,7 @@ struct MapPane: View {
             saveImage()
         }
         .task(id: mapSettings.folder) {
+            await garminMaps.reload(folder: mapSettings.folder)
             await coverage.reload(folder: mapSettings.folder)
         }
         .overlay {
@@ -228,7 +229,7 @@ struct MapPane: View {
     private func saveImage() {
         guard let bounds = store.viewBounds, let url = imageDestination() else { return }
         let scene = self.scene
-        let base = layers.pictureBase(folder: mapSettings.folder)
+        let base = layers.pictureBase(garmin: garminMaps)
         Task {
             do {
                 let rendered = try await MapImageExport.render(scene: scene, bounds: bounds, size: CGSize(width: 1600, height: 1200), base: base)

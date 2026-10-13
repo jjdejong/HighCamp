@@ -140,9 +140,8 @@ struct MapScene: Equatable {
 /// circles, so the map keeps its detail.
 struct MapKitView: NSViewRepresentable {
     let base: BaseMapLayer
-    /// Where the Garmin base map reads its maps, and how much detail it shows.
-    let garminFolder: URL
-    let garminDetail: GarminDetail
+    /// The maps the Garmin base map draws, and how much detail it shows.
+    let garmin: GarminMapConfiguration
     let showContours: Bool
     let contourOpacity: Double
     let scene: MapScene
@@ -181,7 +180,7 @@ struct MapKitView: NSViewRepresentable {
     func updateNSView(_ map: MKMapView, context: Context) {
         let coordinator = context.coordinator
         coordinator.parent = self
-        coordinator.applyBase(base, folder: garminFolder, detail: garminDetail, on: map)
+        coordinator.applyBase(base, garmin: garmin, on: map)
         coordinator.applyContours(show: showContours, opacity: contourOpacity, on: map)
         coordinator.applyScene(scene, on: map)
         if fitRequest != coordinator.lastFitRequest {
@@ -203,7 +202,7 @@ struct MapKitView: NSViewRepresentable {
         var parent: MapKitView
         var lastFitRequest = -1
 
-        private var appliedBase: (layer: BaseMapLayer, folder: URL, detail: GarminDetail)?
+        private var appliedBase: (layer: BaseMapLayer, garmin: GarminMapConfiguration)?
         private var baseOverlay: MKTileOverlay?
         private var contourOverlay: MKTileOverlay?
         private var appliedOpacity: Double?
@@ -227,15 +226,15 @@ struct MapKitView: NSViewRepresentable {
 
         // MARK: Base map and contours
 
-        func applyBase(_ base: BaseMapLayer, folder: URL, detail: GarminDetail, on map: MKMapView) {
-            if let appliedBase, appliedBase.layer == base, base != .garmin || (appliedBase.folder == folder && appliedBase.detail == detail) {
+        func applyBase(_ base: BaseMapLayer, garmin: GarminMapConfiguration, on map: MKMapView) {
+            if let appliedBase, appliedBase.layer == base, base != .garmin || appliedBase.garmin == garmin {
                 return
             }
-            appliedBase = (base, folder, detail)
+            appliedBase = (base, garmin)
             if let baseOverlay {
                 remove([baseOverlay], from: map)
             }
-            baseOverlay = base.tileOverlay(folder: folder, detail: detail)
+            baseOverlay = base.tileOverlay(garmin: garmin)
             map.mapType = base == .appleHybrid ? .hybrid : .standard
             if let baseOverlay {
                 insert([baseOverlay], rank: Rank.base, level: .aboveLabels, on: map)

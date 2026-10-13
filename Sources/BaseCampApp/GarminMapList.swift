@@ -1,0 +1,112 @@
+import BaseCampCore
+import BaseCampIMG
+import Foundation
+import Observation
+
+/// The maps the Garmin base map draws, in order, as QMapShack's map list: which are on, between which zoom levels,
+/// and how opaque. Kept between launches, and kept in step with the map folder.
+@MainActor
+@Observable
+final class GarminMapListStore {
+    private static let defaultsKey = "map.list"
+
+    private(set) var entries: [MapListEntry]
+    private(set) var folder: URL?
+
+    init() {
+        if let data = UserDefaults.standard.data(forKey: Self.defaultsKey),
+           let saved = try? JSONDecoder().decode([MapListEntry].self, from: data) {
+            entries = saved
+        } else {
+            entries = []
+        }
+    }
+
+    /// Reads the folder's maps, finds which are overlays, and updates the list. Opening the maps happens off the
+    /// main thread.
+    func reload(folder: URL) async {
+        let files = await Task.detached { () -> [(fileName: String, isOverlay: Bool)] in
+            ((try? MapFolder.imgMaps(in: folder)) ?? []).compactMap { file in
+                guard let map = try? GarminIMG(url: file.url) else { return nil }
+                return (file.url.lastPathComponent, map.isTransparent)
+            }
+        }.value
+        self.folder = folder
+        update(MapList.synced(entries, with: files))
+    }
+
+    func setEnabled(_ enabled: Bool, for fileName: String) {
+        change(fileName) { $0.isEnabled = enabled }
+    }
+
+    func setZoomRange(minimum: Int, maximum: Int, for fileName: String) {
+        change(fileName) {
+            $0.minimumZoom = min(minimum, maximum)
+            $0.maximumZoom = max(minimum, maximum)
+        }
+    }
+
+    func setOpacity(_ opacity: Double, for fileName: String) {
+        change(fileName) { $0.opacity = min(1, max(0, opacity)) }
+    }
+
+    /// The list as shown, top first: the top map is drawn on top, as in QMapShack.
+    var topFirst: [MapListEntry] {
+        entries.reversed()
+    }
+
+    /// Moves maps in the top-first list.
+    func moveTopFirst(fromOffsets source: IndexSet, toOffset destination: Int) {
+        var shown = topFirst
+        shown.move(fromOffsets: source, toOffset: destination)
+        update(shown.reversed())
+    }
+
+    /// What the renderer needs: the maps that are on, bottom first, with their files.
+    func configuration(detail: GarminDetail) -> GarminMapConfiguration {
+        guard let folder else { return GarminMapConfiguration(layers: [], detailOffset: detail.offset) }
+        return GarminMapConfiguration(
+            layers: entries.filter(\.isEnabled).map { entry in
+                GarminMapLayer(
+                    url: folder.appendingPathComponent(entry.fileName), isOverlay: entry.isOverlay,
+                    minimumZoom: entry.minimumZoom, maximumZoom: entry.maximumZoom, opacity: entry.opacity
+                )
+            },
+            detailOffset: detail.offset
+        )
+    }
+
+    private func change(_ fileName: String, _ edit: (inout MapListEntry) -> Void) {
+        guard let index = entries.firstIndex(where: { $0.fileName == fileName }) else { return }
+        var changed = entries
+        edit(&changed[index])
+        update(changed)
+    }
+
+    private func update(_ new: [MapListEntry]) {
+        guard new != entries else { return }
+        entries = new
+        if let data = try? JSONEncoder().encode(new) {
+            UserDefaults.standard.set(data, forKey: Self.defaultsKey)
+        }
+    }
+}
+
+/// One map the renderer draws.
+struct GarminMapLayer: Equatable, Sendable {
+    let url: URL
+    let isOverlay: Bool
+    let minimumZoom: Int
+    let maximumZoom: Int
+    let opacity: Double
+
+    func isVisible(atZoom zoom: Int) -> Bool {
+        opacity > 0 && zoom >= minimumZoom && zoom <= maximumZoom
+    }
+}
+
+/// Everything the Garmin base map is drawn from: the maps that are on, bottom first, and the detail setting.
+struct GarminMapConfiguration: Equatable, Sendable {
+    var layers: [GarminMapLayer]
+    var detailOffset: Int
+}

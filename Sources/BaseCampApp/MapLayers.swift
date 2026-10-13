@@ -64,12 +64,12 @@ enum BaseMapLayer: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The tile overlay for this layer, or nil for Apple's maps. The Garmin maps are read from `folder`.
+    /// The tile overlay for this layer, or nil for Apple's maps. The Garmin maps are drawn from `garmin`.
     @MainActor
-    func tileOverlay(folder: URL, detail: GarminDetail) -> MKTileOverlay? {
+    func tileOverlay(garmin: GarminMapConfiguration) -> MKTileOverlay? {
         switch self {
         case .garmin:
-            GarminTileOverlay(folder: folder, detailOffset: detail.offset)
+            GarminTileOverlay(configuration: garmin)
         case .appleStandard, .appleHybrid:
             nil
         case .ignPlan:
@@ -148,12 +148,11 @@ enum GarminDetail: String, CaseIterable, Identifiable {
     }
 }
 
-/// The base map a picture is drawn on: the layer, the IGN contours, and for the Garmin maps their folder and detail.
+/// The base map a picture is drawn on: the layer, the IGN contours, and the Garmin maps to draw.
 struct PictureBase: Sendable {
     let layer: BaseMapLayer
     let contours: Bool
-    let garminFolder: URL
-    let garminDetail: GarminDetail
+    let garmin: GarminMapConfiguration
 }
 
 /// Which base map and contour overlay to show, and how strong the contours are. Kept between launches.
@@ -190,8 +189,8 @@ final class MapLayerSettings {
     }
 
     /// The base map for a picture of what the screen shows.
-    func pictureBase(folder: URL) -> PictureBase {
-        PictureBase(layer: base, contours: showContours, garminFolder: folder, garminDetail: garminDetail)
+    func pictureBase(garmin: GarminMapListStore) -> PictureBase {
+        PictureBase(layer: base, contours: showContours, garmin: garmin.configuration(detail: garminDetail))
     }
 
     /// Attribution for the layers on screen.

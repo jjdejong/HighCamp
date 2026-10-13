@@ -111,16 +111,16 @@ enum MapImageExport {
 
     /// The Garmin features for the picture's area, at the picture's scale, and how much to thin their paths so the
     /// total stays bounded.
-    private static func garminFeatures(projection: ImageProjection, base: PictureBase) async -> (features: MapFeatureSet, step: Int) {
+    private static func garminFeatures(projection: ImageProjection, base: PictureBase) async -> (features: [GarminMapDrawing], step: Int) {
         let bounds = projection.bounds
         let middle = (bounds.north + bounds.south) / 2 * .pi / 180
         let metersPerPoint = 40_075_016.686 * cos(middle) * projection.widthWorld(worldSize: 1) / projection.size.width
-        let features = await MapFeatureCache.shared.features(
-            in: bounds, metersPerPoint: metersPerPoint, folder: base.garminFolder, detailOffset: base.garminDetail.offset
-        )
-        let points = features.lines.reduce(0) { $0 + $1.paths.reduce(0) { $0 + $1.count } }
-            + features.areas.reduce(0) { $0 + $1.rings.reduce(0) { $0 + $1.count } }
-        return (features, max(1, points / maximumFeaturePoints))
+        let drawings = await base.garmin.drawings(in: bounds, metersPerPoint: metersPerPoint, zoom: projection.zoom(maximum: 21))
+        let points = drawings.reduce(0) { total, drawing in
+            total + drawing.features.lines.reduce(0) { $0 + $1.paths.reduce(0) { $0 + $1.count } }
+                + drawing.features.areas.reduce(0) { $0 + $1.rings.reduce(0) { $0 + $1.count } }
+        }
+        return (drawings, max(1, points / maximumFeaturePoints))
     }
 
     /// The coverage outlines, the lines, and the markers, in that order. Long lines are thinned.

@@ -13,6 +13,7 @@ struct BaseCampApp: App {
     @State private var mapCoverage = MapCoverageStore()
     @State private var display = DisplaySettings()
     @State private var elevation = ElevationSettings()
+    @State private var garminMaps = GarminMapListStore()
 
     var body: some Scene {
         WindowGroup("BaseCamp Clone") {
@@ -27,6 +28,7 @@ struct BaseCampApp: App {
                 .environment(mapCoverage)
                 .environment(display)
                 .environment(elevation)
+                .environment(garminMaps)
                 .frame(minWidth: 960, minHeight: 620)
 #if DEBUG
                 .task {
@@ -62,7 +64,7 @@ struct BaseCampApp: App {
                     // `--report-png PATH` or `--report-pdf PATH` renders the report for the selection, for testing.
                     if Self.launchValue("--report-png") != nil || Self.launchValue("--report-pdf") != nil {
                         try? await Task.sleep(for: .seconds(6))
-                        await ReportPrinter.printSelection(store: store, display: display, base: mapLayers.pictureBase(folder: mapSettings.folder))
+                        await ReportPrinter.printSelection(store: store, display: display, base: mapLayers.pictureBase(garmin: garminMaps))
                     }
                     // `--map-image PATH` saves the map view to PATH once the map has settled, for testing.
                     // With `--select`, the map is framed on the selection first, so the picture shows what was selected.
@@ -86,7 +88,7 @@ struct BaseCampApp: App {
         }
         .defaultSize(width: 1280, height: 820)
         .commands {
-            BaseCampCommands(store: store, planner: planner, elevation: elevation, display: display, layers: mapLayers, mapSettings: mapSettings)
+            BaseCampCommands(store: store, planner: planner, elevation: elevation, display: display, layers: mapLayers, garminMaps: garminMaps)
         }
 
         Settings {
@@ -142,12 +144,12 @@ struct BaseCampCommands: Commands {
     let elevation: ElevationSettings
     let display: DisplaySettings
     let layers: MapLayerSettings
-    let mapSettings: MapSettings
+    let garminMaps: GarminMapListStore
 
     var body: some Commands {
         CommandGroup(replacing: .printItem) {
             Button("Print Report…") {
-                Task { await ReportPrinter.printSelection(store: store, display: display, base: layers.pictureBase(folder: mapSettings.folder)) }
+                Task { await ReportPrinter.printSelection(store: store, display: display, base: layers.pictureBase(garmin: garminMaps)) }
             }
             .keyboardShortcut("p")
         }

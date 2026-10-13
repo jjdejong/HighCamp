@@ -90,17 +90,18 @@ actor MapFeatureCache {
     private var cellOrder: [CellKey] = []
     private var listing: (folder: URL, read: Date, files: [MapFile])?
 
-    /// The features to draw in `area` at a scale of `metersPerPoint`. `detailOffset` moves the level used: above 0
-    /// for more detail than the scale calls for, below 0 for less.
-    func features(in area: GeoBounds, metersPerPoint: Double, folder: URL, detailOffset: Int) -> MapFeatureSet {
-        let wantedBits = MapFeatureReader.detailBits(metersPerPoint: metersPerPoint) + detailOffset
+    /// The features of one map to draw in `area` at a scale of `metersPerPoint`. `detailOffset` moves the level
+    /// used: above 0 for more detail than the scale calls for, below 0 for less. With `finestLevel`, the map's finest
+    /// level is used whatever the scale, as for overlays whose coarse levels are too rough to show.
+    func features(in area: GeoBounds, metersPerPoint: Double, map url: URL, finestLevel: Bool, detailOffset: Int) -> MapFeatureSet {
+        let wantedBits = finestLevel ? 32 : MapFeatureReader.detailBits(metersPerPoint: metersPerPoint) + detailOffset
         var lineGroups: [LineKey: LineGroup] = [:]
         var areaGroups: [AreaKey: (rank: Int, group: AreaGroup)] = [:]
         var coverage: [GeoBounds] = []
         var linePaths = 0
         var areaRings = 0
 
-        for file in files(in: folder) {
+        for file in files(in: url.deletingLastPathComponent()) where file.url.lastPathComponent == url.lastPathComponent {
             guard !Task.isCancelled, let open = openMap(file) else { continue }
             for subfile in open.image.subfiles {
                 guard !Task.isCancelled else { return MapFeatureSet() }

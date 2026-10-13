@@ -3,30 +3,47 @@ import BaseCampCore
 import BaseCampIMG
 import MapKit
 
-/// The Garmin maps of the map folder as the base map, drawn tile by tile from the maps themselves, the way
-/// BaseCamp and QMapShack show them: areas, then road borders, then lines.
+/// The Garmin maps of the map list as the base map, drawn tile by tile from the maps themselves, the way
+/// BaseCamp and QMapShack show them: areas, then road borders, then lines, map by map in the list's order.
 final class GarminTileOverlay: MKTileOverlay {
-    let folder: URL
-    let detailOffset: Int
+    let configuration: GarminMapConfiguration
 
-    init(folder: URL, detailOffset: Int) {
-        self.folder = folder
-        self.detailOffset = detailOffset
+    init(configuration: GarminMapConfiguration) {
+        self.configuration = configuration
         super.init(urlTemplate: nil)
         canReplaceMapContent = true
         maximumZ = 21
     }
 
     override func loadTile(at path: MKTileOverlayPath, result: @escaping (Data?, Error?) -> Void) {
-        let folder = folder
-        let detailOffset = detailOffset
+        let configuration = configuration
         Task.detached(priority: .userInitiated) {
             let data = await GarminTileRenderer.png(
-                z: path.z, x: path.x, y: path.y, scale: path.contentScaleFactor,
-                folder: folder, detailOffset: detailOffset
+                z: path.z, x: path.x, y: path.y, scale: path.contentScaleFactor, configuration: configuration
             )
             result(data, nil)
         }
+    }
+}
+
+/// The features of one map, ready to draw, with how the map is drawn.
+struct GarminMapDrawing: Sendable {
+    let features: MapFeatureSet
+    let isOverlay: Bool
+    let opacity: Double
+}
+
+extension GarminMapConfiguration {
+    /// The features of every map on at `zoom`, bottom first. Overlays use their finest level.
+    func drawings(in area: GeoBounds, metersPerPoint: Double, zoom: Int) async -> [GarminMapDrawing] {
+        var drawings: [GarminMapDrawing] = []
+        for layer in layers where layer.isVisible(atZoom: zoom) {
+            let features = await MapFeatureCache.shared.features(
+                in: area, metersPerPoint: metersPerPoint, map: layer.url, finestLevel: layer.isOverlay, detailOffset: detailOffset
+            )
+            drawings.append(GarminMapDrawing(features: features, isOverlay: layer.isOverlay, opacity: layer.opacity))
+        }
+        return drawings
     }
 }
 
@@ -34,7 +51,7 @@ final class GarminTileOverlay: MKTileOverlay {
 enum GarminTileRenderer {
     static let tileSize = 256.0
 
-    static func png(z: Int, x: Int, y: Int, scale: CGFloat, folder: URL, detailOffset: Int) async -> Data? {
+    static func png(z: Int, x: Int, y: Int, scale: CGFloat, configuration: GarminMapConfiguration) async -> Data? {
         let tiles = pow(2, Double(z))
         let bounds = GeoBounds(
             north: latitude(y: Double(y) / tiles),
@@ -51,14 +68,12 @@ enum GarminTileRenderer {
         )
         let middle = (bounds.north + bounds.south) / 2 * .pi / 180
         let metersPerPoint = 40_075_016.686 * cos(middle) / (tileSize * tiles)
-        let features = await MapFeatureCache.shared.features(
-            in: area, metersPerPoint: metersPerPoint, folder: folder, detailOffset: detailOffset
-        )
+        let drawings = await configuration.drawings(in: area, metersPerPoint: metersPerPoint, zoom: z)
 
         let worldSize = tileSize * tiles
         let origin = NSPoint(x: Double(x) * tileSize, y: Double(y) * tileSize)
         return render(size: tileSize, scale: max(1, scale)) { rect in
-            GarminPainter.draw(features, in: rect, patternOrigin: origin) { coordinate in
+            GarminPainter.draw(drawings, in: rect, patternOrigin: origin) { coordinate in
                 let world = WebMercator.unit(coordinate)
                 return NSPoint(x: world.x * worldSize - origin.x, y: world.y * worldSize - origin.y)
             }
@@ -104,23 +119,41 @@ enum GarminPainter {
     /// Where no map has data.
     static let noData = NSColor(calibratedWhite: 0.88, alpha: 1)
 
-    /// Draws the features: the background, the areas in the map's order, then the lines in two passes (see below).
-    /// `patternOrigin` is the context origin's position in the pattern grid, so area patterns meet across tiles.
-    /// `step` thins long paths for large pictures: every `step`-th point is drawn.
+    /// Draws the maps bottom first: the background (land where a full map has data), then each map's features, with
+    /// its opacity. `patternOrigin` is the context origin's position in the pattern grid, so area patterns meet
+    /// across tiles. `step` thins long paths for large pictures: every `step`-th point is drawn.
     static func draw(
-        _ features: MapFeatureSet, in rect: NSRect, patternOrigin: NSPoint, step: Int = 1,
+        _ drawings: [GarminMapDrawing], in rect: NSRect, patternOrigin: NSPoint, step: Int = 1,
         project: (Coordinate) -> NSPoint
     ) {
         noData.setFill()
         rect.fill()
         land.setFill()
-        for bounds in features.coverage {
-            let corner = project(Coordinate(latitude: bounds.north, longitude: bounds.west))
-            let opposite = project(Coordinate(latitude: bounds.south, longitude: bounds.east))
-            NSRect(x: corner.x, y: corner.y, width: opposite.x - corner.x, height: opposite.y - corner.y).fill()
+        for drawing in drawings where !drawing.isOverlay {
+            for bounds in drawing.features.coverage {
+                let corner = project(Coordinate(latitude: bounds.north, longitude: bounds.west))
+                let opposite = project(Coordinate(latitude: bounds.south, longitude: bounds.east))
+                NSRect(x: corner.x, y: corner.y, width: opposite.x - corner.x, height: opposite.y - corner.y).fill()
+            }
         }
-
         NSGraphicsContext.current?.patternPhase = NSPoint(x: -patternOrigin.x, y: -patternOrigin.y)
+        for drawing in drawings {
+            let context = NSGraphicsContext.current?.cgContext
+            let faded = drawing.opacity < 1
+            if faded {
+                context?.setAlpha(drawing.opacity)
+                context?.beginTransparencyLayer(auxiliaryInfo: nil)
+            }
+            draw(drawing.features, step: step, project: project)
+            if faded {
+                context?.endTransparencyLayer()
+                context?.setAlpha(1)
+            }
+        }
+    }
+
+    /// One map's areas in the map's order, then its lines in two passes (see below).
+    private static func draw(_ features: MapFeatureSet, step: Int, project: (Coordinate) -> NSPoint) {
         for group in features.areas {
             let path = NSBezierPath()
             for ring in group.rings {

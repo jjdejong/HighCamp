@@ -9,7 +9,9 @@ struct ContentView: View {
     @Environment(MapLayerSettings.self) private var mapLayers
     @Environment(\.openSettings) private var openSettings
     @State private var showInspector = true
+    @Environment(GarminMapListStore.self) private var garminMaps
     @State private var isDropTargeted = false
+    @State private var showMapList = false
 
     var body: some View {
         @Bindable var store = store
@@ -91,6 +93,8 @@ struct ContentView: View {
                             .disabled(!mapLayers.showContours)
                             Divider()
                             Toggle("Show map coverage", isOn: $mapLayers.showCoverage)
+                            Button("Garmin Map List…") { showMapList = true }
+                                .disabled(mapLayers.base != .garmin)
                             Picker("Garmin map detail", selection: $mapLayers.garminDetail) {
                                 ForEach(GarminDetail.allCases) { detail in
                                     Text(detail.label).tag(detail)
@@ -132,6 +136,10 @@ struct ContentView: View {
         } message: {
             Text(store.errorMessage ?? "")
         }
+        .sheet(isPresented: $showMapList) {
+            GarminMapListSheet()
+                .environment(garminMaps)
+        }
         .sheet(isPresented: $store.showMaps) {
             MapsSheet()
                 .environment(mapSettings)
@@ -166,6 +174,10 @@ struct ContentView: View {
             // `--show settings` opens the Settings window at launch, for testing.
             if BaseCampApp.launchValue("--show") == "settings" {
                 openSettings()
+            }
+            // `--show maplist` opens the Garmin map list, for testing.
+            if BaseCampApp.launchValue("--show") == "maplist" {
+                showMapList = true
             }
             #endif
         }

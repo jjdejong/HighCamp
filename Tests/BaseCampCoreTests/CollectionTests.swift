@@ -38,4 +38,26 @@ final class CollectionTests: XCTestCase {
         XCTAssertEqual(library.collections[0].name, "Day 2")
         XCTAssertFalse(library.renameCollection(UUID(), to: "Other"))
     }
+
+    func testNextCollectionNameStartsAtOne() {
+        XCTAssertEqual(Library().nextCollectionName(), "Collection 1")
+    }
+
+    func testNextCollectionNameSkipsNumbersInUse() {
+        let library = Library(collections: [
+            LibraryCollection(name: "Collection 1"),
+            LibraryCollection(name: "Collection 2"),
+        ])
+        XCTAssertEqual(library.nextCollectionName(), "Collection 3")
+    }
+
+    func testNextCollectionNameReusesAGapLeftByDeletion() {
+        let library = Library(collections: [LibraryCollection(name: "Collection 2")])
+        XCTAssertEqual(library.nextCollectionName(), "Collection 1")
+    }
+
+    func testNextCollectionNameIgnoresOtherNames() {
+        let library = Library(collections: [LibraryCollection(name: "Day 1")])
+        XCTAssertEqual(library.nextCollectionName(), "Collection 1")
+    }
 }

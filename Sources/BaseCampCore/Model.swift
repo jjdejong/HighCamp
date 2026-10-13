@@ -129,6 +129,14 @@ public struct Library: Equatable, Codable, Sendable {
         return true
     }
 
+    /// The name for a new collection: the lowest "Collection N" that no collection uses yet.
+    public func nextCollectionName() -> String {
+        let used = Set(collections.map(\.name))
+        var number = 1
+        while used.contains("Collection \(number)") { number += 1 }
+        return "Collection \(number)"
+    }
+
     /// Removes the references to items that are no longer in the library, from every collection.
     public mutating func pruneCollections() {
         let waypointIDs = Set(waypoints.map(\.id))

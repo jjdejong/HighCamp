@@ -494,8 +494,7 @@ final class LibraryStore {
 
     /// Creates an empty collection and shows it in the sidebar. Its name is numbered when others have taken it.
     func createCollection() {
-        let number = library.collections.count + 1
-        let collection = LibraryCollection(name: "Collection \(number)")
+        let collection = LibraryCollection(name: library.nextCollectionName())
         edit("New Collection") { $0.collections.append(collection) }
         activeCollectionID = collection.id
     }

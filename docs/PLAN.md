@@ -207,7 +207,7 @@ The largest change.
 | A5 | Haiku | todo | | |
 | A6 | Haiku | todo | | |
 | A7 | Haiku | todo | | |
-| A8 | Haiku | todo | | |
+| A8 | Haiku | done | | |
 | A9 | Haiku → Opus | todo | | |
 | A10 | Haiku | todo | | on-device check by user |
 | B1 | Opus | todo | | Haiku: call-site list |

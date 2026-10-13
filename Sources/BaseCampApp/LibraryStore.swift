@@ -668,6 +668,39 @@ final class LibraryStore {
         }
     }
 
+    /// Inserts a stop into a route at `index`, for example by dragging the handle in the middle of a leg. The legs
+    /// it splits become straight until they are recalculated.
+    func insertRouteStop(_ id: UUID, at index: Int, coordinate: Coordinate) {
+        edit("Insert Point") { library in
+            guard let routeIndex = library.routes.firstIndex(where: { $0.id == id }) else { return }
+            library.routes[routeIndex].insertStop(RouteStop(coordinate: coordinate), at: index)
+        }
+    }
+
+    /// Adds a stop after the end of a route.
+    func extendRoute(_ id: UUID, to coordinate: Coordinate) {
+        edit("Extend Route") { library in
+            guard let routeIndex = library.routes.firstIndex(where: { $0.id == id }) else { return }
+            library.routes[routeIndex].insertStop(RouteStop(coordinate: coordinate), at: library.routes[routeIndex].stops.count)
+        }
+    }
+
+    /// Puts in a leg the router recalculated, as part of the step that changed its stops: undo takes back both.
+    /// Nothing happens when the leg's stops changed in the meantime. Returns whether the leg was taken.
+    @discardableResult
+    func applyRecalculatedLeg(_ id: UUID, at index: Int, from start: RouteStop, to end: RouteStop, _ leg: RouteLeg) -> Bool {
+        var taken = false
+        let changed = history.amend { library in
+            guard let routeIndex = library.routes.firstIndex(where: { $0.id == id }) else { return }
+            taken = library.routes[routeIndex].setLeg(at: index, from: start, to: end, leg)
+        }
+        if changed {
+            revision += 1
+            save()
+        }
+        return taken
+    }
+
     /// Deletes one stop of a route.
     func removeRouteStop(_ id: UUID, at index: Int) {
         edit("Delete Point") { library in

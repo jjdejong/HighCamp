@@ -279,8 +279,8 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | B5 | Opus | done | 1d2f670 | design in HANDOFF; core: stops and legs, library file v2 |
 | B5a | Haiku → Opus | done | 717e19b | GPX stops and shape; reviewed; user to check the import in BaseCamp and QMapShack |
 | B5b | Haiku | done | 73b6393 | stops in the inspector: name, via or shaping, distance, leg state, routing profile |
-| B5-map | Opus | todo | | recalculation and map editing |
-| B5c | Haiku | blocked | | after B5-map |
+| B5-map | Opus | done | (this commit) | background recalculation, dashed waiting legs, insert handles, Option-click extends |
+| B5c | Haiku | todo | | menu items over the B5-map calls; see HANDOFF |
 | B6 | Opus | todo | | |
 | G1 | Opus | done | 577e13a, 6ae12af | Garmin base map; overlay removed |
 | G2 | Opus | todo | | labels and icons |
@@ -298,4 +298,4 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | C2, C4 | Haiku → Opus | todo | | unblocked: new optional `TrackPoint` fields need no file version change |
 | C6 | — | moved | | to G2 |
 
-Suggested order for Haiku now: C2, C4, then C1. Phase A is done. Phase G is Opus only; Haiku does not touch the map renderer or the IMG decoder.
+Suggested order for Haiku now: C2, C4, C1, then B5c. Phase A is done. Phase G is Opus only; Haiku does not touch the map renderer or the IMG decoder.

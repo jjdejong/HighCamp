@@ -138,10 +138,14 @@ enum MapImageExport {
             addPath(line.coordinates, to: path, projection: projection, closed: false)
             path.lineWidth = CGFloat(line.width)
             path.lineJoinStyle = .round
+            if line.dashed {
+                path.setLineDash([line.width * 2, line.width * 1.6], count: 2, phase: 0)
+            }
             (line.rgb?.nsColor ?? line.color.nsColor).setStroke()
             path.stroke()
         }
-        for pin in scene.pins {
+        // The handles for inserting route stops are for editing on screen only.
+        for pin in scene.pins where pin.style != .insertHandle {
             guard !isLabelOnly(pin.style) else { continue }
             let point = projection.point(pin.coordinate)
             // The same marker as the map, centred on the coordinate.

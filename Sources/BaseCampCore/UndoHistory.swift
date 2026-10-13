@@ -42,6 +42,18 @@ public struct UndoHistory<Value: Equatable> {
         return true
     }
 
+    /// Changes the current value without a step of its own: the change belongs to the step that made it necessary,
+    /// such as a leg recalculated after a stop moved. Undo takes it back with that step. Redo is kept. Returns false
+    /// when the change does nothing.
+    @discardableResult
+    public mutating func amend(_ change: (inout Value) -> Void) -> Bool {
+        var updated = value
+        change(&updated)
+        guard updated != value else { return false }
+        value = updated
+        return true
+    }
+
     /// Takes back the last step. Returns false when there is nothing to undo.
     @discardableResult
     public mutating func undo() -> Bool {

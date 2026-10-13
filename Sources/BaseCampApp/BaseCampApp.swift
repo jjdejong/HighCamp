@@ -14,6 +14,7 @@ struct BaseCampApp: App {
     @State private var display = DisplaySettings()
     @State private var elevation = ElevationSettings()
     @State private var garminMaps = GarminMapListStore()
+    @State private var recalculator = RouteRecalculator()
 
     var body: some Scene {
         WindowGroup("BaseCamp Clone") {
@@ -29,6 +30,7 @@ struct BaseCampApp: App {
                 .environment(display)
                 .environment(elevation)
                 .environment(garminMaps)
+                .environment(recalculator)
                 .frame(minWidth: 960, minHeight: 620)
 #if DEBUG
                 .task {

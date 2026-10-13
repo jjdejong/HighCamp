@@ -4,12 +4,16 @@ import BaseCampIMG
 import MapKit
 import SwiftUI
 
-/// What one marker on the map stands for.
-/// A point of a route that can be dragged on the map.
+/// A point of a route that can be dragged on the map: a stop, or the handle in the middle of a leg, which inserts a
+/// stop where it is dropped.
 struct RoutePointRef: Equatable {
     let route: UUID
+    /// The stop, or for a handle the leg.
     let index: Int
+    var isInsertion = false
 }
+
+/// What one marker on the map stands for.
 
 struct MapPin: Equatable {
     enum Style: Equatable {
@@ -22,6 +26,8 @@ struct MapPin: Equatable {
         case cursor
         /// A point of a selected route. Drag it to move the point.
         case routePoint
+        /// The middle of a leg of the selected route. Drag it to insert a stop there.
+        case insertHandle
     }
 
     let id: String
@@ -82,6 +88,8 @@ struct MapLine: Equatable {
     /// The colour and width from the map's style. When nil, `color` and a default width are used.
     var rgb: MapRGB?
     var width: Double = 3
+    /// Drawn dashed, as a route leg waiting to be recalculated.
+    var dashed = false
 }
 
 struct MapCircleShape: Equatable {
@@ -153,6 +161,8 @@ struct MapKitView: NSViewRepresentable {
     let onViewportChange: (GeoBounds, Double) -> Void
     /// Called when a dragged route point is released at a new position.
     let onMovePoint: (RoutePointRef, Coordinate) -> Void
+    /// Called for a click with the Option key on empty map.
+    var onOptionClick: (Coordinate) -> Void = { _ in }
     /// Bumped to go to the Mac's position.
     let locateRequest: Int
     /// Called with a message when the position cannot be found.
@@ -308,6 +318,7 @@ struct MapKitView: NSViewRepresentable {
                 let overlay = LineOverlay(coordinates: coordinates, count: coordinates.count)
                 overlay.color = line.rgb?.nsColor ?? line.color.nsColor
                 overlay.width = CGFloat(line.width)
+                overlay.dashed = line.dashed
                 overlays.append(overlay)
             }
             for circle in content.circles {
@@ -376,7 +387,12 @@ struct MapKitView: NSViewRepresentable {
                 hit = view.superview
             }
             let coordinate = map.convert(point, toCoordinateFrom: map)
-            parent.onMapClick(Coordinate(latitude: coordinate.latitude, longitude: coordinate.longitude))
+            let clicked = Coordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            if NSEvent.modifierFlags.contains(.option) {
+                parent.onOptionClick(clicked)
+            } else {
+                parent.onMapClick(clicked)
+            }
         }
 
         // MARK: MKMapViewDelegate
@@ -391,6 +407,9 @@ struct MapKitView: NSViewRepresentable {
                 let renderer = MKPolylineRenderer(polyline: line)
                 renderer.strokeColor = line.color
                 renderer.lineWidth = line.width
+                if line.dashed {
+                    renderer.lineDashPattern = [NSNumber(value: Double(line.width) * 2), NSNumber(value: Double(line.width) * 1.6)]
+                }
                 return renderer
             }
             if overlay is FootprintOverlay, let polygon = overlay as? MKPolygon {
@@ -525,6 +544,7 @@ final class PinAnnotation: NSObject, MKAnnotation {
 final class LineOverlay: MKPolyline {
     var color: NSColor = .systemBlue
     var width: CGFloat = 3
+    var dashed = false
 }
 
 final class CircleOverlay: MKCircle {}
@@ -586,6 +606,8 @@ enum MarkerImage {
             image = dot(diameter: 12, fill: .white, label: nil, ring: .systemRed)
         case .routePoint:
             image = dot(diameter: 10, fill: .white, label: nil, ring: .systemBlue)
+        case .insertHandle:
+            image = dot(diameter: 9, fill: NSColor.white.withAlphaComponent(0.75), label: nil, ring: NSColor.systemBlue.withAlphaComponent(0.6))
         }
         cache[key] = image
         return image

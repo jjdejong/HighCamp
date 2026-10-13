@@ -10,6 +10,9 @@ struct ContentView: View {
     @Environment(\.openSettings) private var openSettings
     @State private var showInspector = true
     @Environment(GarminMapListStore.self) private var garminMaps
+    @Environment(RouteRecalculator.self) private var recalculator
+    @Environment(RoutingSettings.self) private var routing
+    @Environment(ElevationSettings.self) private var elevation
     @State private var isDropTargeted = false
     @State private var showMapList = false
 
@@ -185,6 +188,10 @@ struct ContentView: View {
             Button("Cancel", role: .cancel) {}
         } message: { course in
             Text("Garmin/Courses already has \(course.fileName). The new course is copied and checked before the old one is deleted.")
+        }
+        .task(id: store.revision) {
+            // Legs whose stops changed are recalculated with their route's profile, in the background.
+            recalculator.check(store: store, planner: planner, settings: routing, demFolder: elevation.folder)
         }
         .onAppear {
             device.refresh()

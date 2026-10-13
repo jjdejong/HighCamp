@@ -2,6 +2,34 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## B5-map — 2026-10-13 — Opus
+State: done (this commit). Gate green: 211 tests, 3 skipped, no DIAG. App bundle rebuilt.
+- `RouteRecalculator` (app): after every library change (`ContentView`, `.task(id: store.revision)`) it works through
+  the legs with `needsRecalculation`, one at a time, with the route's profile and its grade limit
+  (`ConstrainedRouter`, heights from the DEM folder when it covers the leg, as the planner does). The result goes in
+  with `LibraryStore.applyRecalculatedLeg` → `UndoHistory.amend`: no undo step of its own, so undo takes back the move
+  and its recalculation together. A stale result (stops changed meanwhile) is refused by `Route.setLeg` and the leg is
+  asked for again. A failure (BRouter down, profile deleted, no route) is kept per request (route, leg, stop
+  positions, profile) and not retried until the stops change or the user presses Try Again in the inspector.
+- Map: legs waiting for the router are drawn dashed (also in saved pictures). The selected route has a small handle
+  in the middle of each leg; dragging it inserts a stop there (`insertRouteStop`). Option-click on empty map adds a
+  stop after the end of the selected route (`extendRoute`). Handles are left out of saved pictures.
+- Inspector: "Recalculating n leg(s)…", or "Some legs could not be recalculated" with Try Again; the leg line says
+  "Not recalculated: <reason>". A deleted profile shows as "Deleted profile" in the Routing picker.
+- Core: `UndoHistory.amend`, `Route.legsWaitingForRouter`, `legLine`, `legMidpoint`, `RouteLeg.calculated(line:...)`;
+  four tests.
+- Checked live, debug build, scratch library, local BRouter: two waiting legs were calculated in the background and
+  saved (308 and 394 shape points); a leg with a deleted profile stayed dashed with Try Again; Option-click added a
+  fourth stop with a dashed leg.
+- Not checked: dragging the insert handle. Synthetic drags do not reach MapKit here (a stop drag does nothing either),
+  so the handle uses the same annotation drag as the stops and the user should try both.
+- The design said "drag the line"; handles do the same with MapKit's own annotation drag, which pans and clicks
+  leave alone. Dragging the line itself would need taking over MapKit's mouse handling.
+- The local BRouter must be running (start it from the planner bar); otherwise legs fail with the planner's message.
+**B5c for Haiku:** a Route menu (or the inspector's Edit section) with: Recalculate Route (mark every leg
+`needsRecalculation` when the route has a profile: add `Route.markAllLegsForRecalculation()` in core, one `edit`),
+Insert Stop… is not needed (handles), Remove Stop is in the inspector. Keep it to Recalculate Route plus its test.
+
 ## Opus review of B5a and B5b — 2026-10-13
 State: accepted, with three import changes (this commit). Gate green: 207 tests, 3 skipped, no DIAG.
 - BaseCamp repeats a stop as the first `gpxx:rpt` of its leg (with `gpxx:Subclass` children), and sometimes the next

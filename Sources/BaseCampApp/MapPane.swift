@@ -42,7 +42,16 @@ struct MapPane: View {
                 store.viewBounds = bounds
             },
             onMovePoint: { reference, coordinate in
-                store.moveRouteStop(reference.route, at: reference.index, to: coordinate)
+                if reference.isInsertion {
+                    store.insertRouteStop(reference.route, at: reference.index + 1, coordinate: coordinate)
+                } else {
+                    store.moveRouteStop(reference.route, at: reference.index, to: coordinate)
+                }
+            },
+            onOptionClick: { coordinate in
+                // Option-click adds a stop after the end of the selected route, as BaseCamp's route tool does.
+                guard !planner.isActive, !store.measuring, case .route(let id)? = store.selection else { return }
+                store.extendRoute(id, to: coordinate)
             },
             locateRequest: store.locateRequest,
             onLocationProblem: { message in
@@ -108,17 +117,13 @@ struct MapPane: View {
         var selectedLines: [MapLine] = []
         for route in store.library.routes {
             let selected = store.selectedItems.contains(.route(route.id))
-            let line = MapLine(
-                id: "route-\(route.id)",
-                coordinates: route.points.map(\.coordinate),
-                color: .blue,
-                rgb: route.color.map(MapRGB.init)
-            )
-            if selected {
-                selectedHalos.append(Self.selectionHalo(for: line))
-                selectedLines.append(line)
-            } else {
-                content.lines.append(line)
+            for line in Self.routeLines(route) {
+                if selected {
+                    selectedHalos.append(Self.selectionHalo(for: line))
+                    selectedLines.append(line)
+                } else {
+                    content.lines.append(line)
+                }
             }
         }
 
@@ -132,6 +137,18 @@ struct MapPane: View {
                     item: nil,
                     title: point.name ?? "Point \(index + 1)",
                     routePoint: RoutePointRef(route: selectedRoute.id, index: index)
+                ))
+            }
+            // A handle in the middle of each leg: drag it to insert a stop.
+            for leg in selectedRoute.legs.indices {
+                guard let middle = selectedRoute.legMidpoint(leg) else { continue }
+                content.pins.append(MapPin(
+                    id: "route-insert-\(selectedRoute.id)-\(leg)",
+                    coordinate: middle,
+                    style: .insertHandle,
+                    item: nil,
+                    title: "Drag to insert a point",
+                    routePoint: RoutePointRef(route: selectedRoute.id, index: leg, isInsertion: true)
                 ))
             }
         }
@@ -155,6 +172,31 @@ struct MapPane: View {
         }
         content.lines += selectedHalos + selectedLines
         return content
+    }
+
+    /// A route's line, cut where legs start or stop waiting for the router: those legs are drawn dashed.
+    private static func routeLines(_ route: Route) -> [MapLine] {
+        let rgb = route.color.map(MapRGB.init)
+        guard route.legs.contains(where: \.needsRecalculation) else {
+            return [MapLine(id: "route-\(route.id)", coordinates: route.points.map(\.coordinate), color: .blue, rgb: rgb)]
+        }
+        var lines: [MapLine] = []
+        var run: [Coordinate] = []
+        var runIsWaiting = false
+        for leg in route.legs.indices {
+            let waiting = route.legs[leg].needsRecalculation
+            if !run.isEmpty, waiting != runIsWaiting {
+                lines.append(MapLine(id: "route-\(route.id)-\(lines.count)", coordinates: run, color: .blue, rgb: rgb, dashed: runIsWaiting))
+                run = []
+            }
+            runIsWaiting = waiting
+            let line = route.legLine(leg)
+            run += run.isEmpty ? line : Array(line.dropFirst())
+        }
+        if !run.isEmpty {
+            lines.append(MapLine(id: "route-\(route.id)-\(lines.count)", coordinates: run, color: .blue, rgb: rgb, dashed: runIsWaiting))
+        }
+        return lines
     }
 
     /// The pale halo under a selected line: the same path, four points wider, in white. The item keeps its colour.

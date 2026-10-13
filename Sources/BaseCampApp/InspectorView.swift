@@ -8,6 +8,8 @@ struct InspectorView: View {
     @Environment(DisplaySettings.self) private var display
     @Environment(ElevationSettings.self) private var elevation
     @Environment(RoutePlanner.self) private var planner
+    @Environment(RouteRecalculator.self) private var recalculator
+    @Environment(RoutingSettings.self) private var routing
 
     var body: some View {
         if store.selectedItems.count > 1 {
@@ -215,6 +217,7 @@ struct InspectorView: View {
         Section("Route") {
             LabeledContent("Points", value: "\(route.points.count)")
             routingPicker(route)
+            recalculationStatus(route)
         }
         colourSection(.route(route.id), color: route.color, defaultColour: MapLineColor.blue)
         editSection(canSplit: false)
@@ -326,8 +329,12 @@ struct InspectorView: View {
             ForEach(planner.profiles) { profile in
                 Text(profile.name).tag(UUID?.some(profile.id))
             }
+            // A profile that was deleted since: shown, so the picker is not blank.
+            if let id = route.profileID, !planner.profiles.contains(where: { $0.id == id }) {
+                Text("Deleted profile").tag(UUID?.some(id))
+            }
         }
-        .help("The profile that recalculates legs when their stops change. Choosing a profile recalculates nothing.")
+        .help("The profile that recalculates legs when their stops change, in the background. Choosing a profile recalculates nothing by itself.")
     }
 
     /// The route's stops, each with its name, its kind, its distance from the start, and a button to delete it. The
@@ -341,7 +348,7 @@ struct InspectorView: View {
                     ForEach(Array(route.stops.enumerated()), id: \.element.id) { index, stop in
                         stopRow(stop, index: index, count: route.stops.count, route: route, distance: distances.indices.contains(index) ? distances[index] : nil)
                         if index < route.legs.count {
-                            Text(legDescription(route.legs[index]))
+                            Text(legDescription(route.legs[index], failure: recalculator.failure(route: route, leg: index)))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .padding(.leading, 28)
@@ -405,6 +412,39 @@ struct InspectorView: View {
     }
 
     /// How a leg was made: straight, calculated with a named profile, imported, or waiting for recalculation.
+    /// While legs wait for the router: that they are being recalculated, or that some could not be, with a button to
+    /// try again. Option-click on the map adds a stop after the end; the handles in the middle of the legs insert one.
+    @ViewBuilder
+    private func recalculationStatus(_ route: Route) -> some View {
+        let waiting = route.legsWaitingForRouter
+        if !waiting.isEmpty {
+            let failed = waiting.contains { recalculator.failure(route: route, leg: $0) != nil }
+            HStack {
+                if recalculator.isWorking(on: route.id) {
+                    ProgressView().controlSize(.small)
+                    Text("Recalculating \(waiting.count) leg(s)…")
+                } else if failed {
+                    Text("Some legs could not be recalculated.")
+                    Spacer()
+                    Button("Try Again") {
+                        recalculator.retry(route.id, store: store, planner: planner, settings: routing, demFolder: elevation.folder)
+                    }
+                } else {
+                    Text("\(waiting.count) leg(s) waiting for the router.")
+                }
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func legDescription(_ leg: RouteLeg, failure: String?) -> String {
+        if let failure, leg.needsRecalculation {
+            return "Not recalculated: \(failure)"
+        }
+        return legDescription(leg)
+    }
+
     private func legDescription(_ leg: RouteLeg) -> String {
         switch leg.state {
         case .straight:

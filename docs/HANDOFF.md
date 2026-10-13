@@ -2,6 +2,13 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Opus review of C3b, C3c, C7b — 2026-10-13
+State: accepted. Gate green: 167 tests, 3 skipped, no DIAG. Checked a saved picture with a selected track on the Garmin base: the white halo shows on both sides of the line.
+Found while checking, not from Haiku's work:
+- Every map in the folder is drawn, stacked. At Lans-en-Vercors that is OFM SW, Utagawa France and three contour maps on top of each other, which looks wrong (Utagawa's forest over OFM's, olive streets over white ones). OFM SW alone is clean. G3 (the map list) moves ahead of G2.
+- `Isere_contours_20m.img` decodes with spike lines across its contours. QMapShack draws it correctly, so it is a decoder bug: new task G0.
+Haiku: no task is ready now. C1, C2 and C4 wait for B5.
+
 ## Opus review of C7 part 2 — 2026-10-13
 State: accepted. Gate green: 167 tests, 3 skipped, no DIAG. Checked a PDF for T03 from `--report-pdf`: two A4 pages, map with the Garmin base, scale bar and statistics on page 1, profile on page 2.
 - Answer: yes, make the profile taller on its own page (C7b, about 400 points).

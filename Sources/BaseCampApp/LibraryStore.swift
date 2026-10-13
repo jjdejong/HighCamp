@@ -55,7 +55,9 @@ final class LibraryStore {
         self.fileURL = fileURL
         saver = LibrarySaver(fileURL: fileURL)
         saver.onError = { [weak self] error in
-            let message = "The library could not be saved. \(error.localizedDescription)"
+            let message = error is LibrarySaver.BackupError
+                ? error.localizedDescription
+                : "The library could not be saved. \(error.localizedDescription)"
             Task { @MainActor in
                 self?.errorMessage = message
             }

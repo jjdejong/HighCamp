@@ -6,8 +6,17 @@ import Foundation
 ///
 /// All state is used only on `queue`, which is what makes it safe to share the saver between threads.
 public final class LibrarySaver: @unchecked Sendable {
-    /// Called with the first failure of each run of failed writes. A later success starts a new run.
-    /// Set it before the first change is scheduled.
+    /// A backup that could not be made. The library itself was still saved: losing edits is worse than missing
+    /// a backup.
+    public struct BackupError: Error, LocalizedError {
+        public let underlying: Error
+        public var errorDescription: String? {
+            "The library was saved, but its backup could not be made. \(underlying.localizedDescription)"
+        }
+    }
+
+    /// Called with the first failure of each run of failed writes, and with the first `BackupError` of a session.
+    /// A later successful write starts a new run of write failures. Set it before the first change is scheduled.
     public var onError: (@Sendable (Error) -> Void)?
 
     private let queue = DispatchQueue(label: "BaseCampClone.LibrarySaver")
@@ -23,6 +32,7 @@ public final class LibrarySaver: @unchecked Sendable {
     private var firstUnsaved: Date?
     private var scheduledWrite: DispatchWorkItem?
     private var reportedFailure = false
+    private var reportedBackupFailure = false
     private var checkedBackupThisSession = false
     private var writeCount = 0
 
@@ -108,7 +118,14 @@ public final class LibrarySaver: @unchecked Sendable {
     }
 
     private func write(_ library: Library) throws {
-        try backUpIfDue()
+        do {
+            try backUpIfDue()
+        } catch {
+            if !reportedBackupFailure {
+                reportedBackupFailure = true
+                onError?(BackupError(underlying: error))
+            }
+        }
         try LibraryFile.save(library, to: fileURL)
         writeCount += 1
     }

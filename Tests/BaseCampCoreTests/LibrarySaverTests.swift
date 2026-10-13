@@ -12,6 +12,12 @@ private final class ErrorCollector: @unchecked Sendable {
         lock.unlock()
     }
 
+    var first: Error? {
+        lock.lock()
+        defer { lock.unlock() }
+        return errors.first
+    }
+
     var count: Int {
         lock.lock()
         defer { lock.unlock() }
@@ -129,8 +135,9 @@ final class LibrarySaverTests: XCTestCase {
 
     func testAFailedWriteLeavesTheOldFileAsItWas() throws {
         try LibraryFile.save(library("Old"), to: fileURL)
-        // A file where the backup folder should be: the backup, which comes first, cannot be made.
-        try "not a folder".write(to: backupFolder, atomically: true, encoding: .utf8)
+        // A read-only folder: neither the new file nor a backup can be written in it.
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: folder.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path) }
         let saver = makeSaver(idle: 60)
 
         saver.schedule(library("New"))
@@ -167,6 +174,21 @@ final class LibrarySaverTests: XCTestCase {
 
         XCTAssertEqual(backupNames().count, 1)
         XCTAssertEqual(try LibraryFile.load(from: fileURL), library("C"))
+    }
+
+    func testAFailedBackupIsReportedButTheLibraryIsStillSaved() throws {
+        try LibraryFile.save(library("A"), to: fileURL)
+        // A file where the backup folder should be: the backup cannot be made.
+        try Data().write(to: backupFolder)
+        let errors = ErrorCollector()
+        let saver = makeSaver(idle: 60) { errors.add($0) }
+
+        saver.schedule(library("B"))
+        try saver.flush()
+
+        XCTAssertEqual(try LibraryFile.load(from: fileURL), library("B"))
+        XCTAssertEqual(errors.count, 1)
+        XCTAssertTrue(errors.first is LibrarySaver.BackupError)
     }
 
     func testOnlyTheNewestBackupsAreKept() throws {

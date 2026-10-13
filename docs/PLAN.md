@@ -274,7 +274,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | B1 | Opus | done | 8247d30 | Replace checked on the Edge with EdgeSend; in-app dialog by user |
 | B2 | Opus | done | 7ffe83e, b87aa68 | hover 61 → 2.5 ms; area fills only on Apple bases |
 | B3 | Opus | done | | design in HANDOFF |
-| B3-impl | Haiku → Opus | done | eed7750 | background saver, compact atomic writes, backups; for Opus review |
+| B3-impl | Haiku → Opus | reviewed | eed7750 | accepted; a failed backup no longer blocks the save |
 | B4 | Opus | todo | | |
 | B5 | Opus | done | 1d2f670 | design in HANDOFF; core: stops and legs, library file v2 |
 | B5a | Haiku → Opus | todo | | GPX stops and shape |
@@ -298,4 +298,4 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | C2, C4 | Haiku → Opus | todo | | unblocked: new optional `TrackPoint` fields need no file version change |
 | C6 | — | moved | | to G2 |
 
-Suggested order for Haiku now: B3-impl, B5a, B5b, then C2, C4. Phase A is done. Phase G is Opus only; Haiku does not touch the map renderer or the IMG decoder.
+Suggested order for Haiku now: B5a, B5b, then C2, C4. Phase A is done. Phase G is Opus only; Haiku does not touch the map renderer or the IMG decoder.

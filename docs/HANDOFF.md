@@ -2,6 +2,18 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Opus review of B3-impl — 2026-10-13
+State: accepted, with one change (this commit). Gate green: 194 tests, 3 skipped, no DIAG. (The note's "242 tests"
+was a miscount; the suite had 193.)
+- Backup failure: decided the other way. A backup that fails no longer blocks the save. The library is written
+  anyway and `onError` gets a `LibrarySaver.BackupError`, once per session, shown as "The library was saved, but its
+  backup could not be made." Losing edits is worse than missing a backup. New test; the old-file test now fails the
+  write with a read-only folder instead of a blocked backup.
+- Quit with a change pending: not tested by hand, as noted. `flush` runs on the same queue after any `schedule`, so
+  the order holds. The user's normal use will show it.
+- One-line JSON: fine. `python3 -m json.tool Library.json` formats it for reading.
+Haiku next: B5a, then B5b, then C2 and C4.
+
 ## B5 design — 2026-10-13 — Opus
 State: decided; core done (this commit). Haiku tasks B5a and B5b are ready; B5c waits for B5-map.
 

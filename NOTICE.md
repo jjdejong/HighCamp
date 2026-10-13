@@ -5,10 +5,14 @@ See `LICENSE`.
 
 ## Code from other projects
 
-- `Sources/BaseCampIMG/GarminIMG.swift` is ported from QMapShack
-  (`src/qmapshack/map/CMapIMG.cpp`, `src/qmapshack/map/CMapIMG.h` and `src/qmapshack/helpers/Platform.h`).
-  QMapShack is Copyright (C) 2008-2014 Oliver Eichler and contributors, licensed under the
-  GNU General Public License version 3 or later. The port is marked in the file header.
+- The Garmin map readers in `Sources/BaseCampIMG/` are ported from QMapShack, Copyright (C) 2008-2014
+  Oliver Eichler and contributors, licensed under the GNU General Public License version 3 or later:
+  - `GarminIMG.swift`: `src/qmapshack/map/CMapIMG.cpp`, `src/qmapshack/map/CMapIMG.h`,
+    `src/qmapshack/helpers/Platform.h`.
+  - `GarminRGN.swift`: `src/qmapshack/map/CMapIMG.cpp`, `src/qmapshack/map/garmin/CGarminPolygon.cpp`,
+    `src/qmapshack/map/CMapIMG.h`.
+  - `GarminTyp.swift`: `src/qmapshack/map/garmin/CGarminTyp.cpp`.
+  Each file names its source in the header.
 
 ## Map and data sources
 

@@ -20,12 +20,12 @@ Open questions:
 Next step: Opus reviews fa454fe, then the user fills heights from a real DEM folder and undoes once to confirm the undo step.
 
 ## A7 — 2026-10-13 — Haiku
-State: done, one decision open
-Commits: 3f22733
+State: done, decision closed
+Commits: 3f22733, and this note
 What was checked: `swift build -c release --product BaseCampApp` compiles. The release binary contains none of the hook flags, and launched with `--map-image` it writes no picture. The debug build still writes the `--select` picture, about the same size as before.
-Open questions:
-- `--library` is inside `#if DEBUG` too. Its own comment calls it a testing aid, and no doc describes it as a user feature. Should it stay in release? If yes, remove the `#if DEBUG` around the first part of `libraryFileURL()` in `BaseCampApp.swift`.
-Next step: decide on `--library`.
+Decision: `--library` stays inside `#if DEBUG`. Its own comment calls it a testing aid, no doc describes it as a user feature, and nothing else in the repo uses it. The debug build keeps it, and the test scripts use it there. If it is ever wanted in release, remove the `#if DEBUG` around the first part of `libraryFileURL()` in `BaseCampApp.swift`.
+Open questions: none.
+Next step: none.
 
 ## A5 — 2026-10-13 — Haiku
 State: done, one check not run as the plan asks

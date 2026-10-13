@@ -206,7 +206,7 @@ The largest change.
 | A4 | Haiku → Opus | done | d3ebc89, 8dda86b | for Opus review; see HANDOFF |
 | A5 | Haiku | done | 9a72f99 | offline check by user; see HANDOFF |
 | A6 | Haiku | done | 96a2d8d | |
-| A7 | Haiku | done | 3f22733 | `--library` wrapped too; decision in HANDOFF |
+| A7 | Haiku | done | 3f22733 | `--library` debug-only; decided in HANDOFF |
 | A8 | Haiku | done | ba2332a | |
 | A9 | Haiku → Opus | done | fa454fe | for Opus review; see HANDOFF |
 | A10 | Haiku | done | c2028ea | on-device check by user (not sent to the device) |

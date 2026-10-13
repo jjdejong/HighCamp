@@ -26,6 +26,19 @@ public enum GPX {
     }
 }
 
+/// The Garmin extension namespaces. The version at the end of the URI may change, so only the start is matched.
+private enum GarminNamespace {
+    static let gpxExtensions = "http://www.garmin.com/xmlschemas/GpxExtensions/"
+    static let tripExtensions = "http://www.garmin.com/xmlschemas/TripExtensions/"
+}
+
+/// A route point as read: its position, whether it is a shaping point, and the shape points after it.
+private struct ReadRoutePoint {
+    var point: RoutePoint
+    var isShaping = false
+    var shape: [RoutePoint] = []
+}
+
 private final class GPXReader: NSObject, XMLParserDelegate {
     private var library = Library()
     private var skipped = 0
@@ -34,9 +47,9 @@ private final class GPXReader: NSObject, XMLParserDelegate {
 
     private var waypoint: Waypoint?
     private var route: Route?
-    private var routePoint: RoutePoint?
+    private var routePoint: ReadRoutePoint?
     /// The points of the route being read. The route is made from them at its end.
-    private var routePoints: [RoutePoint] = []
+    private var routePoints: [ReadRoutePoint] = []
     private var track: Track?
     private var segment: [TrackPoint]?
     private var trackPoint: TrackPoint?
@@ -44,6 +57,9 @@ private final class GPXReader: NSObject, XMLParserDelegate {
     func read(_ data: Data) throws -> (library: Library, skipped: Int) {
         let parser = XMLParser(data: data)
         parser.delegate = self
+        // Namespaces are processed, so the Garmin extensions are recognised by their namespace whatever prefix a
+        // file gives them. Element names are then the local names.
+        parser.shouldProcessNamespaces = true
         guard parser.parse() else {
             throw GPXError.malformedXML(parser.parserError?.localizedDescription ?? "unknown error")
         }
@@ -59,6 +75,15 @@ private final class GPXReader: NSObject, XMLParserDelegate {
     ) {
         stack.append(elementName)
         text = ""
+        if routePoint != nil {
+            // Inside a route point: a shaping marker, or a shape point, from the Garmin extensions.
+            if elementName == "ShapingPoint", namespaceURI?.hasPrefix(GarminNamespace.tripExtensions) == true {
+                routePoint?.isShaping = true
+            } else if elementName == "rpt", namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true,
+                      let coordinate = coordinate(attributes) {
+                routePoint?.shape.append(RoutePoint(coordinate: coordinate))
+            }
+        }
         switch elementName {
         case "wpt":
             guard let coordinate = coordinate(attributes) else { return }
@@ -67,7 +92,7 @@ private final class GPXReader: NSObject, XMLParserDelegate {
             route = Route(name: "")
         case "rtept":
             guard let coordinate = coordinate(attributes) else { return }
-            routePoint = RoutePoint(coordinate: coordinate)
+            routePoint = ReadRoutePoint(point: RoutePoint(coordinate: coordinate))
         case "trk":
             track = Track(name: "")
         case "trkseg":
@@ -117,14 +142,14 @@ private final class GPXReader: NSObject, XMLParserDelegate {
         case ("name", "rte"):
             route?.name = value
         case ("name", "rtept"):
-            routePoint?.name = value.nonEmpty
+            routePoint?.point.name = value.nonEmpty
         case ("ele", "rtept"):
-            routePoint?.elevation = Double(value)
+            routePoint?.point.elevation = Double(value)
         case ("rtept", _):
             if let routePoint { routePoints.append(routePoint) }
             routePoint = nil
         case ("rte", _):
-            if let route { library.routes.append(Route(id: route.id, name: route.name, points: routePoints)) }
+            if let route { library.routes.append(Self.route(id: route.id, name: route.name, points: routePoints)) }
             route = nil
             routePoints = []
 
@@ -150,6 +175,27 @@ private final class GPXReader: NSObject, XMLParserDelegate {
     }
 
     /// The point's coordinate. A point whose lat or lon is missing or out of range gives nil and is counted as skipped.
+    /// The route from its points. A route with no shape points is read as a plain list of points, as before. Otherwise
+    /// each point is a stop, and the shape points after a stop are the imported leg to the next stop. The first and last
+    /// stops are always via points, as the writer makes them.
+    private static func route(id: UUID, name: String, points: [ReadRoutePoint]) -> Route {
+        guard points.contains(where: { !$0.shape.isEmpty }) else {
+            return Route(id: id, name: name, points: points.map(\.point))
+        }
+        let last = points.count - 1
+        let stops = points.enumerated().map { index, read in
+            RouteStop(
+                name: read.point.name,
+                coordinate: read.point.coordinate,
+                elevation: read.point.elevation,
+                isShaping: read.isShaping && index != 0 && index != last
+            )
+        }
+        // The shape points of the last point have no leg after them, so they are not used.
+        let legs = points.dropLast().map { RouteLeg(shape: $0.shape, method: .imported) }
+        return Route(id: id, name: name, stops: stops, legs: legs)
+    }
+
     private func coordinate(_ attributes: [String: String]) -> Coordinate? {
         guard let latitudeText = attributes["lat"], let longitudeText = attributes["lon"],
               let latitude = Double(latitudeText), let longitude = Double(longitudeText) else {
@@ -168,7 +214,9 @@ private final class GPXReader: NSObject, XMLParserDelegate {
 private enum GPXWriter {
     static func write(_ library: Library) -> Data {
         var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        xml += "<gpx version=\"1.1\" creator=\"BaseCamp Clone\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n"
+        xml += "<gpx version=\"1.1\" creator=\"BaseCamp Clone\" xmlns=\"http://www.topografix.com/GPX/1/1\""
+        xml += " xmlns:gpxx=\"http://www.garmin.com/xmlschemas/GpxExtensions/v3\""
+        xml += " xmlns:trp=\"http://www.garmin.com/xmlschemas/TripExtensions/v1\">\n"
 
         for waypoint in library.waypoints {
             xml += "  <wpt\(attributes(waypoint.coordinate))>\n"
@@ -183,10 +231,24 @@ private enum GPXWriter {
         for route in library.routes {
             xml += "  <rte>\n"
             xml += element("name", route.name, indent: "    ")
-            for point in route.points {
-                xml += "    <rtept\(attributes(point.coordinate))>\n"
-                xml += element("ele", point.elevation.map(number), indent: "      ")
-                xml += element("name", point.name, indent: "      ")
+            let last = route.stops.count - 1
+            for (index, stop) in route.stops.enumerated() {
+                xml += "    <rtept\(attributes(stop.coordinate))>\n"
+                xml += element("ele", stop.elevation.map(number), indent: "      ")
+                xml += element("name", stop.name, indent: "      ")
+                xml += "      <extensions>\n"
+                // The first and last stops are always via points, as Garmin requires.
+                let isShaping = stop.isShaping && index != 0 && index != last
+                xml += isShaping ? "        <trp:ShapingPoint/>\n" : "        <trp:ViaPoint/>\n"
+                let shape = index < route.legs.count ? route.legs[index].shape : []
+                if !shape.isEmpty {
+                    xml += "        <gpxx:RoutePointExtension>\n"
+                    for point in shape {
+                        xml += "          <gpxx:rpt\(attributes(point.coordinate))/>\n"
+                    }
+                    xml += "        </gpxx:RoutePointExtension>\n"
+                }
+                xml += "      </extensions>\n"
                 xml += "    </rtept>\n"
             }
             xml += "  </rte>\n"

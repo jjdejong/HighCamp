@@ -158,6 +158,40 @@ Notes:
 - Selected items keep their colour, so a selected track or route is no longer drawn red. Selection is marked only by the halo.
 Next step: C7b (a taller profile on page 2).
 
+## B5a — 2026-10-13 — Haiku, for Opus review
+State: done
+Commits: this commit (the hash goes in the status table in the next commit)
+What was checked:
+- Five `GPXRouteTests`: a planned route (start, shaping point, end, with shape points in both legs) round trips, with
+  names, via and shaping flags, and shape coordinates to 1e-7 degrees; shape heights are absent after the round trip, and
+  the legs come back imported. The writer's markers: two via points, one shaping point, five `gpxx:rpt`, and both Garmin
+  namespaces declared on `<gpx>`. The first and last stops are always via points. A file with shape points under other
+  prefixes (`g:`, `t:`) reads the same. A file without shape points reads as plain points, as before.
+- Gate green: 199 tests, 3 skipped, no DIAG. The app bundle was rebuilt with `Tools/make-app-bundle.sh release`.
+- Sample written with the real writer, a three-stop route with shape points in both legs:
+  ```
+  <rte><name>Sample way out</name>
+    <rtept lat="45.5000000" lon="6.2500000"><name>Start</name><extensions><trp:ViaPoint/>
+      <gpxx:RoutePointExtension><gpxx:rpt lat="45.5200000" lon="6.2600000"/><gpxx:rpt lat="45.5500000" lon="6.2700000"/></gpxx:RoutePointExtension>
+    </extensions></rtept>
+    <rtept lat="45.6000000" lon="6.3000000"><name>Pass</name><extensions><trp:ShapingPoint/>
+      <gpxx:RoutePointExtension><gpxx:rpt lat="45.6300000" lon="6.3200000"/></gpxx:RoutePointExtension>
+    </extensions></rtept>
+    <rtept lat="45.7000000" lon="6.3500000"><name>End</name><extensions><trp:ViaPoint/></extensions></rtept>
+  </rte>
+  ```
+Decisions and open questions:
+- The reader now processes XML namespaces for every GPX file, so the Garmin extensions are matched by URI, whatever
+  prefix a file uses. Element names are then local names. A file with an undeclared prefix still imports, so no file
+  that the old reader took is refused.
+- On import, the first and last stops are forced to via points, as on export. The file's own marker is not kept there.
+- A route with shaping markers but no `rpt` is read as plain points, as the design says, so its shaping markers are lost.
+- `gpxx:rpt` has no height, so shape heights are lost on a round trip. "Elevations from Model" puts them back.
+- The shape points of the last stop have no leg after them, so they are dropped on import.
+- Check by the user: import the sample route into BaseCamp and into QMapShack, and say what each shows. I have not
+  opened BaseCamp.
+Next step: Opus reviews this commit. Then B5b (Haiku, the inspector), then C2 and C4.
+
 ## B3-impl — 2026-10-13 — Haiku, for Opus review
 State: done
 Commits: eed7750

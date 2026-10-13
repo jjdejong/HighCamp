@@ -86,13 +86,16 @@ enum ReportPrinter {
             return
         }
 
-        let map = await mapImage(for: coordinates, base: base, contours: contours)
+        let rendered = await mapImage(for: coordinates, base: base, contours: contours)
+        if let message = rendered?.missingTilesMessage {
+            store.errorMessage = message
+        }
         let report = ReportView(
             title: title,
             stats: statisticRows(stats, units: display.units, coordinates: display.coordinates, start: coordinates.first),
             profile: profile,
             units: display.units,
-            map: map
+            map: rendered?.image
         )
         let renderer = ImageRenderer(content: report)
         renderer.scale = 2
@@ -152,7 +155,7 @@ enum ReportPrinter {
     }
 
     /// Apple's map of the item's area, with the item drawn on it.
-    private static func mapImage(for coordinates: [Coordinate], base: BaseMapLayer, contours: Bool) async -> NSImage? {
+    private static func mapImage(for coordinates: [Coordinate], base: BaseMapLayer, contours: Bool) async -> RenderedMap? {
         guard let first = coordinates.first else { return nil }
         var north = first.latitude, south = first.latitude, east = first.longitude, west = first.longitude
         for coordinate in coordinates {

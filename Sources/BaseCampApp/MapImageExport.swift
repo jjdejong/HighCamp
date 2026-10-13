@@ -3,6 +3,19 @@ import BaseCampCore
 import BaseCampIMG
 import MapKit
 
+/// A rendered picture, and how many of the tiles it was drawn from could not be loaded. Those stay blank.
+struct RenderedMap {
+    let image: NSImage
+    var requestedTiles = 0
+    var missingTiles = 0
+
+    /// A message for the user when more than half the tiles are missing, otherwise nil.
+    var missingTilesMessage: String? {
+        guard requestedTiles > 0, missingTiles * 2 > requestedTiles else { return nil }
+        return "\(missingTiles) of \(requestedTiles) map tiles could not be loaded, so those parts of the picture are blank."
+    }
+}
+
 /// Saves the map as a picture: the base map for the visible area, with the Garmin features, the coverage outlines,
 /// the lines and the markers drawn on it. Apple's maps come from a snapshot. Other base maps are drawn from their
 /// tiles, which are fetched from the same servers the map uses. The contour tiles can be added on top.
@@ -13,12 +26,12 @@ enum MapImageExport {
     /// The most points drawn for all the Garmin features together. Past this, every path is thinned further.
     static let maximumFeaturePoints = 400_000
 
-    static func render(scene: MapScene, bounds: GeoBounds, size: CGSize, base: BaseMapLayer, contours: Bool = false) async throws -> NSImage {
+    static func render(scene: MapScene, bounds: GeoBounds, size: CGSize, base: BaseMapLayer, contours: Bool = false) async throws -> RenderedMap {
         let projection = ImageProjection(bounds: bounds, size: size)
         if base.tileURL(z: 0, x: 0, y: 0) == nil {
-            return try await renderSnapshot(scene: scene, projection: projection, base: base)
+            return RenderedMap(image: try await renderSnapshot(scene: scene, projection: projection, base: base))
         }
-        return try await renderTiles(scene: scene, projection: projection, base: base, contours: contours)
+        return await renderTiles(scene: scene, projection: projection, base: base, contours: contours)
     }
 
     /// Apple's own map, drawn by MapKit over the same area the projection covers.
@@ -35,7 +48,7 @@ enum MapImageExport {
     }
 
     /// A base map drawn from tiles in Web Mercator, the projection the tile servers use.
-    private static func renderTiles(scene: MapScene, projection: ImageProjection, base: BaseMapLayer, contours: Bool) async throws -> NSImage {
+    private static func renderTiles(scene: MapScene, projection: ImageProjection, base: BaseMapLayer, contours: Bool) async -> RenderedMap {
         // The contour tiles only go to zoom 16, so with them the base map is drawn at the same zoom.
         let zoom = projection.zoom(maximum: contours ? min(16, base.maximumTileZoom) : base.maximumTileZoom)
         let worldSize = 256 * pow(2, Double(zoom))
@@ -44,10 +57,10 @@ enum MapImageExport {
 
         let columns = Int((origin.x / 256).rounded(.down))...Int(((origin.x + projection.size.width / scale - 0.001) / 256).rounded(.down))
         let rows = Int((origin.y / 256).rounded(.down))...Int(((origin.y + projection.size.height / scale - 0.001) / 256).rounded(.down))
-        let baseTiles = try await fetchTiles(columns: columns, rows: rows) { base.tileURL(z: zoom, x: $0, y: $1) }
+        let baseTiles = await fetchTiles(columns: columns, rows: rows) { base.tileURL(z: zoom, x: $0, y: $1) }
         let contourTiles = contours
-            ? try await fetchTiles(columns: columns, rows: rows) { MapTileURLs.ignWMTS(layer: "ELEVATION.CONTOUR.LINE", z: zoom, x: $0, y: $1) }
-            : [:]
+            ? await fetchTiles(columns: columns, rows: rows) { MapTileURLs.ignWMTS(layer: "ELEVATION.CONTOUR.LINE", z: zoom, x: $0, y: $1) }
+            : FetchedTiles()
 
         let tileSize = 256 * scale
         func draw(_ tiles: [TileKey: NSImage], alpha: CGFloat) {
@@ -58,14 +71,19 @@ enum MapImageExport {
         }
         let attribution = [base.attribution, contours ? MapTileURLs.contourAttribution : nil].compactMap { $0 }.joined(separator: " · ")
 
-        return picture(size: projection.size) { rect in
+        let image = picture(size: projection.size) { rect in
             NSColor.white.setFill()
             rect.fill()
-            draw(baseTiles, alpha: 1)
-            draw(contourTiles, alpha: 0.8)
+            draw(baseTiles.images, alpha: 1)
+            draw(contourTiles.images, alpha: 0.8)
             drawOverlays(scene, projection: projection)
             drawAttribution(attribution, in: rect)
         }
+        return RenderedMap(
+            image: image,
+            requestedTiles: baseTiles.requested + contourTiles.requested,
+            missingTiles: baseTiles.missing + contourTiles.missing
+        )
     }
 
     /// Draws a picture once, with the origin at the top left. The drawing is made into a bitmap straight away, so
@@ -164,8 +182,9 @@ enum MapImageExport {
         return south <= area.north && north >= area.south && west <= area.east && east >= area.west
     }
 
-    /// Downloads the tiles of a range, a few at a time.
-    private static func fetchTiles(columns: ClosedRange<Int>, rows: ClosedRange<Int>, address: (Int, Int) -> URL?) async throws -> [TileKey: NSImage] {
+    /// Downloads the tiles of a range, a few at a time. A tile that fails to load is left blank rather than ending
+    /// the export, so the picture still comes out without a network.
+    private static func fetchTiles(columns: ClosedRange<Int>, rows: ClosedRange<Int>, address: (Int, Int) -> URL?) async -> FetchedTiles {
         var keys: [(TileKey, URL)] = []
         for column in columns {
             for row in rows {
@@ -174,29 +193,29 @@ enum MapImageExport {
                 }
             }
         }
-        var result: [TileKey: NSImage] = [:]
+        var fetched = FetchedTiles(requested: keys.count)
         var index = 0
         while index < keys.count {
             let batch = keys[index..<min(index + 8, keys.count)]
             index += 8
-            try await withThrowingTaskGroup(of: (TileKey, NSImage?).self) { group in
+            await withTaskGroup(of: (TileKey, NSImage?).self) { group in
                 for (key, url) in batch {
                     group.addTask {
                         var request = URLRequest(url: url)
                         request.setValue("BaseCamp Clone/0.1 (macOS)", forHTTPHeaderField: "User-Agent")
-                        let (data, response) = try await URLSession.shared.data(for: request)
-                        guard (response as? HTTPURLResponse)?.statusCode == 200 else { return (key, nil) }
-                        return (key, NSImage(data: data))
+                        guard let loaded = try? await URLSession.shared.data(for: request),
+                              (loaded.1 as? HTTPURLResponse)?.statusCode == 200 else { return (key, nil) }
+                        return (key, NSImage(data: loaded.0))
                     }
                 }
-                for try await (key, image) in group {
+                for await (key, image) in group {
                     if let image {
-                        result[key] = image
+                        fetched.images[key] = image
                     }
                 }
             }
         }
-        return result
+        return fetched
     }
 
     private static func drawAttribution(_ text: String, in rect: NSRect) {
@@ -238,6 +257,16 @@ enum MapImageExport {
 private struct TileKey: Hashable {
     let column: Int
     let row: Int
+}
+
+/// The tiles that were loaded, and how many were asked for. The difference is what stays blank.
+private struct FetchedTiles {
+    var images: [TileKey: NSImage] = [:]
+    var requested = 0
+
+    var missing: Int {
+        requested - images.count
+    }
 }
 
 /// Maps coordinates to a picture of a given size, in Web Mercator. The area is the requested bounds, made taller or

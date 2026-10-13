@@ -203,9 +203,12 @@ struct MapPane: View {
         let contours = layers.showContours
         Task {
             do {
-                let image = try await MapImageExport.render(scene: scene, bounds: bounds, size: CGSize(width: 1600, height: 1200), base: base, contours: contours)
-                guard let data = MapImageExport.pngData(image) else { throw CocoaError(.fileWriteUnknown) }
+                let rendered = try await MapImageExport.render(scene: scene, bounds: bounds, size: CGSize(width: 1600, height: 1200), base: base, contours: contours)
+                guard let data = MapImageExport.pngData(rendered.image) else { throw CocoaError(.fileWriteUnknown) }
                 try data.write(to: url, options: .atomic)
+                if let message = rendered.missingTilesMessage {
+                    store.errorMessage = message
+                }
             } catch {
                 store.errorMessage = "The map image could not be saved. \(error.localizedDescription)"
             }

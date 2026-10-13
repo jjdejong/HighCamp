@@ -4,7 +4,7 @@ Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first with
 
 ## C2 — 2026-10-13 — Haiku, for Opus review
 State: done for Opus review, except the GPX sensor reading, which waits for C1. The status row stays "partial".
-Commits: 8a542f8 (part 1: fields, FIT reading, statistics); <part 2 hash> (part 2: inspector and profiles)
+Commits: 8a542f8 (part 1: fields, FIT reading, statistics); d8b0aa8 (part 2: inspector and profiles)
 What was checked:
 - Core tests in `Tests/BaseCampCoreTests/SensorDataTests.swift`: FIT record fields 3, 4, 7 and 13 are read; the
   "no reading" values (0xFF, 0xFFFF, 0x7F) become nil; average and maximum per series; a route's profile is only its

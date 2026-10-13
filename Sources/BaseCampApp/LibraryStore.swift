@@ -676,6 +676,32 @@ final class LibraryStore {
         }
     }
 
+    /// Renames a stop of a route, as typed: an empty name clears it. Typing into the name is one undo step.
+    func renameRouteStop(_ route: UUID, stop: UUID, to name: String) {
+        edit("Rename Point", coalesceKey: "route-stop-name-\(stop)") { library in
+            guard let routeIndex = library.routes.firstIndex(where: { $0.id == route }),
+                  let index = library.routes[routeIndex].stops.firstIndex(where: { $0.id == stop }) else { return }
+            library.routes[routeIndex].updateStop(at: index) { $0.name = name.isEmpty ? nil : name }
+        }
+    }
+
+    /// Makes a stop of a route a shaping point or a via point. The first and last stops stay via points.
+    func setRouteStopShaping(_ route: UUID, stop: UUID, isShaping: Bool) {
+        edit("Change Point Type") { library in
+            guard let routeIndex = library.routes.firstIndex(where: { $0.id == route }),
+                  let index = library.routes[routeIndex].stops.firstIndex(where: { $0.id == stop }) else { return }
+            library.routes[routeIndex].setShaping(isShaping, at: index)
+        }
+    }
+
+    /// Sets the routing profile a route's changed legs are recalculated with. Nothing is recalculated by this.
+    func setRouteProfile(_ route: UUID, profileID: UUID?) {
+        edit("Change Routing") { library in
+            guard let routeIndex = library.routes.firstIndex(where: { $0.id == route }) else { return }
+            library.routes[routeIndex].profileID = profileID
+        }
+    }
+
     /// Joins another track onto the selected track, in order. The result takes the selected track's place and name.
     func combineSelection(withTrack other: UUID) {
         guard case .track(let id)? = selection, id != other,

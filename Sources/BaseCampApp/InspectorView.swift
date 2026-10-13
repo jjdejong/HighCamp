@@ -7,6 +7,7 @@ struct InspectorView: View {
     @Environment(DeviceStore.self) private var device
     @Environment(DisplaySettings.self) private var display
     @Environment(ElevationSettings.self) private var elevation
+    @Environment(RoutePlanner.self) private var planner
 
     var body: some View {
         if store.selectedItems.count > 1 {
@@ -213,6 +214,7 @@ struct InspectorView: View {
     private func routeDetails(_ route: Route) -> some View {
         Section("Route") {
             LabeledContent("Points", value: "\(route.points.count)")
+            routingPicker(route)
         }
         colourSection(.route(route.id), color: route.color, defaultColour: MapLineColor.blue)
         editSection(canSplit: false)
@@ -314,39 +316,108 @@ struct InspectorView: View {
         return nil
     }
 
-    /// The route's stops, each with a button to delete it. The list scrolls and builds its rows as they appear.
-    /// Stops can also be dragged on the map.
+    /// The routing profile that recalculates a route's changed legs. Choosing one recalculates nothing by itself.
+    private func routingPicker(_ route: Route) -> some View {
+        Picker("Routing", selection: Binding(
+            get: { route.profileID },
+            set: { store.setRouteProfile(route.id, profileID: $0) }
+        )) {
+            Text("None (straight lines)").tag(UUID?.none)
+            ForEach(planner.profiles) { profile in
+                Text(profile.name).tag(UUID?.some(profile.id))
+            }
+        }
+        .help("The profile that recalculates legs when their stops change. Choosing a profile recalculates nothing.")
+    }
+
+    /// The route's stops, each with its name, its kind, its distance from the start, and a button to delete it. The
+    /// leg to the next stop is described under each stop. The first and last stops are always via points.
     @ViewBuilder
     private func routePointList(_ route: Route) -> some View {
+        let distances = route.stopDistances()
         Section("Stops (\(route.stops.count))") {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(route.stops.enumerated()), id: \.offset) { index, point in
-                        HStack {
-                            Text("\(index + 1)")
-                                .monospacedDigit()
+                    ForEach(Array(route.stops.enumerated()), id: \.element.id) { index, stop in
+                        stopRow(stop, index: index, count: route.stops.count, route: route, distance: distances.indices.contains(index) ? distances[index] : nil)
+                        if index < route.legs.count {
+                            Text(legDescription(route.legs[index]))
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
-                                .frame(width: 44, alignment: .trailing)
-                            Text(point.name ?? UnitFormat.coordinate(point.coordinate, display.coordinates))
-                                .lineLimit(1)
-                            Spacer()
-                            if let height = point.elevation {
-                                Text(UnitFormat.elevation(height, display.units))
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                            }
-                            Button(role: .destructive) {
-                                store.removeRouteStop(route.id, at: index)
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Delete this point")
+                                .padding(.leading, 28)
                         }
                     }
                 }
             }
-            .frame(height: min(260, CGFloat(route.stops.count) * 24 + 8))
+            .frame(height: min(420, CGFloat(route.stops.count) * 68 + 8))
+        }
+    }
+
+    /// One stop: its number, name and delete button on the first line; its kind, distance and height on the second.
+    private func stopRow(_ stop: RouteStop, index: Int, count: Int, route: Route, distance: Double?) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text("\(index + 1)")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18, alignment: .trailing)
+                TextField("Point \(index + 1)", text: Binding(
+                    get: { stop.name ?? "" },
+                    set: { store.renameRouteStop(route.id, stop: stop.id, to: $0) }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.small)
+                Button(role: .destructive) {
+                    store.removeRouteStop(route.id, at: index)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .help("Delete this point")
+            }
+            HStack(spacing: 6) {
+                Picker("Kind", selection: Binding(
+                    get: { stop.isShaping },
+                    set: { store.setRouteStopShaping(route.id, stop: stop.id, isShaping: $0) }
+                )) {
+                    Text("Via").tag(false)
+                    Text("Shaping").tag(true)
+                }
+                .labelsHidden()
+                .controlSize(.small)
+                .frame(width: 92)
+                // The first and last stops are always via points.
+                .disabled(index == 0 || index == count - 1)
+                Spacer(minLength: 0)
+                if let distance {
+                    Text(UnitFormat.distance(distance, display.units))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                if let height = stop.elevation {
+                    Text(UnitFormat.elevation(height, display.units))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            .padding(.leading, 24)
+        }
+    }
+
+    /// How a leg was made: straight, calculated with a named profile, imported, or waiting for recalculation.
+    private func legDescription(_ leg: RouteLeg) -> String {
+        switch leg.state {
+        case .straight:
+            return "Straight"
+        case .calculated(let profileID):
+            guard let profileID, let profile = planner.profiles.first(where: { $0.id == profileID }) else {
+                return "Calculated"
+            }
+            return "Calculated (\(profile.name))"
+        case .imported:
+            return "Imported"
+        case .waiting:
+            return "Waiting to be recalculated"
         }
     }
 

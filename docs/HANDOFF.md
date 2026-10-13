@@ -158,6 +158,33 @@ Notes:
 - Selected items keep their colour, so a selected track or route is no longer drawn red. Selection is marked only by the halo.
 Next step: C7b (a taller profile on page 2).
 
+## B5b — 2026-10-13 — Haiku
+State: done
+Commits: this commit (the hash goes in the status table in the next commit)
+What was checked:
+- Six `RouteStopsTests`: the distance from the start to each stop follows the line, and the last stop's distance is the
+  route's length; a route with no stops has none; the first and last stops cannot be shaping points, and setting the
+  kind of a missing stop changes nothing; a leg is described as straight, calculated with its profile, imported, or
+  waiting for recalculation.
+- Picture of the inspector for a scratch route with every leg state (window capture, route selected). Each stop shows
+  its name, via or shaping, distance and height. Under each stop, its leg: "Calculated (Mountain bike, max 15%)",
+  "Imported", "Waiting to be recalculated", and "Straight". The routing picker shows the profile.
+  The stop list is below the fold, and synthetic scrolling does not reach the app in this session. So for the picture
+  I moved the list above the other sections for one build, and then restored the layout.
+- Gate green: 205 tests, 3 skipped, no DIAG. The app bundle was rebuilt with `Tools/make-app-bundle.sh release`.
+Decisions:
+- The name field's placeholder is "Point N". The coordinate placeholder wrapped over five lines in the narrow
+  inspector. A stop with no name shows its number.
+- The name is set per keystroke, one undo step per stop, as waypoint names are. Nothing is trimmed while typing.
+- The first and last stops show a disabled picker set to Via, and the model enforces that too (`Route.setShaping`).
+- Choosing a routing profile only sets the route's profile. Nothing is recalculated; B5-map does that.
+- Three store calls, each one `edit`: `renameRouteStop`, `setRouteStopShaping`, `setRouteProfile`.
+Not checked:
+- Clicking through the controls: typing a name, changing a kind, choosing a profile, and undo. There is no UI automation
+  here, so please try these in the app. Rename a stop and undo once: the whole name should go back.
+- A list with many stops: the list scrolls within 420 points. Not tried with many stops.
+Next step: Opus reviews this commit. Then C2 and C4 (Haiku → Opus). B5c waits for B5-map.
+
 ## B5a — 2026-10-13 — Haiku, for Opus review
 State: done
 Commits: 717e19b

@@ -397,6 +397,8 @@ final class LibraryStore {
     @ObservationIgnored var viewBounds: GeoBounds?
     /// Bumped to ask the map to save its current view as an image.
     var mapImageRequest = 0
+    /// Bumped by "Go to My Location"; the map centres on the Mac's position.
+    var locateRequest = 0
 
     /// Adds a waypoint at `coordinate` and selects it.
     func addWaypoint(name: String, coordinate: Coordinate, comment: String? = nil) {

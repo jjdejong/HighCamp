@@ -224,6 +224,10 @@ struct BaseCampCommands: Commands {
                 store.zoomToSelection()
             }
             .keyboardShortcut("l", modifiers: [.command])
+            Button("Go to My Location") {
+                store.locateRequest += 1
+            }
+            .keyboardShortcut("l", modifiers: [.command, .option])
         }
 
         CommandGroup(replacing: .importExport) {

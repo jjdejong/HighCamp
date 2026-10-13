@@ -27,6 +27,8 @@ cat > "$bundle/Contents/Info.plist" <<PLIST
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
+    <key>NSLocationUsageDescription</key><string>To open the map around where you are.</string>
+    <key>NSLocationWhenInUseUsageDescription</key><string>To open the map around where you are.</string>
 </dict>
 </plist>
 PLIST

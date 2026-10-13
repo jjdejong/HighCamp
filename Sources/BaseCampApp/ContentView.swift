@@ -77,6 +77,10 @@ struct ContentView: View {
                         .disabled(!device.isConnected)
 
                         Menu {
+                            Button("Go to My Location", systemImage: "location") {
+                                store.locateRequest += 1
+                            }
+                            Divider()
                             Section("Garmin maps, from the map folder") {
                                 if garminMaps.entries.isEmpty {
                                     Text(garminMaps.problem ?? "No .img maps in the map folder")

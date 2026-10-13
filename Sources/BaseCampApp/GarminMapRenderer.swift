@@ -119,15 +119,17 @@ enum GarminPainter {
     /// Inside a map's coverage, where no area is filled.
     static let land = NSColor(calibratedRed: 0.976, green: 0.973, blue: 0.949, alpha: 1)
 
-    /// Draws the maps bottom first: land where a full map is drawn, then each map's features, with its opacity.
-    /// Elsewhere the picture stays transparent, so whatever is under it shows. `patternOrigin` is the context origin's position in the pattern grid, so area patterns meet
+    /// Draws the maps bottom first: land where a full map draws something, then each map's features, with its
+    /// opacity. Elsewhere the picture stays transparent, so whatever is under it shows. A map whose level here holds
+    /// nothing drawable (an overview level with only its background area, say) paints no land, so it cannot hide
+    /// the map under it with a blank sheet. `patternOrigin` is the context origin's position in the pattern grid, so area patterns meet
     /// across tiles. `step` thins long paths for large pictures: every `step`-th point is drawn.
     static func draw(
         _ drawings: [GarminMapDrawing], in rect: NSRect, patternOrigin: NSPoint, step: Int = 1,
         project: (Coordinate) -> NSPoint
     ) {
         land.setFill()
-        for drawing in drawings where !drawing.isOverlay {
+        for drawing in drawings where !drawing.isOverlay && !(drawing.features.lines.isEmpty && drawing.features.areas.isEmpty) {
             for bounds in drawing.features.coverage {
                 let corner = project(Coordinate(latitude: bounds.north, longitude: bounds.west))
                 let opposite = project(Coordinate(latitude: bounds.south, longitude: bounds.east))

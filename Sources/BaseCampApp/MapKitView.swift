@@ -153,19 +153,32 @@ struct MapKitView: NSViewRepresentable {
     let onViewportChange: (GeoBounds, Double) -> Void
     /// Called when a dragged route point is released at a new position.
     let onMovePoint: (RoutePointRef, Coordinate) -> Void
+    /// Bumped to go to the Mac's position.
+    let locateRequest: Int
+    /// Called with a message when the position cannot be found.
+    let onLocationProblem: (String) -> Void
 
     func makeNSView(context: Context) -> MKMapView {
         let map = ScrollZoomMapView()
         map.delegate = context.coordinator
         map.showsCompass = true
         map.showsScale = true
+        // Open where the map was left, as BaseCamp does. The first time, go to the Mac's position if it can be
+        // found; until then, France.
+        let saved = SavedMapRegion.load()
         map.setRegion(
-            MKCoordinateRegion(
+            saved ?? MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: 46.6, longitude: 2.4),
                 span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
             ),
             animated: false
         )
+        context.coordinator.lastLocateRequest = locateRequest
+        if saved == nil {
+            DispatchQueue.main.async { [weak map, coordinator = context.coordinator] in
+                if let map { coordinator.goToMyLocation(on: map, reportProblems: false) }
+            }
+        }
         // Report the starting view too, so the store knows where the map is before anything moves it.
         DispatchQueue.main.async { [weak map, coordinator = context.coordinator] in
             if let map {
@@ -183,6 +196,12 @@ struct MapKitView: NSViewRepresentable {
         coordinator.applyBase(base, garmin: garmin, on: map)
         coordinator.applyContours(show: showContours, opacity: contourOpacity, on: map)
         coordinator.applyScene(scene, on: map)
+        if locateRequest != coordinator.lastLocateRequest {
+            coordinator.lastLocateRequest = locateRequest
+            DispatchQueue.main.async {
+                coordinator.goToMyLocation(on: map, reportProblems: true)
+            }
+        }
         if fitRequest != coordinator.lastFitRequest {
             coordinator.lastFitRequest = fitRequest
             // Moving the camera can run map callbacks at once, so it waits until this update has finished.
@@ -201,6 +220,8 @@ struct MapKitView: NSViewRepresentable {
     final class Coordinator: NSObject, MKMapViewDelegate {
         var parent: MapKitView
         var lastFitRequest = -1
+        var lastLocateRequest = 0
+        private let locationFinder = LocationFinder()
 
         private var appliedBase: (layer: BaseMapLayer, garmin: GarminMapConfiguration)?
         private var baseOverlay: MKTileOverlay?
@@ -315,6 +336,18 @@ struct MapKitView: NSViewRepresentable {
             }
         }
 
+        /// Centres the map on the Mac's position, about 30 km across. Problems are reported only when the user asked.
+        func goToMyLocation(on map: MKMapView, reportProblems: Bool) {
+            locationFinder.locate { [weak self, weak map] result in
+                switch result {
+                case .success(let coordinate):
+                    map?.setRegion(MKCoordinateRegion(center: coordinate, latitudinalMeters: 30_000, longitudinalMeters: 30_000), animated: true)
+                case .failure(let problem):
+                    if reportProblems { self?.parent.onLocationProblem(problem.message) }
+                }
+            }
+        }
+
         func fit(_ coordinates: [Coordinate], on map: MKMapView) {
             guard let area = MapFraming.area(enclosing: coordinates) else { return }
             let corner = MKMapPoint(area.southWest.clLocation)
@@ -407,6 +440,9 @@ struct MapKitView: NSViewRepresentable {
         /// Sends the visible area to the owner, after the current update has finished.
         func reportViewport(_ mapView: MKMapView) {
             let region = mapView.region
+            if mapView.bounds.width > 0 {
+                SavedMapRegion.save(region)
+            }
             let half = (region.span.latitudeDelta / 2, region.span.longitudeDelta / 2)
             let bounds = GeoBounds(
                 north: MapFraming.clampLatitude(region.center.latitude + half.0),

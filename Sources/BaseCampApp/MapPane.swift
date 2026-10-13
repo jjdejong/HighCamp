@@ -43,6 +43,10 @@ struct MapPane: View {
             },
             onMovePoint: { reference, coordinate in
                 store.moveRoutePoint(reference.route, at: reference.index, to: coordinate)
+            },
+            locateRequest: store.locateRequest,
+            onLocationProblem: { message in
+                store.errorMessage = message
             }
         )
         .overlay(alignment: .bottomLeading) {

@@ -26,7 +26,7 @@ struct MapPane: View {
             fitCoordinates: store.fitCoordinates,
             onMapClick: { coordinate in
                 if planner.isActive {
-                    planner.add(coordinate)
+                    planner.click(coordinate, store: store)
                 } else if store.measuring {
                     store.measurePoints.append(coordinate)
                 }
@@ -53,6 +53,11 @@ struct MapPane: View {
                 guard !planner.isActive, !store.measuring, case .route(let id)? = store.selection else { return }
                 store.extendRoute(id, to: coordinate)
             },
+            editableRoute: selectedRoute,
+            onStopClick: { reference in
+                store.selectedStop = store.route(reference.route)?.stops[safe: reference.index]?.id
+            },
+            contextMenu: contextMenu,
             locateRequest: store.locateRequest,
             onLocationProblem: { message in
                 store.errorMessage = message
@@ -75,7 +80,7 @@ struct MapPane: View {
         }
         .overlay(alignment: .bottom) {
             // A small bar, so the map stays usable everywhere else: BaseCamp shows nothing over its map.
-            if store.library.isEmpty && planner.via.isEmpty {
+            if store.library.isEmpty && !planner.isActive {
                 emptyState
             }
         }
@@ -85,8 +90,9 @@ struct MapPane: View {
     private var scene: MapScene {
         var parts: [MapLayerKind: MapLayerContent] = [:]
         parts[.coverage] = coverageLayer
-        parts[.library] = libraryLayer.content(revision: store.revision, selectedItems: store.selectedItems, build: buildLibraryLayer)
-        parts[.planner] = plannerLayer
+        parts[.library] = libraryLayer.content(
+            revision: store.revision, selectedItems: store.selectedItems, selectedStop: store.selectedStop, build: buildLibraryLayer
+        )
         parts[.measure] = measureLayer
         if let cursor = store.profileCoordinate {
             parts[.cursor] = MapLayerContent(pins: [
@@ -133,7 +139,7 @@ struct MapPane: View {
                 content.pins.append(MapPin(
                     id: "route-point-\(selectedRoute.id)-\(index)",
                     coordinate: point.coordinate,
-                    style: .routePoint,
+                    style: .routePoint(selected: point.id == store.selectedStop),
                     item: nil,
                     title: point.name ?? "Point \(index + 1)",
                     routePoint: RoutePointRef(route: selectedRoute.id, index: index)
@@ -199,44 +205,51 @@ struct MapPane: View {
         return lines
     }
 
+    /// The selected route, when exactly one item is selected and it is a route.
+    private var selectedRoute: Route? {
+        guard case .route(let id)? = store.selection else { return nil }
+        return store.route(id)
+    }
+
+    /// The map's context menu: for a stop of the selected route, its line, or anywhere else.
+    private func contextMenu(_ target: MapContextTarget) -> [MapMenuItem] {
+        switch target {
+        case .stop(let reference):
+            guard let route = store.route(reference.route), let stop = route.stops[safe: reference.index] else { return [] }
+            let isEnd = reference.index == 0 || reference.index == route.stops.count - 1
+            return [
+                MapMenuItem(title: "Delete Point") { store.removeRouteStop(route.id, at: reference.index) },
+                MapMenuItem(title: stop.isShaping ? "Make Via Point" : "Make Shaping Point", isEnabled: !isEnd) {
+                    store.setRouteStopShaping(route.id, stop: stop.id, isShaping: !stop.isShaping)
+                },
+            ]
+        case .leg(let route, let leg, let coordinate):
+            return [
+                MapMenuItem(title: "Insert Point Here") { store.insertRouteStop(route, at: leg + 1, coordinate: coordinate) },
+            ]
+        case .map(let coordinate):
+            var items = [
+                MapMenuItem(title: "New Waypoint Here") {
+                    store.addWaypoint(name: "Waypoint \(store.library.waypoints.count + 1)", coordinate: coordinate)
+                },
+                MapMenuItem(title: "New Route from Here") {
+                    planner.isActive = true
+                    planner.click(coordinate, store: store, startNew: true)
+                },
+            ]
+            if let route = selectedRoute {
+                items += [
+                    .separator,
+                    MapMenuItem(title: "Extend \(route.name) to Here") { store.extendRoute(route.id, to: coordinate) },
+                ]
+            }
+            return items
+        }
+    }
+
     /// The pale halo under a selected line: the same path, four points wider, in white. The item keeps its colour.
     private static func selectionHalo(for line: MapLine) -> MapLine {
         MapLine(id: "halo-\(line.id)", coordinates: line.coordinates, color: line.color, rgb: MapRGB(red: 1, green: 1, blue: 1), width: line.width + 4)
-    }
-
-    private var plannerLayer: MapLayerContent {
-        var content = MapLayerContent()
-        for (index, point) in planner.via.enumerated() {
-            content.pins.append(MapPin(
-                id: "via-\(index)",
-                coordinate: point,
-                style: .via(number: index + 1),
-                item: nil,
-                title: "Point \(index + 1)"
-            ))
-        }
-        if let plan = planner.plan {
-            content.lines.append(MapLine(
-                id: "planned-route",
-                coordinates: plan.geometry.points.map(\.coordinate),
-                color: .teal
-            ))
-            for (index, section) in plan.remainingSteepSections.enumerated() {
-                content.circles.append(MapCircleShape(
-                    id: "steep-circle-\(index)",
-                    center: section.center,
-                    radiusMeters: section.lengthMeters / 2 + 25
-                ))
-                content.pins.append(MapPin(
-                    id: "steep-pin-\(index)",
-                    coordinate: section.center,
-                    style: .steep(percent: Int(section.maxGradePercent.rounded())),
-                    item: nil,
-                    title: "Climb above \(Int(section.maxGradePercent.rounded()))%"
-                ))
-            }
-        }
-        return content
     }
 
     private var measureLayer: MapLayerContent {
@@ -362,13 +375,15 @@ struct MapPane: View {
 final class LibraryLayerCache {
     private var revision: Int?
     private var selectedItems: Set<LibraryItem> = []
+    private var selectedStop: UUID?
     private var cached = MapLayerContent()
 
-    func content(revision: Int, selectedItems: Set<LibraryItem>, build: () -> MapLayerContent) -> MapLayerContent {
-        if revision != self.revision || selectedItems != self.selectedItems {
+    func content(revision: Int, selectedItems: Set<LibraryItem>, selectedStop: UUID?, build: () -> MapLayerContent) -> MapLayerContent {
+        if revision != self.revision || selectedItems != self.selectedItems || selectedStop != self.selectedStop {
             cached = build()
             self.revision = revision
             self.selectedItems = selectedItems
+            self.selectedStop = selectedStop
         }
         return cached
     }

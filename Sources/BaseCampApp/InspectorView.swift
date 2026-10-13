@@ -219,9 +219,10 @@ struct InspectorView: View {
             routingPicker(route)
             recalculationStatus(route)
         }
+        // The stops come first: they are what is edited on the map.
+        routePointList(route)
         colourSection(.route(route.id), color: route.color, defaultColour: MapLineColor.blue)
         editSection(canSplit: false)
-        routePointList(route)
         statisticsSections(route.statistics, profile: route.elevationProfile)
     }
 
@@ -343,20 +344,35 @@ struct InspectorView: View {
     private func routePointList(_ route: Route) -> some View {
         let distances = route.stopDistances()
         Section("Stops (\(route.stops.count))") {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(route.stops.enumerated()), id: \.element.id) { index, stop in
-                        stopRow(stop, index: index, count: route.stops.count, route: route, distance: distances.indices.contains(index) ? distances[index] : nil)
-                        if index < route.legs.count {
-                            Text(legDescription(route.legs[index], failure: recalculator.failure(route: route, leg: index)))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .padding(.leading, 28)
+            ScrollViewReader { scroller in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(route.stops.enumerated()), id: \.element.id) { index, stop in
+                            stopRow(stop, index: index, count: route.stops.count, route: route, distance: distances.indices.contains(index) ? distances[index] : nil)
+                                .padding(2)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .fill(stop.id == store.selectedStop ? Color.accentColor.opacity(0.18) : .clear)
+                                )
+                                .id(stop.id)
+                            if index < route.legs.count {
+                                Text(legDescription(route.legs[index], failure: recalculator.failure(route: route, leg: index)))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.leading, 28)
+                            }
                         }
                     }
                 }
+                .frame(height: min(420, CGFloat(route.stops.count) * 72 + 8))
+                .onChange(of: store.selectedStop) { _, stop in
+                    // A stop clicked on the map is brought into view.
+                    if let stop { withAnimation { scroller.scrollTo(stop, anchor: .center) } }
+                }
             }
-            .frame(height: min(420, CGFloat(route.stops.count) * 68 + 8))
+            Text("Click a point on the map to find it here. Drag a point, or the line, to change the route; right-click for more.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -373,6 +389,7 @@ struct InspectorView: View {
                     set: { store.renameRouteStop(route.id, stop: stop.id, to: $0) }
                 ))
                 .textFieldStyle(.roundedBorder)
+                .labelsHidden()
                 .controlSize(.small)
                 Button(role: .destructive) {
                     store.removeRouteStop(route.id, at: index)

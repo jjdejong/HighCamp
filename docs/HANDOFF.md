@@ -2,6 +2,28 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Route editing fixes after user testing — 2026-10-14 — Opus
+State: done (this commit). Gate green: 211 tests, 3 skipped, no DIAG. App bundle rebuilt.
+User report: dragging on a route panned the map; a planned route did not appear under Routes; nothing happened on
+clicking a stop; no right-click menu; "what is the inspector?".
+- Dragging: MapKit's annotation drag never started for the user (it panned instead). Now a local mouse monitor
+  (`MapRouteEditing.swift`) takes left mouse-downs on the selected route before MapKit: a stop (9 pt), a leg handle
+  (8 pt) or the line itself (6 pt) is followed with a tracking loop, with dashed rubber bands to the neighbours. A
+  drag moves the stop or inserts one; a click selects the stop. Elsewhere the event goes on to MapKit (pan, click).
+- Stop selection: `LibraryStore.selectedStop`; the stop is drawn larger and filled on the map, and its row is
+  highlighted and scrolled to in the inspector. The stop list now comes right after the Route section.
+- Right-click (or Control-click): on a stop, Delete Point / Make Shaping (Via) Point; on the selected route's line,
+  Insert Point Here; elsewhere, New Waypoint Here, New Route from Here, Extend <route> to Here.
+- Route tool: "Plan Route" no longer plans a separate line that had to be added with "Add to Library" (the user
+  never saw it in the library). As in BaseCamp, the first click creates "Route n" in the library with the chosen
+  profile and selects it; each click adds a stop; `RouteRecalculator` routes the legs. The bar has the profile and
+  limits, Undo, New Route, Done, and a status line. `RoutePlanner` lost `via`, `plan`, `planRoute`,
+  `addPlannedRoute`; the planner map layer is gone. Steep sections left after the detour passes are no longer shown.
+- Checked live with the local BRouter (scratch library): drag a stop, drag a handle, drag the line, click a stop,
+  both context menus, the route tool (two clicks → Route 2, calculated, listed under Routes), and panning on empty map.
+- Test tool note: synthetic drags need `mouseEventDeltaX/Y` set, or MapKit blanks its overlays; and the window may
+  move between runs, so read its position from `listwin` each time.
+
 ## B5-map — 2026-10-13 — Opus
 State: done (this commit). Gate green: 211 tests, 3 skipped, no DIAG. App bundle rebuilt.
 - `RouteRecalculator` (app): after every library change (`ContentView`, `.task(id: store.revision)`) it works through

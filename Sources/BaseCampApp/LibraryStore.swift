@@ -36,6 +36,8 @@ final class LibraryStore {
         get { selectedItems.count == 1 ? selectedItems.first : nil }
         set { selectedItems = newValue.map { [$0] } ?? [] }
     }
+    /// The stop of the selected route last clicked on the map, highlighted there and in the inspector. Not saved.
+    var selectedStop: UUID?
     /// The point under the cursor of an elevation profile, marked on the map. Not saved.
     var profileCoordinate: Coordinate?
     /// Bumped each time the map should frame `fitCoordinates`.
@@ -699,6 +701,17 @@ final class LibraryStore {
             save()
         }
         return taken
+    }
+
+    /// Starts a new route with one stop, with the routing profile its legs are calculated with, and selects it.
+    @discardableResult
+    func startRoute(at coordinate: Coordinate, profileID: UUID?) -> UUID {
+        let number = library.routes.count + 1
+        let names = Set(library.routes.map(\.name))
+        let name = (number...).lazy.map { "Route \($0)" }.first { !names.contains($0) } ?? "Route"
+        let route = Route(name: name, stops: [RouteStop(coordinate: coordinate)], profileID: profileID)
+        addRoute(route)
+        return route.id
     }
 
     /// Deletes one stop of a route.

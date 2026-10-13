@@ -24,8 +24,8 @@ struct MapPin: Equatable {
         case label(String)
         /// The point under the cursor of an elevation profile.
         case cursor
-        /// A point of a selected route. Drag it to move the point.
-        case routePoint
+        /// A stop of the selected route. Drag it to move the stop; click it to select it.
+        case routePoint(selected: Bool)
         /// The middle of a leg of the selected route. Drag it to insert a stop there.
         case insertHandle
     }
@@ -105,8 +105,6 @@ enum MapLayerKind: Int, CaseIterable {
     case coverage
     /// Waypoints, routes and tracks, and the draggable points of the selected route.
     case library
-    /// The route being planned: its points, its line and the climbs still too steep.
-    case planner
     case measure
     /// The point under the cursor of an elevation profile.
     case cursor
@@ -163,6 +161,12 @@ struct MapKitView: NSViewRepresentable {
     let onMovePoint: (RoutePointRef, Coordinate) -> Void
     /// Called for a click with the Option key on empty map.
     var onOptionClick: (Coordinate) -> Void = { _ in }
+    /// The selected route, whose stops and line can be dragged.
+    var editableRoute: Route?
+    /// Called when a stop of the selected route is clicked without dragging.
+    var onStopClick: (RoutePointRef) -> Void = { _ in }
+    /// The items of the context menu for what was right-clicked.
+    var contextMenu: (MapContextTarget) -> [MapMenuItem] = { _ in [] }
     /// Bumped to go to the Mac's position.
     let locateRequest: Int
     /// Called with a message when the position cannot be found.
@@ -197,7 +201,12 @@ struct MapKitView: NSViewRepresentable {
         }
         let click = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.clicked(_:)))
         map.addGestureRecognizer(click)
+        context.coordinator.installMouseMonitor(on: map)
         return map
+    }
+
+    static func dismantleNSView(_ map: MKMapView, coordinator: Coordinator) {
+        coordinator.removeMouseMonitor()
     }
 
     func updateNSView(_ map: MKMapView, context: Context) {
@@ -231,6 +240,8 @@ struct MapKitView: NSViewRepresentable {
         var parent: MapKitView
         var lastFitRequest = -1
         var lastLocateRequest = 0
+        /// Takes mouse-downs on the selected route before MapKit (see MapRouteEditing.swift).
+        var mouseMonitor: Any?
         private let locationFinder = LocationFinder()
 
         private var appliedBase: (layer: BaseMapLayer, garmin: GarminMapConfiguration)?
@@ -442,14 +453,9 @@ struct MapKitView: NSViewRepresentable {
             // A label makes the image wider; shift it so the marker itself stays on the coordinate.
             view.centerOffset = CGPoint(x: (image.size.width - dot.size.width) / 2, y: 0)
             view.canShowCallout = false
-            view.isDraggable = pin.routePoint != nil
+            // Stops and handles are dragged by the mouse monitor, not by MapKit, which would pan the map instead.
+            view.isDraggable = false
             return view
-        }
-
-        func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, didChange newState: MKAnnotationView.DragState, fromOldState oldState: MKAnnotationView.DragState) {
-            guard newState == .ending, let pin = view.annotation as? PinAnnotation, let reference = pin.routePoint else { return }
-            view.dragState = .none
-            parent.onMovePoint(reference, Coordinate(latitude: pin.coordinate.latitude, longitude: pin.coordinate.longitude))
         }
 
         func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
@@ -525,8 +531,8 @@ final class PinAnnotation: NSObject, MKAnnotation {
     let style: MapPin.Style
     let item: LibraryItem?
     let title: String?
-    /// Changes when the marker is dragged.
-    var coordinate: CLLocationCoordinate2D
+    /// Changes while the marker is dragged; MapKit follows it.
+    @objc dynamic var coordinate: CLLocationCoordinate2D
     let showsLabel: Bool
     let routePoint: RoutePointRef?
 
@@ -604,8 +610,10 @@ enum MarkerImage {
             image = pill(text)
         case .cursor:
             image = dot(diameter: 12, fill: .white, label: nil, ring: .systemRed)
-        case .routePoint:
-            image = dot(diameter: 10, fill: .white, label: nil, ring: .systemBlue)
+        case .routePoint(let selected):
+            image = selected
+                ? dot(diameter: 14, fill: .systemBlue, label: nil, ring: .white)
+                : dot(diameter: 10, fill: .white, label: nil, ring: .systemBlue)
         case .insertHandle:
             image = dot(diameter: 9, fill: NSColor.white.withAlphaComponent(0.75), label: nil, ring: NSColor.systemBlue.withAlphaComponent(0.6))
         }

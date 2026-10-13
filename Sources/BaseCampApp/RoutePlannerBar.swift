@@ -1,13 +1,16 @@
 import BaseCampCore
 import SwiftUI
 
-/// Bottom bar while planning. Choose the profile and its limits, click points on the map, then plan.
+/// Bottom bar of the route tool. Choose the profile and its limits, then click the map: each click adds a point to the
+/// route, which is in the library from the first click. Its legs are calculated in the background.
 struct RoutePlannerBar: View {
     @Environment(RoutePlanner.self) private var planner
     @Environment(RoutingSettings.self) private var settings
     @Environment(BRouterServer.self) private var server
     @Environment(LibraryStore.self) private var store
     @Environment(ElevationSettings.self) private var elevation
+    @Environment(RouteRecalculator.self) private var recalculator
+    @Environment(DisplaySettings.self) private var display
 
     var body: some View {
         @Bindable var planner = planner
@@ -15,7 +18,11 @@ struct RoutePlannerBar: View {
             HStack(spacing: 12) {
                 Picker("Profile", selection: Binding(
                     get: { planner.selectedProfileID },
-                    set: { planner.selectProfile($0) }
+                    set: { id in
+                        planner.selectProfile(id)
+                        // The route being drawn takes the new profile for the legs still to come.
+                        if let route = planner.routeID { store.setRouteProfile(route, profileID: id) }
+                    }
                 )) {
                     ForEach(planner.profiles) { profile in
                         Text(profile.name).tag(profile.id)
@@ -24,10 +31,10 @@ struct RoutePlannerBar: View {
                 .frame(maxWidth: 280)
 
                 Spacer()
-                Button("Close", systemImage: "xmark") {
+                Button("Done") {
                     planner.isActive = false
                 }
-                .labelStyle(.iconOnly)
+                .keyboardShortcut(.defaultAction)
             }
 
             HStack(spacing: 12) {
@@ -35,33 +42,20 @@ struct RoutePlannerBar: View {
             }
 
             HStack(spacing: 12) {
-                Text("\(planner.via.count) point(s)")
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                Button("Undo") { planner.undo() }
-                    .disabled(planner.via.isEmpty)
-                Button("Clear") { planner.clear() }
-                    .disabled(planner.via.isEmpty)
-                Button("Plan Route") {
-                    Task { await planner.planRoute(settings, demFolder: elevation.folder) }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(planner.via.count < 2 || planner.isPlanning)
-                if planner.isPlanning {
+                Button("Undo") { store.undo() }
+                    .disabled(!store.canUndo)
+                Button("New Route") { planner.startNewRoute() }
+                    .disabled(planner.routeID == nil)
+                if let route = currentRoute, recalculator.isWorking(on: route.id) {
                     ProgressView().controlSize(.small)
                 }
-                Button("Add to Library") {
-                    planner.addPlannedRoute(to: store)
-                }
-                .disabled(planner.plan == nil)
+                Text(status)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
                 Spacer()
                 serverStatus
             }
-
-            Text(planner.status.isEmpty ? "Click the map to add route points." : planner.status)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -69,6 +63,26 @@ struct RoutePlannerBar: View {
         .task {
             await planner.checkServer(settings)
         }
+    }
+
+    private var currentRoute: Route? {
+        planner.routeID.flatMap { store.route($0) }
+    }
+
+    private var status: String {
+        guard let route = currentRoute else {
+            return "Click the map to start a route. Each click adds a point; the legs follow the paths allowed by the profile."
+        }
+        let length = UnitFormat.distance(route.lengthMeters, display.units)
+        let summary = "\(route.name): \(route.stops.count) point(s), \(length)."
+        let failure = route.legsWaitingForRouter.lazy.compactMap { recalculator.failure(route: route, leg: $0) }.first
+        if let failure {
+            return "\(summary) \(failure)"
+        }
+        if !route.legsWaitingForRouter.isEmpty {
+            return "\(summary) Calculating…"
+        }
+        return "\(summary) Click to add a point; drag a point or the line to change the route; right-click for more."
     }
 
     /// The grade limit and the climb length that triggers a detour, for the selected profile.

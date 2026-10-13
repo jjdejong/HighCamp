@@ -256,7 +256,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G5 | Opus | todo | | basemap when zoomed out |
 | C3 | Haiku | ready | | colour as a new optional field, so old library files still load; PNG check |
 | C5 | Haiku | done | | table next to the list, with a filter field; `--sidebar table` hook (debug) |
-| C7 | Haiku | ready | | PNG check of the printed page |
+| C7 | Haiku | partial | | scale bar done; page breaks open, see HANDOFF |
 | C1, C2, C4 | see above | blocked | | after B5 |
 | C6 | — | moved | | to G2 |
 

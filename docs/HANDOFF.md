@@ -34,6 +34,16 @@ State: A1–A10 accepted. Gate green: 147 tests, 3 skipped, no DIAG.
 - For B2: two exports of the same view drew the IMG roads in different colours (red, then grey). Check whether the TYP or draw order is chosen nondeterministically. In the same exports a pale IMG area fill washes over most of the tiles, which is the known area-fill item.
 - Still with the user: A5 real offline export, A9 fill from a real DEM folder plus one undo, A10 virtual partner pace on the Edge.
 
+## C7 — 2026-10-13 — Haiku
+State: partial: the scale bar is done; the page breaks are open
+Commits: this commit (scale bar and the report's layout)
+What was checked: three tests of the round-length rule (the largest 1, 2 or 5 times a power of ten within a fraction; never above it; nothing for zero or less). Gate green (153 tests). Release build compiles. Report PNG for the Ride track (report at 2×): a "500 m" bar under the map. The map is about 4 km across: the track is about 1.5 km east–west and the projection widens the picture to 4:3, so 500 m is about 13% of the width, as expected.
+Open questions: a report is about 950 points tall, and printing fits it to one page (verticalPagination .fit), so a long item comes out small. "More than one page for long items" needs page breaks, and the plan does not say where they go. Options:
+- (a) Automatic pagination. Simple, but a page can end in the middle of the map or a statistics row.
+- (b) Break only between sections: title, map and statistics on page 1, and the elevation profile on page 2 when page 1 would overflow. Recommended.
+- (c) Also a per-kilometre table on later pages for long items. That is new content, so it needs a decision of its own.
+Next step: choose (a), (b) or (c). With (b), Haiku measures the page height (A4 less the print margins) and places the break; the report PNG then shows page 1 and page 2.
+
 ## A10 — 2026-10-13 — Haiku
 State: done
 Commits: c2028ea

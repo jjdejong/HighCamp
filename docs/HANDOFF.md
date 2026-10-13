@@ -2,6 +2,29 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## C2 — 2026-10-13 — Haiku, for Opus review
+State: done for Opus review, except the GPX sensor reading, which waits for C1. The status row stays "partial".
+Commits: 8a542f8 (part 1: fields, FIT reading, statistics); <part 2 hash> (part 2: inspector and profiles)
+What was checked:
+- Core tests in `Tests/BaseCampCoreTests/SensorDataTests.swift`: FIT record fields 3, 4, 7 and 13 are read; the
+  "no reading" values (0xFF, 0xFFFF, 0x7F) become nil; average and maximum per series; a route's profile is only its
+  elevation; the statistics list only the series the item has.
+- Test order: `testRoutesProfileOnlyTheirElevation` and `testStatisticsListTheSeriesTheItemHas`, with `Route.profile(of:)`
+  and `availableSeries`, were written in one step, so they were never seen failing first. Opus may want a red run.
+- Gate: build clean, 218 tests, 3 skipped, 0 failures, no DIAG.
+- Picture (scratch library with a track "Sensor ride", 40 points, with heart rate, cadence, power and temperature), inspector
+  window from `run-window.sh`: the Profile section with the Show picker. Elevation has a 250–400 m axis; Heart rate has a
+  100–200 bpm axis. The Statistics rows show average and maximum heart rate (144 and 194 bpm), cadence (85 and 91 rpm)
+  and average power (227 W). For the capture only, the Profile and Statistics sections were moved above Edit, and the
+  default series was set to heart rate. The file was restored from a backup, rebuilt, and checked against that backup.
+- The map pane is blank in window captures, so the map is not in the pictures.
+Open questions:
+- The GPX sensor reading is not done. It is part of C1 (GPX extensions).
+- The FIT field numbers come from the FIT profile (record fields 3, 4, 7, 13) and the invalid values from the same
+  profile. Opus may want to check them against the SDK.
+- Laps are not in this task.
+Next step: Opus reviews part 1 and part 2. Then C4 (Haiku → Opus), which is the next Haiku task.
+
 ## Route editing fixes after user testing — 2026-10-14 — Opus
 State: done (this commit). Gate green: 211 tests, 3 skipped, no DIAG. App bundle rebuilt.
 User report: dragging on a route panned the map; a planned route did not appear under Routes; nothing happened on

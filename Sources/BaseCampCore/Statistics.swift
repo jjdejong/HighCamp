@@ -129,6 +129,17 @@ public struct ActivityStatistics: Equatable, Sendable {
         self.temperature = Self.summary(temperatures)
     }
 
+    /// The series this track or route has data for, in the order of `ProfileSeries`.
+    public var availableSeries: [ProfileSeries] {
+        var result: [ProfileSeries] = []
+        if minimumElevation != nil { result.append(.elevation) }
+        if heartRate != nil { result.append(.heartRate) }
+        if cadence != nil { result.append(.cadence) }
+        if power != nil { result.append(.power) }
+        if temperature != nil { result.append(.temperature) }
+        return result
+    }
+
     /// The average and maximum of the readings, or nil when there are none.
     private static func summary(_ values: [Double]) -> SeriesSummary? {
         guard !values.isEmpty else { return nil }
@@ -229,6 +240,11 @@ public extension Track {
 public extension Route {
     var statistics: ActivityStatistics {
         ActivityStatistics(segments: [points.map { ActivityStatistics.Sample(coordinate: $0.coordinate, elevation: $0.elevation, time: nil) }])
+    }
+
+    /// Distance along the route against one series. A route has only its elevation: other series are empty.
+    func profile(of series: ProfileSeries) -> [ElevationProfilePoint] {
+        series == .elevation ? elevationProfile : []
     }
 
     /// Distance along the route against elevation. Points without an elevation are left out of the profile.

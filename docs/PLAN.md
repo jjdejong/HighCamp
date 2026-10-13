@@ -295,7 +295,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | C3b | Haiku | reviewed | 5922795 | saved pictures and reports draw the map's markers, with symbols |
 | C3c | Haiku | reviewed | ea02d0b | selected items keep their colour, with a white halo under the line |
 | C1 | Haiku → Opus | todo | | unblocked: B5a is done |
-| C2 | Haiku → Opus | partial | | core: sensor fields, FIT reading, statistics and profiles; inspector next. GPX sensor fields wait for C1 |
+| C2 | Haiku → Opus | partial | | fields, FIT reading, statistics, profiles and inspector done, for Opus review. GPX sensor reading waits for C1 |
 | C4 | Haiku → Opus | todo | | unblocked: new optional `TrackPoint` fields need no file version change |
 | C6 | — | moved | | to G2 |
 

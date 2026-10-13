@@ -8,6 +8,8 @@ struct InspectorView: View {
     @Environment(DisplaySettings.self) private var display
     @Environment(ElevationSettings.self) private var elevation
     @Environment(RoutePlanner.self) private var planner
+    /// The series the profile shows, for an item that has it. Not saved.
+    @State private var chartSeries = ProfileSeries.elevation
     @Environment(RouteRecalculator.self) private var recalculator
     @Environment(RoutingSettings.self) private var routing
 
@@ -223,7 +225,7 @@ struct InspectorView: View {
         routePointList(route)
         colourSection(.route(route.id), color: route.color, defaultColour: MapLineColor.blue)
         editSection(canSplit: false)
-        statisticsSections(route.statistics, profile: route.elevationProfile)
+        statisticsSections(route.statistics, profile: { route.profile(of: $0) })
     }
 
     @ViewBuilder
@@ -234,7 +236,7 @@ struct InspectorView: View {
         }
         colourSection(.track(track.id), color: track.color, defaultColour: MapLineColor.orange)
         editSection(canSplit: true)
-        statisticsSections(track.statistics, profile: track.elevationProfile)
+        statisticsSections(track.statistics, profile: { track.profile(of: $0) })
     }
 
     /// The colour the item is drawn in on the map, and a way back to the default.
@@ -487,7 +489,7 @@ struct InspectorView: View {
     }
 
     @ViewBuilder
-    private func statisticsSections(_ stats: ActivityStatistics, profile: [ElevationProfilePoint]) -> some View {
+    private func statisticsSections(_ stats: ActivityStatistics, profile: (ProfileSeries) -> [ElevationProfilePoint]) -> some View {
         Section("Statistics") {
             LabeledContent("Distance", value: UnitFormat.distance(stats.distanceMeters, display.units))
             if let total = stats.totalTime, let text = Format.seconds(total) {
@@ -514,11 +516,35 @@ struct InspectorView: View {
             if let highest = stats.maximumElevation {
                 LabeledContent("Highest", value: UnitFormat.elevation(highest, display.units))
             }
+            sensorRows("heart rate", stats.heartRate) { "\(Int($0.rounded())) bpm" }
+            sensorRows("cadence", stats.cadence) { "\(Int($0.rounded())) rpm" }
+            sensorRows("power", stats.power) { "\(Int($0.rounded())) W" }
+            sensorRows("temperature", stats.temperature) { String(format: "%.1f °C", $0) }
         }
-        if profile.count > 1 {
-            Section("Elevation profile") {
-                ElevationChart(profile: profile)
+        // The series the item has data for. Elevation is the first; a sensor's line is drawn in its own colour.
+        let choices = stats.availableSeries
+        let shown = choices.contains(chartSeries) ? chartSeries : (choices.first ?? .elevation)
+        let points = profile(shown)
+        if points.count > 1 {
+            Section("Profile") {
+                if choices.count > 1 {
+                    Picker("Show", selection: $chartSeries) {
+                        ForEach(choices, id: \.self) { series in
+                            Text(series.title).tag(series)
+                        }
+                    }
+                }
+                ElevationChart(profile: points, series: shown)
             }
+        }
+    }
+
+    /// The average and the maximum of one sensor, when the item has readings for it.
+    @ViewBuilder
+    private func sensorRows(_ name: String, _ summary: SeriesSummary?, format: (Double) -> String) -> some View {
+        if let summary {
+            LabeledContent("Average \(name)", value: format(summary.average))
+            LabeledContent("Maximum \(name)", value: format(summary.maximum))
         }
     }
 

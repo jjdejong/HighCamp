@@ -120,4 +120,24 @@ final class SensorDataTests: XCTestCase {
         let loaded = try JSONDecoder().decode(Library.self, from: Data(old.utf8))
         XCTAssertNil(loaded.tracks.first?.segments.first?.first?.heartRate)
     }
+
+    func testRoutesProfileOnlyTheirElevation() {
+        let route = Route(name: "Loop", points: [
+            RoutePoint(coordinate: Coordinate(latitude: 45, longitude: 5), elevation: 100),
+            RoutePoint(coordinate: Coordinate(latitude: 45.001, longitude: 5), elevation: 120),
+        ])
+
+        XCTAssertEqual(route.profile(of: .elevation), route.elevationProfile)
+        XCTAssertEqual(route.profile(of: .heartRate), [])
+    }
+
+    func testStatisticsListTheSeriesTheItemHas() {
+        let track = Track(name: "Ride", segments: [[point(45.0, elevation: 100, heartRate: 120), point(45.001, elevation: 110)]])
+        XCTAssertEqual(track.statistics.availableSeries, [.elevation, .heartRate])
+
+        let heartOnly = Track(name: "Strap", segments: [[point(45.0, heartRate: 120)]])
+        XCTAssertEqual(heartOnly.statistics.availableSeries, [.heartRate])
+
+        XCTAssertEqual(Track(name: "Empty", segments: [[point(45.0)]]).statistics.availableSeries, [])
+    }
 }

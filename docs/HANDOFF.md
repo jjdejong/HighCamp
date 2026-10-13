@@ -148,7 +148,7 @@ Next step: C7b (a taller profile on page 2).
 
 ## B3-impl — 2026-10-13 — Haiku, for Opus review
 State: done
-Commits: this commit (the hash goes in the status table in the next commit)
+Commits: eed7750
 What was checked:
 - Nine tests of `LibrarySaver` in temporary folders, with short delays: a burst of 20 changes gives one or two writes
   and the last value; steady changes give at least two writes within the maximum delay; `flush` writes at once and

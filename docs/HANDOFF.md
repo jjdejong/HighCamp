@@ -2,6 +2,25 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## C7 (page breaks) — 2026-10-13 — Haiku
+State: done
+Commits: bc1a6cc (scale bar), and the page-break commit that records this note
+What was checked:
+- `ReportLayout` tests (4): the page height in report points for an A4 page with 18-point margins, a wide paper not
+  enlarging the report, the profile moving to page 2 when the report is taller than a page, and staying when it fits.
+- The Ride track, with `--report-png` and `--report-pdf` (a new debug hook: it saves a PDF through the print path,
+  without the dialog). Page 1: title, map, scale bar and statistics. Page 2: "Ride: elevation profile" and the chart.
+  The PDF has two A4 pages, rendered with PDFKit, upright and not cut.
+- A route without heights: one PNG, with no split and no profile.
+- Gate green (167 tests); release build compiles.
+Open questions and limits:
+- The split is decided on the default paper (NSPrintInfo.shared). If the print dialog picks a different paper, such as
+  Letter, the split is not re-decided. Check Letter once by hand.
+- If page 1 alone is taller than a page, it is cut and not split again. Its only variable part is the statistics list,
+  which has up to about ten rows, so this is unlikely on A4.
+- The chart on page 2 is still 170 points high. Decide whether it should be taller on its own page.
+Next step: check the print dialog on Letter; then C3b and C3c, which are ready.
+
 ## Opus review of C3, C5, C7 — 2026-10-13
 State: accepted. Gate green: 163 tests, 3 skipped, no DIAG.
 - C5 (2a26c42): accepted; checked on screen with 20 tracks (columns, sorting, filter, List/Table control). The handoff note was missing; the commit message carries it.

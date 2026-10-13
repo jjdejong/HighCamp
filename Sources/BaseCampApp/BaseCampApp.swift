@@ -59,8 +59,8 @@ struct BaseCampApp: App {
                             store.addSelection(toCollection: id)
                         }
                     }
-                    // `--report-png PATH` renders the report for the selection to PATH, for testing.
-                    if Self.launchValue("--report-png") != nil {
+                    // `--report-png PATH` or `--report-pdf PATH` renders the report for the selection, for testing.
+                    if Self.launchValue("--report-png") != nil || Self.launchValue("--report-pdf") != nil {
                         try? await Task.sleep(for: .seconds(6))
                         await ReportPrinter.printSelection(store: store, display: display, base: mapLayers.pictureBase(folder: mapSettings.folder))
                     }

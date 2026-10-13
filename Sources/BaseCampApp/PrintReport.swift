@@ -7,6 +7,8 @@ import SwiftUI
 
 /// The page printed for a track or route: its name, map, statistics and elevation profile.
 struct ReportView: View {
+    /// The width of the report, in points: a page of the report is this wide before it is fitted to the paper.
+    static let width: CGFloat = 612
     /// The width of the map on the page, in points. The picture is 1080 by 800 pixels, so its height is 400.
     static let mapWidth: CGFloat = 540
 
@@ -16,6 +18,8 @@ struct ReportView: View {
     let units: UnitSystem
     let map: NSImage?
     let scaleBar: ScaleBarMark?
+    /// Whether the elevation profile is on this page. When it is not, it is on the next one (see `ProfilePageView`).
+    let showsProfile: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -42,30 +46,103 @@ struct ReportView: View {
                     }
                 }
             }
-            if profile.count > 1 {
-                Chart(profile) { point in
-                    AreaMark(
-                        x: .value("Distance", UnitFormat.distanceValue(point.distanceMeters, units)),
-                        yStart: .value("Base", profile.map(\.elevation).min() ?? 0),
-                        yEnd: .value("Elevation", UnitFormat.elevationValue(point.elevation, units))
-                    )
-                    .foregroundStyle(Color.orange.opacity(0.25))
-                    LineMark(
-                        x: .value("Distance", UnitFormat.distanceValue(point.distanceMeters, units)),
-                        y: .value("Elevation", UnitFormat.elevationValue(point.elevation, units))
-                    )
-                    .foregroundStyle(.orange)
-                }
-                .chartYScale(domain: .automatic(includesZero: false))
-                .chartXAxisLabel(UnitFormat.distanceUnitName(units))
-                .chartYAxisLabel(UnitFormat.elevationUnitName(units))
-                .frame(height: 170)
+            if showsProfile {
+                ProfileChart(profile: profile, units: units)
             }
         }
         .padding(36)
-        .frame(width: 612, alignment: .leading)
+        .frame(width: Self.width, alignment: .leading)
         .background(Color.white)
         .foregroundStyle(.black)
+    }
+}
+
+/// The elevation profile of a track or route: distance along the item against height.
+struct ProfileChart: View {
+    let profile: [ElevationProfilePoint]
+    let units: UnitSystem
+
+    var body: some View {
+        if profile.count > 1 {
+            Chart(profile) { point in
+                AreaMark(
+                    x: .value("Distance", UnitFormat.distanceValue(point.distanceMeters, units)),
+                    yStart: .value("Base", profile.map(\.elevation).min() ?? 0),
+                    yEnd: .value("Elevation", UnitFormat.elevationValue(point.elevation, units))
+                )
+                .foregroundStyle(Color.orange.opacity(0.25))
+                LineMark(
+                    x: .value("Distance", UnitFormat.distanceValue(point.distanceMeters, units)),
+                    y: .value("Elevation", UnitFormat.elevationValue(point.elevation, units))
+                )
+                .foregroundStyle(.orange)
+            }
+            .chartYScale(domain: .automatic(includesZero: false))
+            .chartXAxisLabel(UnitFormat.distanceUnitName(units))
+            .chartYAxisLabel(UnitFormat.elevationUnitName(units))
+            .frame(height: 170)
+        }
+    }
+}
+
+/// The second page of a report, when the elevation profile does not fit on the first: the item's name and its profile.
+struct ProfilePageView: View {
+    let title: String
+    let profile: [ElevationProfilePoint]
+    let units: UnitSystem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("\(title): elevation profile")
+                .font(.system(size: 18, weight: .semibold))
+            ProfileChart(profile: profile, units: units)
+        }
+        .padding(36)
+        .frame(width: ReportView.width, alignment: .leading)
+        .background(Color.white)
+        .foregroundStyle(.black)
+    }
+}
+
+/// The report's pages, and the page height they are cut to, in report points.
+struct ReportPages {
+    let images: [NSImage]
+    let pageHeight: CGFloat
+}
+
+/// Draws the pages of a report one under the other, each page in its own rectangle, so printing cuts between them.
+private final class ReportPagesView: NSView {
+    private let pages: [NSImage]
+    private let pageHeight: CGFloat
+
+    init(pages: [NSImage], pageHeight: CGFloat, width: CGFloat) {
+        self.pages = pages
+        self.pageHeight = pageHeight
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: pageHeight * CGFloat(pages.count)))
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("ReportPagesView is not made from a nib")
+    }
+
+    override var isFlipped: Bool { true }
+
+    override func knowsPageRange(_ range: NSRangePointer) -> Bool {
+        range.pointee = NSRange(location: 1, length: pages.count)
+        return true
+    }
+
+    override func rectForPage(_ page: Int) -> NSRect {
+        NSRect(x: 0, y: CGFloat(page - 1) * pageHeight, width: bounds.width, height: pageHeight)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.white.setFill()
+        dirtyRect.fill()
+        for (index, page) in pages.enumerated() {
+            let top = CGFloat(index) * pageHeight
+            page.draw(in: NSRect(x: 0, y: top, width: bounds.width, height: page.size.height), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        }
     }
 }
 
@@ -132,40 +209,104 @@ enum ReportPrinter {
         if let message = rendered?.missingTilesMessage {
             store.errorMessage = message
         }
-        let report = ReportView(
-            title: title,
-            stats: statisticRows(stats, units: display.units, coordinates: display.coordinates, start: coordinates.first),
-            profile: profile,
-            units: display.units,
-            map: rendered?.image,
-            scaleBar: bounds.flatMap { scaleBar(for: $0, units: display.units) }
-        )
-        let renderer = ImageRenderer(content: report)
-        renderer.scale = 2
-        guard let image = renderer.nsImage else {
+        let rows = statisticRows(stats, units: display.units, coordinates: display.coordinates, start: coordinates.first)
+        let scale = bounds.flatMap { scaleBar(for: $0, units: display.units) }
+        guard let pages = layOut(title: title, stats: rows, profile: profile, units: display.units, map: rendered?.image, scaleBar: scale) else {
             store.errorMessage = "The report could not be drawn."
             return
         }
         #if DEBUG
-        // `--report-png PATH` saves the report instead of printing it, for testing.
+        // `--report-png PATH` and `--report-pdf PATH` save the report instead of printing it, for testing.
         if let path = BaseCampApp.launchValue("--report-png") {
-            if let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
-               let png = bitmap.representation(using: .png, properties: [:]) {
-                try? png.write(to: URL(fileURLWithPath: path))
-            }
+            writePNGs(pages.images, to: path)
+            return
+        }
+        if let path = BaseCampApp.launchValue("--report-pdf") {
+            savePDF(pages, to: URL(fileURLWithPath: path))
             return
         }
         #endif
-        let imageView = NSImageView(frame: NSRect(origin: .zero, size: image.size))
-        imageView.image = image
-        let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
-        info.horizontalPagination = .fit
-        info.verticalPagination = .fit
-        info.isHorizontallyCentered = true
-        let operation = NSPrintOperation(view: imageView, printInfo: info)
+        let operation = NSPrintOperation(view: pagesView(pages), printInfo: printInfo())
         operation.showsPrintPanel = true
         operation.run()
     }
+
+    /// The print settings the report is laid out for: the default paper, the report fitted to its width, and pages cut
+    /// between the rectangles of `ReportPagesView`.
+    private static func printInfo() -> NSPrintInfo {
+        let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
+        info.horizontalPagination = .fit
+        info.verticalPagination = .clip
+        info.isHorizontallyCentered = true
+        return info
+    }
+
+    private static func pagesView(_ pages: ReportPages) -> NSView {
+        ReportPagesView(pages: pages.images, pageHeight: pages.pageHeight, width: ReportView.width)
+    }
+
+    /// The report as pages. One page when the whole report fits on the paper; otherwise the report without its
+    /// profile, then the profile on a second page (see `ReportLayout`).
+    @MainActor
+    private static func layOut(
+        title: String,
+        stats: [(name: String, value: String)],
+        profile: [ElevationProfilePoint],
+        units: UnitSystem,
+        map: NSImage?,
+        scaleBar: ScaleBarMark?
+    ) -> ReportPages? {
+        let printable = printInfo().imageablePageBounds
+        let pageHeight = printable.width > 0 && printable.height > 0
+            ? ReportLayout.pageHeight(printableWidth: printable.width, printableHeight: printable.height, reportWidth: ReportView.width)
+            : CGFloat.greatestFiniteMagnitude
+        let report = { (showsProfile: Bool) in
+            ReportView(title: title, stats: stats, profile: profile, units: units, map: map, scaleBar: scaleBar, showsProfile: showsProfile)
+        }
+        guard let whole = render(report(true)) else { return nil }
+        guard ReportLayout.profileOnSecondPage(reportHeight: whole.size.height, pageHeight: pageHeight) else {
+            return ReportPages(images: [whole], pageHeight: pageHeight)
+        }
+        guard let first = render(report(false)),
+              let second = render(ProfilePageView(title: title, profile: profile, units: units)) else { return nil }
+        return ReportPages(images: [first, second], pageHeight: pageHeight)
+    }
+
+    /// One view as an image, at twice the point size.
+    @MainActor
+    private static func render<Content: View>(_ view: Content) -> NSImage? {
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        return renderer.nsImage
+    }
+
+    #if DEBUG
+    /// Writes each page as a PNG: the path itself for one page, or the path with -1, -2 and so on before its extension.
+    private static func writePNGs(_ pages: [NSImage], to path: String) {
+        let url = URL(fileURLWithPath: path)
+        let stem = url.deletingPathExtension().path
+        for (index, page) in pages.enumerated() {
+            let target = pages.count == 1 ? url : URL(fileURLWithPath: "\(stem)-\(index + 1).\(url.pathExtension)")
+            if let tiff = page.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
+               let png = bitmap.representation(using: .png, properties: [:]) {
+                try? png.write(to: target)
+            }
+        }
+    }
+
+    /// Saves the report as a PDF, without the print dialog.
+    @MainActor
+    private static func savePDF(_ pages: ReportPages, to url: URL) {
+        let info = printInfo()
+        info.jobDisposition = .save
+        let settings = info.dictionary()
+        settings.setObject(url, forKey: NSPrintInfo.AttributeKey.jobSavingURL as NSString)
+        let operation = NSPrintOperation(view: pagesView(pages), printInfo: info)
+        operation.showsPrintPanel = false
+        operation.showsProgressPanel = false
+        operation.run()
+    }
+    #endif
 
     /// The statistics as name and value rows, in the chosen units.
     static func statisticRows(_ stats: ActivityStatistics, units: UnitSystem, coordinates: CoordinateSystem, start: Coordinate?) -> [(name: String, value: String)] {

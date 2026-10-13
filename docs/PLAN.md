@@ -265,7 +265,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G5 | Opus | todo | | basemap when zoomed out |
 | C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |
 | C5 | Haiku | reviewed | 2a26c42 | accepted; table next to the list; `--sidebar table` hook (debug) |
-| C7 | Haiku | ready | bc1a6cc | scale bar done; page breaks: option (b), decided in HANDOFF |
+| C7 | Haiku | done | bc1a6cc, page-break commit | scale bar; profile on page 2 when page 1 would overflow (option b) |
 | C3b | Haiku | ready | | waypoint symbols in saved pictures and reports |
 | C3c | Haiku | ready | | selection highlight that does not hide the item's colour |
 | C1, C2, C4 | see above | blocked | | after B5 |

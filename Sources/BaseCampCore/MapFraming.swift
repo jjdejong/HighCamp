@@ -8,6 +8,16 @@ public enum MapFraming {
     /// The latitude limit of Web Mercator, which map views project with.
     static let mercatorLatitudeLimit = 85.05
 
+    /// Keeps a latitude within the range Web Mercator can show, ±85.05.
+    public static func clampLatitude(_ latitude: Double) -> Double {
+        min(max(latitude, -mercatorLatitudeLimit), mercatorLatitudeLimit)
+    }
+
+    /// Keeps a longitude within ±180. A view that crosses the 180° meridian is cut at it, not wrapped.
+    public static func clampLongitude(_ longitude: Double) -> Double {
+        min(max(longitude, -180), 180)
+    }
+
     /// The south-west and north-east corners of the area to show, or nil with no coordinates.
     /// The area is the coordinates' extent, grown about its centre until each side is at least `minimumSpanMetres`.
     public static func area(

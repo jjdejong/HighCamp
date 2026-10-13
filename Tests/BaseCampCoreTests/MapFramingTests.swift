@@ -72,4 +72,18 @@ final class MapFramingTests: XCTestCase {
         XCTAssertLessThanOrEqual(area.northEast.longitude - area.southWest.longitude, 360)
         XCTAssertTrue(area.northEast.longitude.isFinite && area.southWest.longitude.isFinite)
     }
+
+    func testLatitudesAreClampedToWebMercator() {
+        XCTAssertEqual(MapFraming.clampLatitude(90), 85.05)
+        XCTAssertEqual(MapFraming.clampLatitude(-95), -85.05)
+        XCTAssertEqual(MapFraming.clampLatitude(45), 45)
+        XCTAssertEqual(MapFraming.clampLatitude(-85.05), -85.05)
+    }
+
+    func testLongitudesAreClampedToTheGlobe() {
+        XCTAssertEqual(MapFraming.clampLongitude(190), 180)
+        XCTAssertEqual(MapFraming.clampLongitude(-181), -180)
+        XCTAssertEqual(MapFraming.clampLongitude(10), 10)
+        XCTAssertEqual(MapFraming.clampLongitude(-180), -180)
+    }
 }

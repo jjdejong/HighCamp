@@ -355,10 +355,10 @@ struct MapKitView: NSViewRepresentable {
             let region = mapView.region
             let half = (region.span.latitudeDelta / 2, region.span.longitudeDelta / 2)
             let bounds = GeoBounds(
-                north: region.center.latitude + half.0,
-                east: region.center.longitude + half.1,
-                south: region.center.latitude - half.0,
-                west: region.center.longitude - half.1
+                north: MapFraming.clampLatitude(region.center.latitude + half.0),
+                east: MapFraming.clampLongitude(region.center.longitude + half.1),
+                south: MapFraming.clampLatitude(region.center.latitude - half.0),
+                west: MapFraming.clampLongitude(region.center.longitude - half.1)
             )
             let width = Double(mapView.bounds.width)
             guard width > 0 else {

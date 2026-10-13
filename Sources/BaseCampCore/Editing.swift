@@ -261,6 +261,8 @@ public extension Route {
             coordinate: \.coordinate,
             elevation: \.elevation
         ) else { return nil }
-        return Route(id: id, name: name, points: updated)
+        var copy = self
+        copy.points = updated
+        return copy
     }
 }

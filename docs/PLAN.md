@@ -224,6 +224,10 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 ### C6. IMG points and labels. Owner: Opus
 - Moved to G2.
 
+### C7b. Taller profile on its own page. Owner: Haiku
+- When the elevation profile moves to page 2, draw it about 400 points high instead of 170, keeping the same width.
+  On page 1 it stays 170. PDF check with `--report-pdf`.
+
 ### C3b. Waypoint symbols in saved pictures. Owner: Haiku
 - `MapImageExport` draws waypoints as plain dots. Draw the same marker images as the map (`MarkerImage`), so pictures
   and printed reports show the symbols. PNG check.
@@ -265,7 +269,8 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G5 | Opus | todo | | basemap when zoomed out |
 | C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |
 | C5 | Haiku | reviewed | 2a26c42 | accepted; table next to the list; `--sidebar table` hook (debug) |
-| C7 | Haiku | done | bc1a6cc, 69350e5 | scale bar; profile on page 2 when page 1 would overflow (option b) |
+| C7 | Haiku | reviewed | bc1a6cc, 69350e5 | accepted; follow-up C7b |
+| C7b | Haiku | ready | | taller profile when it has page 2 to itself |
 | C3b | Haiku | ready | | waypoint symbols in saved pictures and reports |
 | C3c | Haiku | ready | | selection highlight that does not hide the item's colour |
 | C1, C2, C4 | see above | blocked | | after B5 |

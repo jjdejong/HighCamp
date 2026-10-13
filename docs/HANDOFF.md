@@ -2,6 +2,12 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Opus review of C7 part 2 — 2026-10-13
+State: accepted. Gate green: 167 tests, 3 skipped, no DIAG. Checked a PDF for T03 from `--report-pdf`: two A4 pages, map with the Garmin base, scale bar and statistics on page 1, profile on page 2.
+- Answer: yes, make the profile taller on its own page (C7b, about 400 points).
+- Letter paper: left to the user, as the note says.
+- C3b and C3c are still to do, then C7b.
+
 ## C7 (page breaks) — 2026-10-13 — Haiku
 State: done
 Commits: bc1a6cc (scale bar), and the page-break commit that records this note

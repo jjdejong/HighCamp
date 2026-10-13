@@ -60,11 +60,31 @@ public struct TrackPoint: Equatable, Codable, Sendable {
     public var coordinate: Coordinate
     public var elevation: Double?
     public var time: Date?
+    /// Sensor readings from the device, where it recorded them. Files from before these fields have none.
+    public var heartRate: Double?
+    /// Revolutions per minute.
+    public var cadence: Double?
+    /// Watts.
+    public var power: Double?
+    /// Degrees Celsius.
+    public var temperature: Double?
 
-    public init(coordinate: Coordinate, elevation: Double? = nil, time: Date? = nil) {
+    public init(
+        coordinate: Coordinate,
+        elevation: Double? = nil,
+        time: Date? = nil,
+        heartRate: Double? = nil,
+        cadence: Double? = nil,
+        power: Double? = nil,
+        temperature: Double? = nil
+    ) {
         self.coordinate = coordinate
         self.elevation = elevation
         self.time = time
+        self.heartRate = heartRate
+        self.cadence = cadence
+        self.power = power
+        self.temperature = temperature
     }
 }
 

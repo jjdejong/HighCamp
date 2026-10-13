@@ -2,6 +2,26 @@ import Foundation
 
 /// Distance, time, speed and climb of a track or a route. Values that need timestamps or elevations
 /// are nil when the data is missing.
+/// The average and the maximum of a sensor reading over a track.
+public struct SeriesSummary: Equatable, Sendable {
+    public var average: Double
+    public var maximum: Double
+
+    public init(average: Double, maximum: Double) {
+        self.average = average
+        self.maximum = maximum
+    }
+}
+
+/// A value a profile can plot against distance: the height, or one of the sensor readings.
+public enum ProfileSeries: CaseIterable, Sendable {
+    case elevation
+    case heartRate
+    case cadence
+    case power
+    case temperature
+}
+
 public struct ActivityStatistics: Equatable, Sendable {
     public var distanceMeters: Double
     public var pointCount: Int
@@ -17,6 +37,11 @@ public struct ActivityStatistics: Equatable, Sendable {
     public var descentMeters: Double?
     public var minimumElevation: Double?
     public var maximumElevation: Double?
+    /// Sensor readings, where the track has them.
+    public var heartRate: SeriesSummary?
+    public var cadence: SeriesSummary?
+    public var power: SeriesSummary?
+    public var temperature: SeriesSummary?
 
     /// Below this speed (metres per second) the rider counts as stopped.
     public static let movingSpeed = 0.5
@@ -30,6 +55,10 @@ public struct ActivityStatistics: Equatable, Sendable {
         var coordinate: Coordinate
         var elevation: Double?
         var time: Date?
+        var heartRate: Double?
+        var cadence: Double?
+        var power: Double?
+        var temperature: Double?
     }
 
     /// Builds the statistics from segments of samples. Each segment is a run of points without a gap.
@@ -43,11 +72,19 @@ public struct ActivityStatistics: Equatable, Sendable {
         var ascent = 0.0
         var descent = 0.0
         var elevations: [Double] = []
+        var heartRates: [Double] = []
+        var cadences: [Double] = []
+        var powers: [Double] = []
+        var temperatures: [Double] = []
 
         for segment in segments {
             count += segment.count
             times += segment.compactMap(\.time)
             elevations += segment.compactMap(\.elevation)
+            heartRates += segment.compactMap(\.heartRate)
+            cadences += segment.compactMap(\.cadence)
+            powers += segment.compactMap(\.power)
+            temperatures += segment.compactMap(\.temperature)
             if let profile = Self.climb(segment.compactMap(\.elevation), threshold: Self.elevationNoise) {
                 ascent += profile.ascent
                 descent += profile.descent
@@ -86,6 +123,16 @@ public struct ActivityStatistics: Equatable, Sendable {
             self.minimumElevation = elevations.min()
             self.maximumElevation = elevations.max()
         }
+        self.heartRate = Self.summary(heartRates)
+        self.cadence = Self.summary(cadences)
+        self.power = Self.summary(powers)
+        self.temperature = Self.summary(temperatures)
+    }
+
+    /// The average and maximum of the readings, or nil when there are none.
+    private static func summary(_ values: [Double]) -> SeriesSummary? {
+        guard !values.isEmpty else { return nil }
+        return SeriesSummary(average: values.reduce(0, +) / Double(values.count), maximum: values.max() ?? 0)
     }
 
     /// Adds up the climb and descent of a series of elevations. A rise or fall only counts once it is
@@ -141,20 +188,41 @@ public struct ActivityStatistics: Equatable, Sendable {
 public struct ElevationProfilePoint: Equatable, Sendable, Identifiable {
     public var id: Int
     public var distanceMeters: Double
-    public var elevation: Double
+    /// The height in metres, or the reading of the series the profile plots.
+    public var value: Double
     public var coordinate: Coordinate
 }
 
 public extension Track {
     var statistics: ActivityStatistics {
         ActivityStatistics(segments: segments.map { segment in
-            segment.map { ActivityStatistics.Sample(coordinate: $0.coordinate, elevation: $0.elevation, time: $0.time) }
+            segment.map {
+                ActivityStatistics.Sample(
+                    coordinate: $0.coordinate, elevation: $0.elevation, time: $0.time,
+                    heartRate: $0.heartRate, cadence: $0.cadence, power: $0.power, temperature: $0.temperature
+                )
+            }
         })
     }
 
     /// Distance along the track against elevation. Points without an elevation are left out of the profile.
     var elevationProfile: [ElevationProfilePoint] {
-        profile(of: segments.map { segment in segment.map { ($0.coordinate, $0.elevation) } })
+        profile(of: .elevation)
+    }
+
+    /// Distance along the track against one series. Points without a value for it are left out.
+    func profile(of series: ProfileSeries) -> [ElevationProfilePoint] {
+        makeProfile(of: segments.map { segment in segment.map { ($0.coordinate, Self.value(of: series, $0)) } })
+    }
+
+    private static func value(of series: ProfileSeries, _ point: TrackPoint) -> Double? {
+        switch series {
+        case .elevation: point.elevation
+        case .heartRate: point.heartRate
+        case .cadence: point.cadence
+        case .power: point.power
+        case .temperature: point.temperature
+        }
     }
 }
 
@@ -165,12 +233,12 @@ public extension Route {
 
     /// Distance along the route against elevation. Points without an elevation are left out of the profile.
     var elevationProfile: [ElevationProfilePoint] {
-        profile(of: [points.map { ($0.coordinate, $0.elevation) }])
+        makeProfile(of: [points.map { ($0.coordinate, $0.elevation) }])
     }
 }
 
 /// Builds a profile from segments of (coordinate, elevation) pairs. Distance is not counted across gaps.
-private func profile(of segments: [[(Coordinate, Double?)]]) -> [ElevationProfilePoint] {
+private func makeProfile(of segments: [[(Coordinate, Double?)]]) -> [ElevationProfilePoint] {
     var result: [ElevationProfilePoint] = []
     var distance = 0.0
     for segment in segments {
@@ -184,7 +252,7 @@ private func profile(of segments: [[(Coordinate, Double?)]]) -> [ElevationProfil
                 result.append(ElevationProfilePoint(
                     id: result.count,
                     distanceMeters: distance,
-                    elevation: elevation,
+                    value: elevation,
                     coordinate: coordinate
                 ))
             }

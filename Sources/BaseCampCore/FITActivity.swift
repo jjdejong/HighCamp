@@ -153,6 +153,10 @@ private struct Reader {
         var latitude: Int32?
         var longitude: Int32?
         var altitude: Double?
+        var heartRate: Double?
+        var cadence: Double?
+        var power: Double?
+        var temperature: Double?
         var offset = start
         for field in definition.fields {
             let raw = bytes[offset..<(offset + field.size)]
@@ -174,6 +178,27 @@ private struct Reader {
                 if value != 0xFFFF_FFFF {
                     altitude = Double(value) / 5 - 500
                 }
+            case 3:
+                // Heart rate, one byte; 0xFF means no reading.
+                if let byte = raw.first, byte != 0xFF {
+                    heartRate = Double(byte)
+                }
+            case 4:
+                // Cadence, one byte; 0xFF means no reading.
+                if let byte = raw.first, byte != 0xFF {
+                    cadence = Double(byte)
+                }
+            case 7:
+                // Power in watts, two bytes; 0xFFFF means no reading.
+                let value = unsigned(raw, bigEndian: definition.bigEndian)
+                if value != 0xFFFF {
+                    power = Double(value)
+                }
+            case 13:
+                // Temperature in degrees, one signed byte; 0x7F means no reading.
+                if let byte = raw.first, byte != 0x7F {
+                    temperature = Double(Int8(bitPattern: byte))
+                }
             default:
                 break
             }
@@ -191,7 +216,15 @@ private struct Reader {
             longitude: Double(longitude) * 180 / 2_147_483_648
         )
         let time = timestamp.map { Date(timeIntervalSince1970: Double($0) + 631_065_600) }
-        return TrackPoint(coordinate: coordinate, elevation: altitude, time: time)
+        return TrackPoint(
+            coordinate: coordinate,
+            elevation: altitude,
+            time: time,
+            heartRate: heartRate,
+            cadence: cadence,
+            power: power,
+            temperature: temperature
+        )
     }
 
     private mutating func readByte() throws -> UInt8 {

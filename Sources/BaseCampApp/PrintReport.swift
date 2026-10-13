@@ -69,13 +69,13 @@ struct ProfileChart: View {
             Chart(profile) { point in
                 AreaMark(
                     x: .value("Distance", UnitFormat.distanceValue(point.distanceMeters, units)),
-                    yStart: .value("Base", profile.map(\.elevation).min() ?? 0),
-                    yEnd: .value("Elevation", UnitFormat.elevationValue(point.elevation, units))
+                    yStart: .value("Base", profile.map(\.value).min() ?? 0),
+                    yEnd: .value("Elevation", UnitFormat.elevationValue(point.value, units))
                 )
                 .foregroundStyle(Color.orange.opacity(0.25))
                 LineMark(
                     x: .value("Distance", UnitFormat.distanceValue(point.distanceMeters, units)),
-                    y: .value("Elevation", UnitFormat.elevationValue(point.elevation, units))
+                    y: .value("Elevation", UnitFormat.elevationValue(point.value, units))
                 )
                 .foregroundStyle(.orange)
             }

@@ -13,18 +13,18 @@ struct ElevationChart: View {
     var body: some View {
         let units = display.units
         // The area fills down to the lowest point, not to zero, so the shape of the climb stays visible.
-        let lowest = profile.map { UnitFormat.elevationValue($0.elevation, units) }.min() ?? 0
+        let lowest = profile.map { UnitFormat.elevationValue($0.value, units) }.min() ?? 0
         Chart(profile) { point in
             AreaMark(
                 x: .value("Distance", UnitFormat.distanceValue(point.distanceMeters, units)),
                 yStart: .value("Base", lowest),
-                yEnd: .value("Elevation", UnitFormat.elevationValue(point.elevation, units))
+                yEnd: .value("Elevation", UnitFormat.elevationValue(point.value, units))
             )
             .foregroundStyle(Color.orange.opacity(0.2))
 
             LineMark(
                 x: .value("Distance", UnitFormat.distanceValue(point.distanceMeters, units)),
-                y: .value("Elevation", UnitFormat.elevationValue(point.elevation, units))
+                y: .value("Elevation", UnitFormat.elevationValue(point.value, units))
             )
             .foregroundStyle(.orange)
         }

@@ -98,14 +98,14 @@ final class StatisticsTests: XCTestCase {
         XCTAssertEqual(profile.count, 4)
         XCTAssertEqual(profile[0].distanceMeters, 0, accuracy: 0.001)
         XCTAssertEqual(profile[3].distanceMeters, 300, accuracy: 1)
-        XCTAssertEqual(profile[2].elevation, 110, accuracy: 0.001)
+        XCTAssertEqual(profile[2].value, 110, accuracy: 0.001)
     }
 
     func testElevationProfileSkipsPointsWithoutElevation() {
         var track = track(metresPerStep: 100, steps: 3, interval: 10, elevations: [100, 110, 120])
         track.segments[0][1].elevation = nil
         let profile = track.elevationProfile
-        XCTAssertEqual(profile.map(\.elevation), [100, 120])
+        XCTAssertEqual(profile.map(\.value), [100, 120])
         XCTAssertEqual(profile[1].distanceMeters, 200, accuracy: 1)
     }
 }

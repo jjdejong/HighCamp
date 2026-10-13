@@ -224,6 +224,15 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 ### C6. IMG points and labels. Owner: Opus
 - Moved to G2.
 
+### C3b. Waypoint symbols in saved pictures. Owner: Haiku
+- `MapImageExport` draws waypoints as plain dots. Draw the same marker images as the map (`MarkerImage`), so pictures
+  and printed reports show the symbols. PNG check.
+
+### C3c. Selection highlight. Owner: Haiku
+- A selected route or track is redrawn in red, so a red item looks unselected. Keep the item's colour and mark the
+  selection with a wider pale halo under the line (white, about 4 points wider), on the map and in saved pictures.
+  PNG check with a red track selected and unselected.
+
 ### C7. Print improvements. Owner: Haiku
 - Scale bar; more than one page for long items.
 
@@ -254,9 +263,11 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G3 | Opus | todo | | map list: on/off, order, zoom range, opacity |
 | G4 | Opus | todo | | map DEM: relief shading and heights |
 | G5 | Opus | todo | | basemap when zoomed out |
-| C3 | Haiku | done | 2b4a79c, 5d80925, this commit | export still shows plain dots, see HANDOFF |
-| C5 | Haiku | done | | table next to the list, with a filter field; `--sidebar table` hook (debug) |
-| C7 | Haiku | partial | | scale bar done; page breaks open, see HANDOFF |
+| C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |
+| C5 | Haiku | reviewed | 2a26c42 | accepted; table next to the list; `--sidebar table` hook (debug) |
+| C7 | Haiku | ready | bc1a6cc | scale bar done; page breaks: option (b), decided in HANDOFF |
+| C3b | Haiku | ready | | waypoint symbols in saved pictures and reports |
+| C3c | Haiku | ready | | selection highlight that does not hide the item's colour |
 | C1, C2, C4 | see above | blocked | | after B5 |
 | C6 | — | moved | | to G2 |
 

@@ -2,6 +2,13 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Opus review of C3, C5, C7 — 2026-10-13
+State: accepted. Gate green: 163 tests, 3 skipped, no DIAG.
+- C5 (2a26c42): accepted; checked on screen with 20 tracks (columns, sorting, filter, List/Table control). The handoff note was missing; the commit message carries it.
+- C3 (2b4a79c, 5d80925, c454ae4): accepted. The colour is optional, so old library files load, and it carries through combine, split, convert, reverse, simplify and duplicate. Follow-ups added as C3b (symbols in saved pictures) and C3c (a selection highlight that keeps the item's colour).
+- C7 (bc1a6cc): the scale bar is accepted. Decision on page breaks: option (b). Title, map and statistics on page 1; the elevation profile on page 2 when page 1 would overflow. No per-kilometre table (that would be a new feature).
+- Reminder for Haiku: replace "this commit" in the status table with the hash, and write a handoff note for every task.
+
 ## B2 — 2026-10-13 — Opus
 State: done
 Commits: 7ffe83e (feature order), b87aa68 (layers)

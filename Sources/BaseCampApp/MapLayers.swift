@@ -2,8 +2,10 @@ import AppKit
 import MapKit
 import Observation
 
-/// Base maps. Apple's maps are built in; the others are tile servers.
+/// Base maps. The Garmin maps are drawn from the map folder, as BaseCamp draws them; Apple's maps are built in;
+/// the others are tile servers.
 enum BaseMapLayer: String, CaseIterable, Identifiable {
+    case garmin
     case appleStandard
     case appleHybrid
     case ignPlan
@@ -14,6 +16,7 @@ enum BaseMapLayer: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
+        case .garmin: "Garmin maps (map folder)"
         case .appleStandard: "Apple Maps"
         case .appleHybrid: "Apple Maps, satellite"
         case .ignPlan: "IGN Plan (France, trails and spot heights)"
@@ -24,6 +27,7 @@ enum BaseMapLayer: String, CaseIterable, Identifiable {
 
     var attribution: String {
         switch self {
+        case .garmin: "Garmin maps from the map folder"
         case .appleStandard, .appleHybrid: "Apple Maps"
         case .ignPlan: "IGN Plan V2, Etalab licence"
         case .openTopoMap: "© OpenStreetMap, © OpenTopoMap (CC-BY-SA)"
@@ -31,10 +35,15 @@ enum BaseMapLayer: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The address of one tile of this layer, or nil for Apple's maps, which are not tiles.
+    /// Apple's own maps, drawn by MapKit rather than from tiles.
+    var isApple: Bool {
+        self == .appleStandard || self == .appleHybrid
+    }
+
+    /// The address of one tile of this layer, or nil for the maps that are not downloaded tiles.
     func tileURL(z: Int, x: Int, y: Int) -> URL? {
         switch self {
-        case .appleStandard, .appleHybrid:
+        case .garmin, .appleStandard, .appleHybrid:
             nil
         case .ignPlan:
             MapTileURLs.ignWMTS(layer: "GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2", z: z, x: x, y: y)
@@ -48,17 +57,19 @@ enum BaseMapLayer: String, CaseIterable, Identifiable {
     /// The highest zoom level the tile server has for this layer.
     var maximumTileZoom: Int {
         switch self {
-        case .appleStandard, .appleHybrid: 19
+        case .garmin, .appleStandard, .appleHybrid: 19
         case .ignPlan: 18
         case .openTopoMap: 17
         case .openStreetMap: 19
         }
     }
 
-    /// The tile overlay for this layer, or nil for Apple's maps.
+    /// The tile overlay for this layer, or nil for Apple's maps. The Garmin maps are read from `folder`.
     @MainActor
-    func tileOverlay() -> MKTileOverlay? {
+    func tileOverlay(folder: URL, detail: GarminDetail) -> MKTileOverlay? {
         switch self {
+        case .garmin:
+            GarminTileOverlay(folder: folder, detailOffset: detail.offset)
         case .appleStandard, .appleHybrid:
             nil
         case .ignPlan:
@@ -108,22 +119,41 @@ final class TileSourceOverlay: MKTileOverlay {
     }
 }
 
-/// How much map detail the IMG overlay draws at most, as the finest Garmin level it may use.
-/// The raw value is the level's detail in bits, the same numbers QMapShack uses.
-enum GarminDetail: Int, CaseIterable, Identifiable {
-    case overview = 18
-    case standard = 22
-    case full = 24
+/// How much detail the Garmin maps show at a given zoom, like BaseCamp's map detail setting. Each step moves the
+/// map level used by one, so "More" shows at one zoom what "Normal" shows one level closer in.
+enum GarminDetail: String, CaseIterable, Identifiable {
+    case lowest, low, normal, high, highest
 
-    var id: Int { rawValue }
+    var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .overview: "Overview"
-        case .standard: "Standard"
-        case .full: "Full (slow)"
+        case .lowest: "Lowest"
+        case .low: "Low"
+        case .normal: "Normal"
+        case .high: "High"
+        case .highest: "Highest"
         }
     }
+
+    /// Bits added to the level the zoom calls for.
+    var offset: Int {
+        switch self {
+        case .lowest: -2
+        case .low: -1
+        case .normal: 0
+        case .high: 1
+        case .highest: 2
+        }
+    }
+}
+
+/// The base map a picture is drawn on: the layer, the IGN contours, and for the Garmin maps their folder and detail.
+struct PictureBase: Sendable {
+    let layer: BaseMapLayer
+    let contours: Bool
+    let garminFolder: URL
+    let garminDetail: GarminDetail
 }
 
 /// Which base map and contour overlay to show, and how strong the contours are. Kept between launches.
@@ -139,13 +169,9 @@ final class MapLayerSettings {
     var contourOpacity: Double {
         didSet { UserDefaults.standard.set(contourOpacity, forKey: "map.contourOpacity") }
     }
-    /// Roads, contours and rivers read from the IMG maps, drawn for the part of the map on screen.
-    var showGarminDetail: Bool {
-        didSet { UserDefaults.standard.set(showGarminDetail, forKey: "map.showGarminDetail") }
-    }
-    /// The finest map level the IMG overlay may draw. The finest level is the heaviest, so the default stops short of it.
+    /// How much detail the Garmin maps show. See `GarminDetail`.
     var garminDetail: GarminDetail {
-        didSet { UserDefaults.standard.set(garminDetail.rawValue, forKey: "map.garminDetail") }
+        didSet { UserDefaults.standard.set(garminDetail.rawValue, forKey: "map.garminDetailLevel") }
     }
     /// Dashed outlines and names for the area each map in the map folder covers.
     var showCoverage: Bool {
@@ -154,13 +180,18 @@ final class MapLayerSettings {
 
     init() {
         let defaults = UserDefaults.standard
-        base = BaseMapLayer(rawValue: defaults.string(forKey: "map.base") ?? "") ?? .appleStandard
+        // The Garmin maps first, as in BaseCamp.
+        base = BaseMapLayer(rawValue: defaults.string(forKey: "map.base") ?? "") ?? .garmin
         showContours = defaults.bool(forKey: "map.showContours")
         let opacity = defaults.double(forKey: "map.contourOpacity")
         contourOpacity = opacity > 0 ? opacity : 0.7
-        showCoverage = defaults.object(forKey: "map.showCoverage") == nil ? true : defaults.bool(forKey: "map.showCoverage")
-        showGarminDetail = defaults.object(forKey: "map.showGarminDetail") == nil ? true : defaults.bool(forKey: "map.showGarminDetail")
-        garminDetail = GarminDetail(rawValue: defaults.integer(forKey: "map.garminDetail")) ?? .standard
+        showCoverage = defaults.bool(forKey: "map.showCoverage")
+        garminDetail = GarminDetail(rawValue: defaults.string(forKey: "map.garminDetailLevel") ?? "") ?? .normal
+    }
+
+    /// The base map for a picture of what the screen shows.
+    func pictureBase(folder: URL) -> PictureBase {
+        PictureBase(layer: base, contours: showContours, garminFolder: folder, garminDetail: garminDetail)
     }
 
     /// Attribution for the layers on screen.

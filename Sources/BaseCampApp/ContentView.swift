@@ -88,14 +88,13 @@ struct ContentView: View {
                             .disabled(!mapLayers.showContours)
                             Divider()
                             Toggle("Show map coverage", isOn: $mapLayers.showCoverage)
-                            Toggle("Map roads and contours (IMG)", isOn: $mapLayers.showGarminDetail)
-                            Picker("Detail", selection: $mapLayers.garminDetail) {
+                            Picker("Garmin map detail", selection: $mapLayers.garminDetail) {
                                 ForEach(GarminDetail.allCases) { detail in
                                     Text(detail.label).tag(detail)
                                 }
                             }
                             .pickerStyle(.inline)
-                            .disabled(!mapLayers.showGarminDetail)
+                            .disabled(mapLayers.base != .garmin)
                         } label: {
                             Label("Map", systemImage: "square.3.layers.3d")
                         }

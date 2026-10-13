@@ -11,7 +11,6 @@ struct BaseCampApp: App {
     @State private var brouter = BRouterServer()
     @State private var mapLayers = MapLayerSettings()
     @State private var mapCoverage = MapCoverageStore()
-    @State private var mapFeatures = MapFeatureStore()
     @State private var display = DisplaySettings()
     @State private var elevation = ElevationSettings()
 
@@ -26,7 +25,6 @@ struct BaseCampApp: App {
                 .environment(brouter)
                 .environment(mapLayers)
                 .environment(mapCoverage)
-                .environment(mapFeatures)
                 .environment(display)
                 .environment(elevation)
                 .frame(minWidth: 960, minHeight: 620)
@@ -60,7 +58,7 @@ struct BaseCampApp: App {
                     // `--report-png PATH` renders the report for the selection to PATH, for testing.
                     if Self.launchValue("--report-png") != nil {
                         try? await Task.sleep(for: .seconds(6))
-                        await ReportPrinter.printSelection(store: store, display: display, base: mapLayers.base, contours: mapLayers.showContours)
+                        await ReportPrinter.printSelection(store: store, display: display, base: mapLayers.pictureBase(folder: mapSettings.folder))
                     }
                     // `--map-image PATH` saves the map view to PATH once the map has settled, for testing.
                     // With `--select`, the map is framed on the selection first, so the picture shows what was selected.
@@ -84,7 +82,7 @@ struct BaseCampApp: App {
         }
         .defaultSize(width: 1280, height: 820)
         .commands {
-            BaseCampCommands(store: store, planner: planner, elevation: elevation, display: display, layers: mapLayers)
+            BaseCampCommands(store: store, planner: planner, elevation: elevation, display: display, layers: mapLayers, mapSettings: mapSettings)
         }
 
         Settings {
@@ -140,11 +138,12 @@ struct BaseCampCommands: Commands {
     let elevation: ElevationSettings
     let display: DisplaySettings
     let layers: MapLayerSettings
+    let mapSettings: MapSettings
 
     var body: some Commands {
         CommandGroup(replacing: .printItem) {
             Button("Print Report…") {
-                Task { await ReportPrinter.printSelection(store: store, display: display, base: layers.base, contours: layers.showContours) }
+                Task { await ReportPrinter.printSelection(store: store, display: display, base: layers.pictureBase(folder: mapSettings.folder)) }
             }
             .keyboardShortcut("p")
         }

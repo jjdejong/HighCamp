@@ -10,7 +10,6 @@ struct MapPane: View {
     @Environment(RoutePlanner.self) private var planner
     @Environment(MapLayerSettings.self) private var layers
     @Environment(MapCoverageStore.self) private var coverage
-    @Environment(MapFeatureStore.self) private var features
     @Environment(MapSettings.self) private var mapSettings
     @Environment(DisplaySettings.self) private var display
     @State private var libraryLayer = LibraryLayerCache()
@@ -18,6 +17,8 @@ struct MapPane: View {
     var body: some View {
         MapKitView(
             base: layers.base,
+            garminFolder: mapSettings.folder,
+            garminDetail: layers.garminDetail,
             showContours: layers.showContours,
             contourOpacity: layers.contourOpacity,
             scene: scene,
@@ -33,13 +34,12 @@ struct MapPane: View {
             onSelect: { item in
                 store.selection = item
             },
-            onViewportChange: { bounds, metersPerPoint in
+            onViewportChange: { bounds, _ in
                 store.viewCenter = Coordinate(
                     latitude: (bounds.north + bounds.south) / 2,
                     longitude: (bounds.east + bounds.west) / 2
                 )
                 store.viewBounds = bounds
-                features.viewportChanged(bounds, metersPerPoint: metersPerPoint, folder: mapSettings.folder)
             },
             onMovePoint: { reference, coordinate in
                 store.moveRoutePoint(reference.route, at: reference.index, to: coordinate)
@@ -52,16 +52,6 @@ struct MapPane: View {
             if store.measuring {
                 measureBar
             }
-        }
-        .onAppear {
-            features.setMaximumBits(layers.garminDetail.rawValue)
-            features.setEnabled(layers.showGarminDetail)
-        }
-        .onChange(of: layers.showGarminDetail) { _, shown in
-            features.setEnabled(shown)
-        }
-        .onChange(of: layers.garminDetail) { _, detail in
-            features.setMaximumBits(detail.rawValue)
         }
         .onChange(of: store.mapImageRequest) { _, _ in
             saveImage()
@@ -88,12 +78,7 @@ struct MapPane: View {
                 MapPin(id: "profile-cursor", coordinate: cursor, style: .cursor, item: nil, title: "Profile position"),
             ])
         }
-        return MapScene(
-            featureLayer: layers.showGarminDetail ? features.layer : nil,
-            // Tile base maps cover the Garmin areas, so the areas are only filled on Apple's maps.
-            showsFeatureAreas: layers.base.tileURL(z: 0, x: 0, y: 0) == nil,
-            layers: parts
-        )
+        return MapScene(layers: parts)
     }
 
     /// Waypoints, routes and tracks, highlighted when selected, and the points of the selected route that can be dragged.
@@ -228,11 +213,10 @@ struct MapPane: View {
     private func saveImage() {
         guard let bounds = store.viewBounds, let url = imageDestination() else { return }
         let scene = self.scene
-        let base = layers.base
-        let contours = layers.showContours
+        let base = layers.pictureBase(folder: mapSettings.folder)
         Task {
             do {
-                let rendered = try await MapImageExport.render(scene: scene, bounds: bounds, size: CGSize(width: 1600, height: 1200), base: base, contours: contours)
+                let rendered = try await MapImageExport.render(scene: scene, bounds: bounds, size: CGSize(width: 1600, height: 1200), base: base)
                 guard let data = MapImageExport.pngData(rendered.image) else { throw CocoaError(.fileWriteUnknown) }
                 try data.write(to: url, options: .atomic)
                 if let message = rendered.missingTilesMessage {

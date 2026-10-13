@@ -54,7 +54,7 @@ enum MapLineColor: Equatable {
 }
 
 /// A colour from a map's style, with components from 0 to 1.
-struct MapRGB: Equatable {
+struct MapRGB: Hashable, Sendable {
     var red: Double
     var green: Double
     var blue: Double
@@ -101,18 +101,11 @@ struct MapLayerContent: Equatable {
     var footprints: [MapFootprint] = []
 }
 
-/// Everything drawn on the map.
+/// Everything drawn on the map above the base map.
 struct MapScene: Equatable {
-    /// The Garmin map features of the view. Compared by identity.
-    var featureLayer: FeatureLayer?
-    /// Whether the Garmin areas are filled. Off on tile base maps: the tiles cover the areas on screen and have
-    /// their own, so the saved picture leaves them out too.
-    var showsFeatureAreas = true
     var layers: [MapLayerKind: MapLayerContent] = [:]
 
-    init(featureLayer: FeatureLayer? = nil, showsFeatureAreas: Bool = true, layers: [MapLayerKind: MapLayerContent] = [:]) {
-        self.featureLayer = featureLayer
-        self.showsFeatureAreas = showsFeatureAreas
+    init(layers: [MapLayerKind: MapLayerContent] = [:]) {
         self.layers = layers
     }
 
@@ -136,6 +129,9 @@ struct MapScene: Equatable {
 /// circles, so the map keeps its detail.
 struct MapKitView: NSViewRepresentable {
     let base: BaseMapLayer
+    /// Where the Garmin base map reads its maps, and how much detail it shows.
+    let garminFolder: URL
+    let garminDetail: GarminDetail
     let showContours: Bool
     let contourOpacity: Double
     let scene: MapScene
@@ -174,7 +170,7 @@ struct MapKitView: NSViewRepresentable {
     func updateNSView(_ map: MKMapView, context: Context) {
         let coordinator = context.coordinator
         coordinator.parent = self
-        coordinator.applyBase(base, on: map)
+        coordinator.applyBase(base, folder: garminFolder, detail: garminDetail, on: map)
         coordinator.applyContours(show: showContours, opacity: contourOpacity, on: map)
         coordinator.applyScene(scene, on: map)
         if fitRequest != coordinator.lastFitRequest {
@@ -196,14 +192,11 @@ struct MapKitView: NSViewRepresentable {
         var parent: MapKitView
         var lastFitRequest = -1
 
-        private var appliedBase: BaseMapLayer?
+        private var appliedBase: (layer: BaseMapLayer, folder: URL, detail: GarminDetail)?
         private var baseOverlay: MKTileOverlay?
         private var contourOverlay: MKTileOverlay?
         private var appliedOpacity: Double?
 
-        private var appliedFeatures: FeatureLayer?
-        private var appliedShowsAreas = true
-        private var featureOverlays: [MKOverlay] = []
         private var appliedLayers: [MapLayerKind: MapLayerContent] = [:]
         private var layerOverlays: [MapLayerKind: [MKOverlay]] = [:]
         private var layerPins: [MapLayerKind: [PinAnnotation]] = [:]
@@ -214,8 +207,6 @@ struct MapKitView: NSViewRepresentable {
         private enum Rank {
             static let base = 0
             static let contours = 1
-            static let featureAreas = 2
-            static let featureLines = 3
             static func layer(_ kind: MapLayerKind) -> Int { 10 + kind.rawValue }
         }
 
@@ -225,13 +216,15 @@ struct MapKitView: NSViewRepresentable {
 
         // MARK: Base map and contours
 
-        func applyBase(_ base: BaseMapLayer, on map: MKMapView) {
-            guard base != appliedBase else { return }
-            appliedBase = base
+        func applyBase(_ base: BaseMapLayer, folder: URL, detail: GarminDetail, on map: MKMapView) {
+            if let appliedBase, appliedBase.layer == base, base != .garmin || (appliedBase.folder == folder && appliedBase.detail == detail) {
+                return
+            }
+            appliedBase = (base, folder, detail)
             if let baseOverlay {
                 remove([baseOverlay], from: map)
             }
-            baseOverlay = base.tileOverlay()
+            baseOverlay = base.tileOverlay(folder: folder, detail: detail)
             map.mapType = base == .appleHybrid ? .hybrid : .standard
             if let baseOverlay {
                 insert([baseOverlay], rank: Rank.base, level: .aboveLabels, on: map)
@@ -256,52 +249,14 @@ struct MapKitView: NSViewRepresentable {
 
         // MARK: Garmin features, library, planner and the other layers
 
-        /// Redraws only what changed: the Garmin features when a new set is read, and each layer when its content changes.
+        /// Redraws only the layers whose content changed.
         func applyScene(_ new: MapScene, on map: MKMapView) {
-            if new.featureLayer !== appliedFeatures || new.showsFeatureAreas != appliedShowsAreas {
-                appliedFeatures = new.featureLayer
-                appliedShowsAreas = new.showsFeatureAreas
-                applyFeatures(new.featureLayer, areas: new.showsFeatureAreas, on: map)
-            }
             for kind in MapLayerKind.allCases {
                 let content = new.content(kind)
                 guard content != appliedLayers[kind] ?? MapLayerContent() else { continue }
                 appliedLayers[kind] = content
                 apply(content, as: kind, on: map)
             }
-        }
-
-        /// The Garmin features, one overlay per type, in the order the map draws them. Areas go above the base map's
-        /// roads but below its labels; lines go above the labels.
-        private func applyFeatures(_ layer: FeatureLayer?, areas: Bool, on map: MKMapView) {
-            remove(featureOverlays, from: map)
-            featureOverlays = []
-            guard let layer else { return }
-            var areaOverlays: [MKOverlay] = []
-            if areas {
-                for group in layer.areas {
-                    let polygons = group.rings.compactMap { ring -> MKPolygon? in
-                        let coordinates = ring.map(\.clLocation)
-                        return coordinates.count >= 3 ? MKPolygon(coordinates: coordinates, count: coordinates.count) : nil
-                    }
-                    guard !polygons.isEmpty else { continue }
-                    let overlay = AreaGroupOverlay(polygons)
-                    overlay.fill = group.fill.nsColor.withAlphaComponent(0.7)
-                    areaOverlays.append(overlay)
-                }
-            }
-            let lineOverlays: [MKOverlay] = layer.lines.map { group in
-                let overlay = LineGroupOverlay(group.paths.map { path in
-                    let coordinates = path.map(\.clLocation)
-                    return MKPolyline(coordinates: coordinates, count: coordinates.count)
-                })
-                overlay.color = group.rgb.nsColor
-                overlay.width = CGFloat(group.width)
-                return overlay
-            }
-            insert(areaOverlays, rank: Rank.featureAreas, level: .aboveRoads, on: map)
-            insert(lineOverlays, rank: Rank.featureLines, level: .aboveLabels, on: map)
-            featureOverlays = areaOverlays + lineOverlays
         }
 
         private func apply(_ content: MapLayerContent, as kind: MapLayerKind, on map: MKMapView) {
@@ -387,24 +342,6 @@ struct MapKitView: NSViewRepresentable {
             if let tiles = overlay as? MKTileOverlay {
                 let renderer = MKTileOverlayRenderer(tileOverlay: tiles)
                 renderer.alpha = tiles === contourOverlay ? parent.contourOpacity : 1
-                return renderer
-            }
-            if let group = overlay as? AreaGroupOverlay {
-                let renderer = MKMultiPolygonRenderer(multiPolygon: group)
-                renderer.fillColor = group.fill
-                renderer.strokeColor = nil
-                return renderer
-            }
-            if let group = overlay as? LineGroupOverlay {
-                let renderer = MKMultiPolylineRenderer(multiPolyline: group)
-                renderer.strokeColor = group.color
-                renderer.lineWidth = group.width
-                return renderer
-            }
-            if let area = overlay as? AreaOverlay {
-                let renderer = MKPolygonRenderer(polygon: area)
-                renderer.fillColor = area.fill
-                renderer.strokeColor = nil
                 return renderer
             }
             if let line = overlay as? LineOverlay {
@@ -518,22 +455,6 @@ final class PinAnnotation: NSObject, MKAnnotation {
 final class LineOverlay: MKPolyline {
     var color: NSColor = .systemBlue
     var width: CGFloat = 3
-}
-
-/// A filled area of the map style.
-final class AreaOverlay: MKPolygon {
-    var fill: NSColor = .clear
-}
-
-/// Every path of one style of the Garmin map, as one overlay.
-final class LineGroupOverlay: MKMultiPolyline {
-    var color: NSColor = .systemGray
-    var width: CGFloat = 3
-}
-
-/// Every ring of one fill of the Garmin map, as one overlay.
-final class AreaGroupOverlay: MKMultiPolygon {
-    var fill: NSColor = .clear
 }
 
 final class CircleOverlay: MKCircle {}

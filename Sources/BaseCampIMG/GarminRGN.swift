@@ -20,6 +20,9 @@ public struct GarminMapLevel: Equatable, Sendable {
     public let level: Int
     /// Larger numbers are finer detail.
     public let bits: Int
+    /// An inherited level holds no geometry of its own; its cells only lead to the next finer level. Read from the
+    /// top bit of the level byte, as QMapShack's `TRE_MAP_INHER`.
+    public var inherited = false
 }
 
 /// One rectangular cell of a map level and the geometry records stored for it.
@@ -52,7 +55,7 @@ public struct GarminGeometry: Equatable, Sendable {
 extension GarminIMG {
     /// The map levels of a subfile, from its TRE part.
     public func mapLevels(of subfile: String) throws -> [GarminMapLevel] {
-        try levelRecords(of: subfile).map { GarminMapLevel(level: $0.level, bits: $0.bits) }
+        try levelRecords(of: subfile).map { GarminMapLevel(level: $0.level, bits: $0.bits, inherited: $0.inherited) }
     }
 
     /// Every subdivision of a subfile, in directory order.
@@ -248,6 +251,7 @@ extension GarminIMG {
         let level: Int
         let bits: Int
         let count: Int
+        var inherited = false
     }
 
     fileprivate func readHeader(of part: IMGPart) throws -> TREHeader {
@@ -274,7 +278,8 @@ extension GarminIMG {
             LevelRecord(
                 level: Int(bytes[index] & 0x0F),
                 bits: Int(bytes[index + 1]),
-                count: GarminIMG.field(bytes, index + 2, 2)
+                count: GarminIMG.field(bytes, index + 2, 2),
+                inherited: bytes[index] & 0x80 != 0
             )
         }
     }

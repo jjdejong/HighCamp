@@ -16,9 +16,10 @@ struct RenderedMap {
     }
 }
 
-/// Saves the map as a picture: the base map for the visible area, with the Garmin features, the coverage outlines,
-/// the lines and the markers drawn on it. Apple's maps come from a snapshot. Other base maps are drawn from their
-/// tiles, which are fetched from the same servers the map uses. The contour tiles can be added on top.
+/// Saves the map as a picture: the base map for the visible area, with the coverage outlines, the lines and the
+/// markers drawn on it. The Garmin maps are drawn from the map folder, as on screen. Apple's maps come from a
+/// snapshot. Other base maps are drawn from their tiles, fetched from the same servers the map uses. The contour
+/// tiles can be added on top of any base map but Apple's.
 @MainActor
 enum MapImageExport {
     /// Longest path, in points, that is drawn in full. Longer paths are thinned, so an export stays quick.
@@ -26,12 +27,12 @@ enum MapImageExport {
     /// The most points drawn for all the Garmin features together. Past this, every path is thinned further.
     static let maximumFeaturePoints = 400_000
 
-    static func render(scene: MapScene, bounds: GeoBounds, size: CGSize, base: BaseMapLayer, contours: Bool = false) async throws -> RenderedMap {
+    static func render(scene: MapScene, bounds: GeoBounds, size: CGSize, base: PictureBase) async throws -> RenderedMap {
         let projection = ImageProjection(bounds: bounds, size: size)
-        if base.tileURL(z: 0, x: 0, y: 0) == nil {
-            return RenderedMap(image: try await renderSnapshot(scene: scene, projection: projection, base: base))
+        if base.layer.isApple {
+            return RenderedMap(image: try await renderSnapshot(scene: scene, projection: projection, base: base.layer))
         }
-        return await renderTiles(scene: scene, projection: projection, base: base, contours: contours)
+        return await renderTiles(scene: scene, projection: projection, base: base)
     }
 
     /// Apple's own map, drawn by MapKit over the same area the projection covers.
@@ -47,8 +48,10 @@ enum MapImageExport {
         }
     }
 
-    /// A base map drawn from tiles in Web Mercator, the projection the tile servers use.
-    private static func renderTiles(scene: MapScene, projection: ImageProjection, base: BaseMapLayer, contours: Bool) async -> RenderedMap {
+    /// A base map drawn in Web Mercator, the projection the tile servers use: the Garmin maps, or a tile server's tiles.
+    private static func renderTiles(scene: MapScene, projection: ImageProjection, base picture: PictureBase) async -> RenderedMap {
+        let base = picture.layer
+        let contours = picture.contours
         // The contour tiles only go to zoom 16, so with them the base map is drawn at the same zoom.
         let zoom = projection.zoom(maximum: contours ? min(16, base.maximumTileZoom) : base.maximumTileZoom)
         let worldSize = 256 * pow(2, Double(zoom))
@@ -57,7 +60,10 @@ enum MapImageExport {
 
         let columns = Int((origin.x / 256).rounded(.down))...Int(((origin.x + projection.size.width / scale - 0.001) / 256).rounded(.down))
         let rows = Int((origin.y / 256).rounded(.down))...Int(((origin.y + projection.size.height / scale - 0.001) / 256).rounded(.down))
-        let baseTiles = await fetchTiles(columns: columns, rows: rows) { base.tileURL(z: zoom, x: $0, y: $1) }
+        let baseTiles = base == .garmin
+            ? FetchedTiles()
+            : await fetchTiles(columns: columns, rows: rows) { base.tileURL(z: zoom, x: $0, y: $1) }
+        let garmin = base == .garmin ? await garminFeatures(projection: projection, base: picture) : nil
         let contourTiles = contours
             ? await fetchTiles(columns: columns, rows: rows) { MapTileURLs.ignWMTS(layer: "ELEVATION.CONTOUR.LINE", z: zoom, x: $0, y: $1) }
             : FetchedTiles()
@@ -75,9 +81,12 @@ enum MapImageExport {
         }
         let attribution = [base.attribution, contours ? MapTileURLs.contourAttribution : nil].compactMap { $0 }.joined(separator: " · ")
 
-        let image = picture(size: projection.size) { rect in
+        let image = self.picture(size: projection.size) { rect in
             NSColor.white.setFill()
             rect.fill()
+            if let garmin {
+                GarminPainter.draw(garmin.features, in: rect, patternOrigin: .zero, step: garmin.step) { projection.point($0) }
+            }
             draw(baseTiles.images, alpha: 1)
             draw(contourTiles.images, alpha: 0.8)
             drawOverlays(scene, projection: projection)
@@ -100,37 +109,22 @@ enum MapImageExport {
         return image
     }
 
-    /// The Garmin areas and lines, the coverage outlines, the other lines, and the markers, in that order.
-    /// Only what is inside the picture is drawn, and long lines are thinned.
+    /// The Garmin features for the picture's area, at the picture's scale, and how much to thin their paths so the
+    /// total stays bounded.
+    private static func garminFeatures(projection: ImageProjection, base: PictureBase) async -> (features: MapFeatureSet, step: Int) {
+        let bounds = projection.bounds
+        let middle = (bounds.north + bounds.south) / 2 * .pi / 180
+        let metersPerPoint = 40_075_016.686 * cos(middle) * projection.widthWorld(worldSize: 1) / projection.size.width
+        let features = await MapFeatureCache.shared.features(
+            in: bounds, metersPerPoint: metersPerPoint, folder: base.garminFolder, detailOffset: base.garminDetail.offset
+        )
+        let points = features.lines.reduce(0) { $0 + $1.paths.reduce(0) { $0 + $1.count } }
+            + features.areas.reduce(0) { $0 + $1.rings.reduce(0) { $0 + $1.count } }
+        return (features, max(1, points / maximumFeaturePoints))
+    }
+
+    /// The coverage outlines, the lines, and the markers, in that order. Long lines are thinned.
     private static func drawOverlays(_ scene: MapScene, projection: ImageProjection) {
-        let view = projection.bounds
-        // As on screen, the Garmin areas are filled only when the base map does not cover them.
-        let areas = scene.showsFeatureAreas ? scene.featureLayer?.areas ?? [] : []
-        // Spread the point budget over all the features in the picture, so the total stays bounded.
-        let featurePoints = (scene.featureLayer?.lines ?? []).reduce(0) { total, group in
-            total + group.paths.reduce(0) { $0 + ($1.count > 1 && overlaps($1, view) ? $1.count : 0) }
-        } + areas.reduce(0) { total, group in
-            total + group.rings.reduce(0) { $0 + ($1.count >= 3 && overlaps($1, view) ? $1.count : 0) }
-        }
-        let globalStep = max(1, featurePoints / maximumFeaturePoints)
-        for group in areas {
-            let path = NSBezierPath()
-            for ring in group.rings where ring.count >= 3 && overlaps(ring, view) {
-                addPath(ring, to: path, projection: projection, closed: true, minimumStep: globalStep)
-            }
-            group.fill.nsColor.withAlphaComponent(0.7).setFill()
-            path.fill()
-        }
-        for group in scene.featureLayer?.lines ?? [] {
-            let path = NSBezierPath()
-            for line in group.paths where line.count > 1 && overlaps(line, view) {
-                addPath(line, to: path, projection: projection, closed: false, minimumStep: globalStep)
-            }
-            path.lineWidth = CGFloat(group.width)
-            path.lineJoinStyle = .round
-            group.rgb.nsColor.setStroke()
-            path.stroke()
-        }
         for footprint in scene.footprints {
             let path = NSBezierPath()
             addPath(footprint.corners, to: path, projection: projection, closed: true)

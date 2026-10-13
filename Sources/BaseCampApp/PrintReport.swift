@@ -63,7 +63,7 @@ struct ReportView: View {
 /// Builds the report for the selected track or route and sends it to the print dialog.
 @MainActor
 enum ReportPrinter {
-    static func printSelection(store: LibraryStore, display: DisplaySettings, base: BaseMapLayer, contours: Bool) async {
+    static func printSelection(store: LibraryStore, display: DisplaySettings, base: PictureBase) async {
         let title: String
         let coordinates: [Coordinate]
         let stats: ActivityStatistics
@@ -86,7 +86,7 @@ enum ReportPrinter {
             return
         }
 
-        let rendered = await mapImage(for: coordinates, base: base, contours: contours)
+        let rendered = await mapImage(for: coordinates, base: base)
         if let message = rendered?.missingTilesMessage {
             store.errorMessage = message
         }
@@ -154,8 +154,8 @@ enum ReportPrinter {
         return rows
     }
 
-    /// Apple's map of the item's area, with the item drawn on it.
-    private static func mapImage(for coordinates: [Coordinate], base: BaseMapLayer, contours: Bool) async -> RenderedMap? {
+    /// The base map of the item's area, with the item drawn on it.
+    private static func mapImage(for coordinates: [Coordinate], base: PictureBase) async -> RenderedMap? {
         guard let first = coordinates.first else { return nil }
         var north = first.latitude, south = first.latitude, east = first.longitude, west = first.longitude
         for coordinate in coordinates {
@@ -167,6 +167,6 @@ enum ReportPrinter {
         let padding = max(north - south, east - west) * 0.08 + 0.001
         let bounds = GeoBounds(north: north + padding, east: east + padding, south: south - padding, west: west - padding)
         let scene = MapScene(lines: [MapLine(id: "report", coordinates: coordinates, color: .red, rgb: nil, width: 4)])
-        return try? await MapImageExport.render(scene: scene, bounds: bounds, size: CGSize(width: 1080, height: 800), base: base, contours: contours)
+        return try? await MapImageExport.render(scene: scene, bounds: bounds, size: CGSize(width: 1080, height: 800), base: base)
     }
 }

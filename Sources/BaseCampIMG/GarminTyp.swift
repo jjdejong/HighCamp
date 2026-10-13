@@ -13,7 +13,7 @@ public enum GarminTypError: Error {
 
 /// The style of one map: how each line and polygon type is drawn, and the order polygons are drawn in.
 public struct GarminTypStyle: Sendable {
-    public struct RGB: Equatable, Sendable {
+    public struct RGB: Hashable, Sendable {
         public let red: UInt8
         public let green: UInt8
         public let blue: UInt8
@@ -21,7 +21,7 @@ public struct GarminTypStyle: Sendable {
 
     /// A one-bit picture, 32 pixels wide, repeated along a line or across an area. Set pixels take the foreground
     /// colour; the others take the background colour, or stay transparent when there is none.
-    public struct Bitmap: Equatable, Sendable {
+    public struct Bitmap: Hashable, Sendable {
         public let width: Int
         public let rows: Int
         /// Row by row, from the top.

@@ -100,6 +100,7 @@ enum ReportPrinter {
             store.errorMessage = "The report could not be drawn."
             return
         }
+        #if DEBUG
         // `--report-png PATH` saves the report instead of printing it, for testing.
         if let path = BaseCampApp.launchValue("--report-png") {
             if let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
@@ -108,6 +109,7 @@ enum ReportPrinter {
             }
             return
         }
+        #endif
         let imageView = NSImageView(frame: NSRect(origin: .zero, size: image.size))
         imageView.image = image
         let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()

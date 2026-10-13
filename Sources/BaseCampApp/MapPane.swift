@@ -197,17 +197,7 @@ struct MapPane: View {
 
     /// Asks where to save, then writes the visible map as a PNG.
     private func saveImage() {
-        guard let bounds = store.viewBounds else { return }
-        let url: URL
-        if let testPath = BaseCampApp.testMapImagePath {
-            url = testPath
-        } else {
-            let panel = NSSavePanel()
-            panel.allowedContentTypes = [.png]
-            panel.nameFieldStringValue = "Map.png"
-            guard panel.runModal() == .OK, let chosen = panel.url else { return }
-            url = chosen
-        }
+        guard let bounds = store.viewBounds, let url = imageDestination() else { return }
         let scene = self.scene
         let base = layers.base
         let contours = layers.showContours
@@ -220,6 +210,20 @@ struct MapPane: View {
                 store.errorMessage = "The map image could not be saved. \(error.localizedDescription)"
             }
         }
+    }
+
+    /// The file to write: the `--map-image` path in debug builds, otherwise one the user picks.
+    private func imageDestination() -> URL? {
+        #if DEBUG
+        if let testPath = BaseCampApp.testMapImagePath {
+            return testPath
+        }
+        #endif
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = "Map.png"
+        guard panel.runModal() == .OK else { return nil }
+        return panel.url
     }
 
     /// Shows the measured distance, with buttons to clear it and to stop measuring.

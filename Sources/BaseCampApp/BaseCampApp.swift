@@ -30,6 +30,7 @@ struct BaseCampApp: App {
                 .environment(display)
                 .environment(elevation)
                 .frame(minWidth: 960, minHeight: 620)
+#if DEBUG
                 .task {
                     store.importFiles(Self.launchFiles())
                     if let names = Self.launchSelection() {
@@ -73,6 +74,7 @@ struct BaseCampApp: App {
                         Self.testMapImagePath = URL(fileURLWithPath: path)
                     }
                 }
+#endif
                 .onAppear {
                     NSApplication.shared.activate(ignoringOtherApps: true)
                 }
@@ -97,13 +99,16 @@ struct BaseCampApp: App {
 
     /// `--library PATH` opens a library file other than the default, for testing.
     private static func libraryFileURL() -> URL {
+        #if DEBUG
         let arguments = CommandLine.arguments
         if let index = arguments.firstIndex(of: "--library"), index + 1 < arguments.count {
             return URL(fileURLWithPath: arguments[index + 1])
         }
+        #endif
         return LibraryStore.defaultFileURL
     }
 
+    #if DEBUG
     /// The value after a launch option, such as `--select NAME`.
     static func launchValue(_ flag: String) -> String? {
         let arguments = CommandLine.arguments
@@ -126,6 +131,7 @@ struct BaseCampApp: App {
             arguments[index] == "--open" ? URL(fileURLWithPath: arguments[index + 1]) : nil
         }
     }
+    #endif
 }
 
 struct BaseCampCommands: Commands {

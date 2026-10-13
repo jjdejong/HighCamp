@@ -150,10 +150,12 @@ struct ContentView: View {
         }
         .onAppear {
             device.refresh()
+            #if DEBUG
             // `--show settings` opens the Settings window at launch, for testing.
             if BaseCampApp.launchValue("--show") == "settings" {
                 openSettings()
             }
+            #endif
         }
     }
 

@@ -158,6 +158,31 @@ The largest change.
 
 ---
 
+## Phase G: the Garmin map as BaseCamp draws it (Opus, first priority)
+
+The user asked for a BaseCamp clone; BaseCamp draws the Garmin map itself as the map. G1 replaced the IMG overlay
+on other base maps. Compare each step with BaseCamp showing the same area (observe its window only; never its code).
+
+### G1. Garmin base map. Owner: Opus. Done (577e13a, 6ae12af)
+- Tiles drawn from the IMG maps in the map folder: areas in TYP draw order with bitmap patterns, lines in
+  QMapShack's two passes, bordered and patterned lines; inherited levels skipped; a detail setting.
+
+### G2. Labels and point icons. Owner: Opus
+- LBL subfile: names of points, lines and areas (QMapShack's CGarminStrTbl). Line labels along roads, area and
+  point labels, POI icons from the TYP point section. Replaces C6.
+
+### G3. Map products, as BaseCamp's map menu. Owner: Opus
+- Read the `.gmap` bundles in `~/Library/Application Support/Garmin/Maps` (loose TRE/RGN/LBL/NET/DEM files per tile,
+  Info.xml, TYP) as well as `.img` files. Choose one product at a time, as BaseCamp does.
+
+### G4. Relief shading. Owner: Opus
+- From the DEM subfile of the map, or the DEM folder, under the map as BaseCamp shades it.
+
+### G5. Zoomed-out view. Owner: Opus
+- Use the product's basemap (overview) tiles when zoomed out past the detailed tiles' levels.
+
+---
+
 ## Phase C: features (Haiku after Opus has set the shape)
 
 ### C1. Garmin GPX extensions, read and write. Owner: Haiku → Opus review
@@ -189,7 +214,7 @@ The largest change.
 - A sortable table (name, type, length, date, ascent) as an alternative sidebar view.
 
 ### C6. IMG points and labels. Owner: Opus
-- Decoder work from QMapShack sources (GPL port with attribution). Raise the 6,000-line loader cap at the same time.
+- Moved to G2.
 
 ### C7. Print improvements. Owner: Haiku
 - Scale bar; more than one page for long items.
@@ -216,6 +241,11 @@ The largest change.
 | B4 | Opus | todo | | |
 | B5 | Opus → Haiku | todo | | |
 | B6 | Opus | todo | | |
-| C1–C7 | see above | blocked | | after B5 / B2 |
+| G1 | Opus | done | 577e13a, 6ae12af | Garmin base map; overlay removed |
+| G2 | Opus | todo | | labels and icons |
+| G3 | Opus | todo | | .gmap products |
+| G4 | Opus | todo | | relief shading |
+| G5 | Opus | todo | | basemap when zoomed out |
+| C1–C7 | see above | blocked | | after B5 / B2; C6 moved to G2 |
 
 Suggested order for Haiku: A8, A2, A3, A6, A1, A7, A5, A10, A4, A9. These run from the smallest to the ones that need review.

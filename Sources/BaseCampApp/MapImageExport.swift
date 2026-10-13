@@ -104,14 +104,16 @@ enum MapImageExport {
     /// Only what is inside the picture is drawn, and long lines are thinned.
     private static func drawOverlays(_ scene: MapScene, projection: ImageProjection) {
         let view = projection.bounds
+        // As on screen, the Garmin areas are filled only when the base map does not cover them.
+        let areas = scene.showsFeatureAreas ? scene.featureLayer?.areas ?? [] : []
         // Spread the point budget over all the features in the picture, so the total stays bounded.
         let featurePoints = (scene.featureLayer?.lines ?? []).reduce(0) { total, group in
             total + group.paths.reduce(0) { $0 + ($1.count > 1 && overlaps($1, view) ? $1.count : 0) }
-        } + (scene.featureLayer?.areas ?? []).reduce(0) { total, group in
+        } + areas.reduce(0) { total, group in
             total + group.rings.reduce(0) { $0 + ($1.count >= 3 && overlaps($1, view) ? $1.count : 0) }
         }
         let globalStep = max(1, featurePoints / maximumFeaturePoints)
-        for group in scene.featureLayer?.areas ?? [] {
+        for group in areas {
             let path = NSBezierPath()
             for ring in group.rings where ring.count >= 3 && overlaps(ring, view) {
                 addPath(ring, to: path, projection: projection, closed: true, minimumStep: globalStep)

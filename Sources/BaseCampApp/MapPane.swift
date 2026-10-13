@@ -13,6 +13,7 @@ struct MapPane: View {
     @Environment(MapFeatureStore.self) private var features
     @Environment(MapSettings.self) private var mapSettings
     @Environment(DisplaySettings.self) private var display
+    @State private var libraryLayer = LibraryLayerCache()
 
     var body: some View {
         MapKitView(
@@ -75,17 +76,32 @@ struct MapPane: View {
         }
     }
 
-    /// Everything the map draws, built from the library and the planner.
+    /// Everything the map draws, built from the library and the planner, one layer at a time.
     private var scene: MapScene {
-        var scene = MapScene()
-
-        if layers.showGarminDetail {
-            scene.featureLayer = features.layer
+        var parts: [MapLayerKind: MapLayerContent] = [:]
+        parts[.coverage] = coverageLayer
+        parts[.library] = libraryLayer.content(revision: store.revision, selectedItems: store.selectedItems, build: buildLibraryLayer)
+        parts[.planner] = plannerLayer
+        parts[.measure] = measureLayer
+        if let cursor = store.profileCoordinate {
+            parts[.cursor] = MapLayerContent(pins: [
+                MapPin(id: "profile-cursor", coordinate: cursor, style: .cursor, item: nil, title: "Profile position"),
+            ])
         }
+        return MapScene(
+            featureLayer: layers.showGarminDetail ? features.layer : nil,
+            // Tile base maps cover the Garmin areas, so the areas are only filled on Apple's maps.
+            showsFeatureAreas: layers.base.tileURL(z: 0, x: 0, y: 0) == nil,
+            layers: parts
+        )
+    }
 
+    /// Waypoints, routes and tracks, highlighted when selected, and the points of the selected route that can be dragged.
+    private func buildLibraryLayer() -> MapLayerContent {
+        var content = MapLayerContent()
         for waypoint in store.library.waypoints {
             let selected = store.selectedItems.contains(.waypoint(waypoint.id))
-            scene.pins.append(MapPin(
+            content.pins.append(MapPin(
                 id: "waypoint-\(waypoint.id)",
                 coordinate: waypoint.coordinate,
                 style: .waypoint(selected: selected),
@@ -95,20 +111,23 @@ struct MapPane: View {
             ))
         }
 
+        // Selected lines are drawn last, so they are not hidden under the others.
+        var selectedLines: [MapLine] = []
         for route in store.library.routes {
             let selected = store.selectedItems.contains(.route(route.id))
-            scene.lines.append(MapLine(
-                id: "route-\(route.id)",
-                coordinates: route.points.map(\.coordinate),
-                color: selected ? .red : .blue
-            ))
+            let line = MapLine(id: "route-\(route.id)", coordinates: route.points.map(\.coordinate), color: selected ? .red : .blue)
+            if selected {
+                selectedLines.append(line)
+            } else {
+                content.lines.append(line)
+            }
         }
 
         // The points of the selected route can be dragged, when there are few enough to handle one by one.
         if case .route(let id)? = store.selection, let selectedRoute = store.route(id),
            selectedRoute.points.count <= LibraryStore.draggableRoutePointLimit {
             for (index, point) in selectedRoute.points.enumerated() {
-                scene.pins.append(MapPin(
+                content.pins.append(MapPin(
                     id: "route-point-\(selectedRoute.id)-\(index)",
                     coordinate: point.coordinate,
                     style: .routePoint,
@@ -122,16 +141,26 @@ struct MapPane: View {
         for track in store.library.tracks {
             let selected = store.selectedItems.contains(.track(track.id))
             for (index, segment) in track.segments.enumerated() {
-                scene.lines.append(MapLine(
+                let line = MapLine(
                     id: "track-\(track.id)-\(index)",
                     coordinates: segment.map(\.coordinate),
                     color: selected ? .red : .orange
-                ))
+                )
+                if selected {
+                    selectedLines.append(line)
+                } else {
+                    content.lines.append(line)
+                }
             }
         }
+        content.lines += selectedLines
+        return content
+    }
 
+    private var plannerLayer: MapLayerContent {
+        var content = MapLayerContent()
         for (index, point) in planner.via.enumerated() {
-            scene.pins.append(MapPin(
+            content.pins.append(MapPin(
                 id: "via-\(index)",
                 coordinate: point,
                 style: .via(number: index + 1),
@@ -139,20 +168,19 @@ struct MapPane: View {
                 title: "Point \(index + 1)"
             ))
         }
-
         if let plan = planner.plan {
-            scene.lines.append(MapLine(
+            content.lines.append(MapLine(
                 id: "planned-route",
                 coordinates: plan.geometry.points.map(\.coordinate),
                 color: .teal
             ))
             for (index, section) in plan.remainingSteepSections.enumerated() {
-                scene.circles.append(MapCircleShape(
+                content.circles.append(MapCircleShape(
                     id: "steep-circle-\(index)",
                     center: section.center,
                     radiusMeters: section.lengthMeters / 2 + 25
                 ))
-                scene.pins.append(MapPin(
+                content.pins.append(MapPin(
                     id: "steep-pin-\(index)",
                     coordinate: section.center,
                     style: .steep(percent: Int(section.maxGradePercent.rounded())),
@@ -161,38 +189,39 @@ struct MapPane: View {
                 ))
             }
         }
+        return content
+    }
 
-        if store.measuring, !store.measurePoints.isEmpty {
-            scene.lines.append(MapLine(id: "measure", coordinates: store.measurePoints, color: .measure))
-            for (index, point) in store.measurePoints.enumerated() {
-                scene.pins.append(MapPin(
-                    id: "measure-\(index)",
-                    coordinate: point,
-                    style: .via(number: index + 1),
-                    item: nil,
-                    title: "Measure point \(index + 1)"
-                ))
-            }
+    private var measureLayer: MapLayerContent {
+        var content = MapLayerContent()
+        guard store.measuring, !store.measurePoints.isEmpty else { return content }
+        content.lines.append(MapLine(id: "measure", coordinates: store.measurePoints, color: .measure))
+        for (index, point) in store.measurePoints.enumerated() {
+            content.pins.append(MapPin(
+                id: "measure-\(index)",
+                coordinate: point,
+                style: .via(number: index + 1),
+                item: nil,
+                title: "Measure point \(index + 1)"
+            ))
         }
+        return content
+    }
 
-        if let cursor = store.profileCoordinate {
-            scene.pins.append(MapPin(id: "profile-cursor", coordinate: cursor, style: .cursor, item: nil, title: "Profile position"))
+    private var coverageLayer: MapLayerContent {
+        var content = MapLayerContent()
+        guard layers.showCoverage else { return content }
+        content.footprints = coverage.footprints
+        for footprint in coverage.footprints {
+            content.pins.append(MapPin(
+                id: "coverage-\(footprint.name)",
+                coordinate: footprint.center,
+                style: .label(footprint.name),
+                item: nil,
+                title: footprint.name
+            ))
         }
-
-        if layers.showCoverage {
-            scene.footprints = coverage.footprints
-            for footprint in coverage.footprints {
-                scene.pins.append(MapPin(
-                    id: "coverage-\(footprint.name)",
-                    coordinate: footprint.center,
-                    style: .label(footprint.name),
-                    item: nil,
-                    title: footprint.name
-                ))
-            }
-        }
-
-        return scene
+        return content
     }
 
     /// Asks where to save, then writes the visible map as a PNG.
@@ -272,5 +301,23 @@ struct MapPane: View {
                 store.showImportPanel()
             }
         }
+    }
+}
+
+/// Keeps the library layer until the library or the selection changes, so that other changes to the map, such as the
+/// profile cursor moving, do not rebuild it. Handing back the same arrays also keeps the map's comparison quick.
+@MainActor
+final class LibraryLayerCache {
+    private var revision: Int?
+    private var selectedItems: Set<LibraryItem> = []
+    private var cached = MapLayerContent()
+
+    func content(revision: Int, selectedItems: Set<LibraryItem>, build: () -> MapLayerContent) -> MapLayerContent {
+        if revision != self.revision || selectedItems != self.selectedItems {
+            cached = build()
+            self.revision = revision
+            self.selectedItems = selectedItems
+        }
+        return cached
     }
 }

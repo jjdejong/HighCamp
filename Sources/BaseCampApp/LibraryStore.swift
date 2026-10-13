@@ -21,6 +21,8 @@ final class LibraryStore {
     /// The library and its undo history. Every change is saved straight away, so the library survives quitting.
     private var history = UndoHistory(Library())
     var library: Library { history.value }
+    /// Goes up by one with every change to the library, so a view can keep work built from it until it changes.
+    private(set) var revision = 0
     /// Counts requests to rename the collection being shown. The sidebar watches it. Not saved.
     var renameRequests = 0
     /// The collection the sidebar shows, or nil for every item. Not saved.
@@ -109,6 +111,7 @@ final class LibraryStore {
     }
 
     private func didChangeLibrary() {
+        revision += 1
         save()
         clearMissingSelection()
     }

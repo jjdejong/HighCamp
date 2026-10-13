@@ -79,14 +79,57 @@ struct MapCircleShape: Equatable {
     let radiusMeters: Double
 }
 
-/// Everything drawn on the map. The map only redraws when this changes.
-struct MapScene: Equatable {
+/// The parts of the map that change on their own. Each is redrawn only when its own content changes, so moving
+/// the profile cursor does not redraw the library or the Garmin map. Listed from bottom to top.
+enum MapLayerKind: Int, CaseIterable {
+    /// Coverage outlines of the maps in the map folder, with their names.
+    case coverage
+    /// Waypoints, routes and tracks, and the draggable points of the selected route.
+    case library
+    /// The route being planned: its points, its line and the climbs still too steep.
+    case planner
+    case measure
+    /// The point under the cursor of an elevation profile.
+    case cursor
+}
+
+/// What one layer draws.
+struct MapLayerContent: Equatable {
     var pins: [MapPin] = []
     var lines: [MapLine] = []
     var circles: [MapCircleShape] = []
     var footprints: [MapFootprint] = []
+}
+
+/// Everything drawn on the map.
+struct MapScene: Equatable {
     /// The Garmin map features of the view. Compared by identity.
     var featureLayer: FeatureLayer?
+    /// Whether the Garmin areas are filled. Off on tile base maps: the tiles cover the areas on screen and have
+    /// their own, so the saved picture leaves them out too.
+    var showsFeatureAreas = true
+    var layers: [MapLayerKind: MapLayerContent] = [:]
+
+    init(featureLayer: FeatureLayer? = nil, showsFeatureAreas: Bool = true, layers: [MapLayerKind: MapLayerContent] = [:]) {
+        self.featureLayer = featureLayer
+        self.showsFeatureAreas = showsFeatureAreas
+        self.layers = layers
+    }
+
+    /// A scene with only these lines, as for a printed report.
+    init(lines: [MapLine]) {
+        self.init(layers: [.library: MapLayerContent(lines: lines)])
+    }
+
+    func content(_ kind: MapLayerKind) -> MapLayerContent {
+        layers[kind] ?? MapLayerContent()
+    }
+
+    /// Every layer's items together, from the bottom layer to the top one.
+    var pins: [MapPin] { MapLayerKind.allCases.flatMap { content($0).pins } }
+    var lines: [MapLine] { MapLayerKind.allCases.flatMap { content($0).lines } }
+    var circles: [MapCircleShape] { MapLayerKind.allCases.flatMap { content($0).circles } }
+    var footprints: [MapFootprint] { MapLayerKind.allCases.flatMap { content($0).footprints } }
 }
 
 /// An MKMapView with the library, the planner and the chosen base map. Markers are small
@@ -157,7 +200,24 @@ struct MapKitView: NSViewRepresentable {
         private var baseOverlay: MKTileOverlay?
         private var contourOverlay: MKTileOverlay?
         private var appliedOpacity: Double?
-        private var scene = MapScene()
+
+        private var appliedFeatures: FeatureLayer?
+        private var appliedShowsAreas = true
+        private var featureOverlays: [MKOverlay] = []
+        private var appliedLayers: [MapLayerKind: MapLayerContent] = [:]
+        private var layerOverlays: [MapLayerKind: [MKOverlay]] = [:]
+        private var layerPins: [MapLayerKind: [PinAnnotation]] = [:]
+        /// The stacking rank of each overlay on the map. Within a level, an overlay always goes above every overlay
+        /// of a lower or equal rank and below every higher one, whatever order things change in.
+        private var ranks: [ObjectIdentifier: Int] = [:]
+
+        private enum Rank {
+            static let base = 0
+            static let contours = 1
+            static let featureAreas = 2
+            static let featureLines = 3
+            static func layer(_ kind: MapLayerKind) -> Int { 10 + kind.rawValue }
+        }
 
         init(parent: MapKitView) {
             self.parent = parent
@@ -169,77 +229,124 @@ struct MapKitView: NSViewRepresentable {
             guard base != appliedBase else { return }
             appliedBase = base
             if let baseOverlay {
-                map.removeOverlay(baseOverlay)
+                remove([baseOverlay], from: map)
             }
             baseOverlay = base.tileOverlay()
             map.mapType = base == .appleHybrid ? .hybrid : .standard
             if let baseOverlay {
-                map.insertOverlay(baseOverlay, at: 0, level: .aboveLabels)
+                insert([baseOverlay], rank: Rank.base, level: .aboveLabels, on: map)
             }
         }
 
         func applyContours(show: Bool, opacity: Double, on map: MKMapView) {
             if show, contourOverlay == nil || appliedOpacity != opacity {
                 if let contourOverlay {
-                    map.removeOverlay(contourOverlay)
+                    remove([contourOverlay], from: map)
                 }
-                contourOverlay = MapTileURLs.contourOverlay()
+                let overlay = MapTileURLs.contourOverlay()
+                contourOverlay = overlay
                 appliedOpacity = opacity
-                map.addOverlay(contourOverlay!, level: .aboveLabels)
+                insert([overlay], rank: Rank.contours, level: .aboveLabels, on: map)
             } else if !show, let contourOverlay {
-                map.removeOverlay(contourOverlay)
+                remove([contourOverlay], from: map)
                 self.contourOverlay = nil
                 appliedOpacity = nil
             }
         }
 
-        // MARK: Library, planner and route overlays
+        // MARK: Garmin features, library, planner and the other layers
 
+        /// Redraws only what changed: the Garmin features when a new set is read, and each layer when its content changes.
         func applyScene(_ new: MapScene, on map: MKMapView) {
-            guard new != scene else { return }
-            scene = new
-
-            map.removeAnnotations(map.annotations.filter { $0 is PinAnnotation })
-            map.removeOverlays(map.overlays.filter { $0 is LineOverlay || $0 is AreaOverlay || $0 is LineGroupOverlay || $0 is AreaGroupOverlay || $0 is CircleOverlay || $0 is FootprintOverlay })
-
-            map.addAnnotations(new.pins.map { PinAnnotation(pin: $0) })
-            // Areas go above the base map's roads but below its labels; lines go above the labels.
-            // The Garmin features are one overlay per style, so the map stays quick with many paths.
-            for group in new.featureLayer?.areas ?? [] {
-                let polygons = group.rings.compactMap { ring -> MKPolygon? in
-                    let coordinates = ring.map(\.clLocation)
-                    return coordinates.count >= 3 ? MKPolygon(coordinates: coordinates, count: coordinates.count) : nil
-                }
-                guard !polygons.isEmpty else { continue }
-                let overlay = AreaGroupOverlay(polygons)
-                overlay.fill = group.fill.nsColor.withAlphaComponent(0.7)
-                map.addOverlay(overlay, level: .aboveRoads)
+            if new.featureLayer !== appliedFeatures || new.showsFeatureAreas != appliedShowsAreas {
+                appliedFeatures = new.featureLayer
+                appliedShowsAreas = new.showsFeatureAreas
+                applyFeatures(new.featureLayer, areas: new.showsFeatureAreas, on: map)
             }
-            for group in new.featureLayer?.lines ?? [] {
-                let polylines = group.paths.map { path -> MKPolyline in
+            for kind in MapLayerKind.allCases {
+                let content = new.content(kind)
+                guard content != appliedLayers[kind] ?? MapLayerContent() else { continue }
+                appliedLayers[kind] = content
+                apply(content, as: kind, on: map)
+            }
+        }
+
+        /// The Garmin features, one overlay per type, in the order the map draws them. Areas go above the base map's
+        /// roads but below its labels; lines go above the labels.
+        private func applyFeatures(_ layer: FeatureLayer?, areas: Bool, on map: MKMapView) {
+            remove(featureOverlays, from: map)
+            featureOverlays = []
+            guard let layer else { return }
+            var areaOverlays: [MKOverlay] = []
+            if areas {
+                for group in layer.areas {
+                    let polygons = group.rings.compactMap { ring -> MKPolygon? in
+                        let coordinates = ring.map(\.clLocation)
+                        return coordinates.count >= 3 ? MKPolygon(coordinates: coordinates, count: coordinates.count) : nil
+                    }
+                    guard !polygons.isEmpty else { continue }
+                    let overlay = AreaGroupOverlay(polygons)
+                    overlay.fill = group.fill.nsColor.withAlphaComponent(0.7)
+                    areaOverlays.append(overlay)
+                }
+            }
+            let lineOverlays: [MKOverlay] = layer.lines.map { group in
+                let overlay = LineGroupOverlay(group.paths.map { path in
                     let coordinates = path.map(\.clLocation)
                     return MKPolyline(coordinates: coordinates, count: coordinates.count)
-                }
-                let overlay = LineGroupOverlay(polylines)
+                })
                 overlay.color = group.rgb.nsColor
                 overlay.width = CGFloat(group.width)
-                map.addOverlay(overlay, level: .aboveLabels)
+                return overlay
             }
-            for line in new.lines {
+            insert(areaOverlays, rank: Rank.featureAreas, level: .aboveRoads, on: map)
+            insert(lineOverlays, rank: Rank.featureLines, level: .aboveLabels, on: map)
+            featureOverlays = areaOverlays + lineOverlays
+        }
+
+        private func apply(_ content: MapLayerContent, as kind: MapLayerKind, on map: MKMapView) {
+            map.removeAnnotations(layerPins[kind] ?? [])
+            remove(layerOverlays[kind] ?? [], from: map)
+
+            let pins = content.pins.map { PinAnnotation(pin: $0) }
+            map.addAnnotations(pins)
+            layerPins[kind] = pins
+
+            var overlays: [MKOverlay] = []
+            for footprint in content.footprints {
+                let corners = footprint.corners.map(\.clLocation)
+                overlays.append(FootprintOverlay(coordinates: corners, count: corners.count))
+            }
+            for line in content.lines {
                 let coordinates = line.coordinates.map(\.clLocation)
                 let overlay = LineOverlay(coordinates: coordinates, count: coordinates.count)
                 overlay.color = line.rgb?.nsColor ?? line.color.nsColor
                 overlay.width = CGFloat(line.width)
-                map.addOverlay(overlay, level: .aboveLabels)
+                overlays.append(overlay)
             }
-            for circle in new.circles {
-                let overlay = CircleOverlay(center: circle.center.clLocation, radius: circle.radiusMeters)
-                map.addOverlay(overlay, level: .aboveLabels)
+            for circle in content.circles {
+                overlays.append(CircleOverlay(center: circle.center.clLocation, radius: circle.radiusMeters))
             }
-            for footprint in new.footprints {
-                let corners = footprint.corners.map(\.clLocation)
-                let overlay = FootprintOverlay(coordinates: corners, count: corners.count)
-                map.addOverlay(overlay, level: .aboveLabels)
+            insert(overlays, rank: Rank.layer(kind), level: .aboveLabels, on: map)
+            layerOverlays[kind] = overlays
+        }
+
+        /// Puts overlays on the map above every overlay of the same or a lower rank in the level, keeping their order.
+        private func insert(_ overlays: [MKOverlay], rank: Int, level: MKOverlayLevel, on map: MKMapView) {
+            guard !overlays.isEmpty else { return }
+            let existing = map.overlays(in: level)
+            let index = existing.firstIndex { (ranks[ObjectIdentifier($0)] ?? 0) > rank } ?? existing.count
+            for (offset, overlay) in overlays.enumerated() {
+                ranks[ObjectIdentifier(overlay)] = rank
+                map.insertOverlay(overlay, at: index + offset, level: level)
+            }
+        }
+
+        private func remove(_ overlays: [MKOverlay], from map: MKMapView) {
+            guard !overlays.isEmpty else { return }
+            map.removeOverlays(overlays)
+            for overlay in overlays {
+                ranks[ObjectIdentifier(overlay)] = nil
             }
         }
 

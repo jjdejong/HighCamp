@@ -200,7 +200,7 @@ The largest change.
 
 | Task | Owner | State | Commit | Notes |
 |---|---|---|---|---|
-| A1 | Haiku | todo | | |
+| A1 | Haiku | done | | |
 | A2 | Haiku | done | | |
 | A3 | Haiku | done | | |
 | A4 | Haiku → Opus | todo | | |

@@ -474,14 +474,9 @@ final class LibraryStore {
     /// Joins the selected tracks, in library order, into one track that takes the first one's place.
     func combineSelectedTracks() {
         let tracks = selectedTracks
-        guard tracks.count >= 2, let first = tracks.first,
-              let index = library.tracks.firstIndex(where: { $0.id == first.id }) else { return }
+        guard tracks.count >= 2, let first = tracks.first else { return }
         let combined = Track.combined(tracks, name: first.name)
-        let others = Set(tracks.dropFirst().map(\.id))
-        edit("Combine Tracks") { library in
-            library.tracks.removeAll { others.contains($0.id) }
-            library.tracks[index] = combined
-        }
+        edit("Combine Tracks") { $0.combineTracks(tracks.map(\.id), into: combined) }
         selection = .track(combined.id)
     }
 
@@ -628,13 +623,9 @@ final class LibraryStore {
     /// Joins another track onto the selected track, in order. The result takes the selected track's place and name.
     func combineSelection(withTrack other: UUID) {
         guard case .track(let id)? = selection, id != other,
-              let first = track(id), let second = track(other),
-              let index = library.tracks.firstIndex(where: { $0.id == id }) else { return }
+              let first = track(id), let second = track(other) else { return }
         let combined = Track.combined([first, second], name: first.name)
-        edit("Combine Tracks") { library in
-            library.tracks.removeAll { $0.id == other }
-            library.tracks[index] = combined
-        }
+        edit("Combine Tracks") { $0.combineTracks([id, other], into: combined) }
         selection = .track(combined.id)
     }
 
@@ -661,11 +652,9 @@ final class LibraryStore {
     @discardableResult
     func splitSelectedTrackAtCursor() -> Bool {
         guard case .track(let id)? = selection, let cursor = profileCoordinate,
-              let track = track(id), let pieces = track.split(nearest: cursor),
-              let index = library.tracks.firstIndex(where: { $0.id == id }) else { return false }
-        let (first, second) = pieces
-        edit("Split Track") { $0.tracks.replaceSubrange(index...index, with: [first, second]) }
-        selection = .track(first.id)
+              let track = track(id), let pieces = track.split(nearest: cursor) else { return false }
+        edit("Split Track") { $0.splitTrack(id, into: pieces) }
+        selection = .track(pieces.0.id)
         return true
     }
 
@@ -675,18 +664,12 @@ final class LibraryStore {
         case .track(let id)?:
             guard let track = track(id) else { return }
             let route = track.asRoute()
-            edit("Convert to Route") { library in
-                library.tracks.removeAll { $0.id == id }
-                library.routes.append(route)
-            }
+            edit("Convert to Route") { $0.convertTrack(id, to: route) }
             selection = .route(route.id)
         case .route(let id)?:
             guard let route = route(id) else { return }
             let track = route.asTrack()
-            edit("Convert to Track") { library in
-                library.routes.removeAll { $0.id == id }
-                library.tracks.append(track)
-            }
+            edit("Convert to Track") { $0.convertRoute(id, to: track) }
             selection = .track(track.id)
         default:
             break

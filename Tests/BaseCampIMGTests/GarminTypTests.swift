@@ -91,6 +91,57 @@ final class GarminTypTests: XCTestCase {
         XCTAssertEqual(order.count, 0x80)
     }
 
+    /// A TYP with one polyline record and one polygon record, each written by `record`.
+    private func makeTyp(line: [UInt8], polygon: [UInt8]) -> [UInt8] {
+        var bytes = makeTyp()
+        bytes.replaceSubrange(0x100..<(0x100 + line.count), with: line)
+        bytes.replaceSubrange(0x150..<(0x150 + polygon.count), with: polygon)
+        return bytes
+    }
+
+    func testALineWithAWiderBorderKeepsIt() throws {
+        // Kind 0: line colour, border colour, line width 3, border width 5.
+        let line: [UInt8] = [0x00, 0x00, 0x10, 0x20, 0x30, 0x01, 0x02, 0x03, 3, 5]
+        let style = try GarminTypStyle(bytes: makeTyp(line: line, polygon: [0x06, 0, 0, 0]))
+        let parsed = try XCTUnwrap(style.lines[1])
+        XCTAssertEqual(parsed.colour, GarminTypStyle.RGB(red: 0x30, green: 0x20, blue: 0x10))
+        XCTAssertEqual(parsed.width, 3)
+        XCTAssertEqual(parsed.border, GarminTypStyle.RGB(red: 3, green: 2, blue: 1))
+        XCTAssertEqual(parsed.borderWidth, 5)
+    }
+
+    func testABorderNoWiderThanTheLineIsDropped() throws {
+        let line: [UInt8] = [0x00, 0x00, 0x10, 0x20, 0x30, 0x01, 0x02, 0x03, 4, 4]
+        let style = try GarminTypStyle(bytes: makeTyp(line: line, polygon: [0x06, 0, 0, 0]))
+        XCTAssertNil(try XCTUnwrap(style.lines[1]).border)
+    }
+
+    func testAPatternedLineReadsItsBitmap() throws {
+        // Kind 0 with 2 rows: foreground, background, then 4 bytes per row, lowest bit first.
+        let line: [UInt8] = [0x00 | (2 << 3), 0x00, 0, 0, 0, 0xff, 0xff, 0xff, 0x0f, 0, 0, 0, 0x0f, 0, 0, 0]
+        let style = try GarminTypStyle(bytes: makeTyp(line: line, polygon: [0x06, 0, 0, 0]))
+        let parsed = try XCTUnwrap(style.lines[1])
+        XCTAssertEqual(parsed.width, 2)
+        XCTAssertEqual(parsed.background, GarminTypStyle.RGB(red: 255, green: 255, blue: 255))
+        let pattern = try XCTUnwrap(parsed.pattern)
+        XCTAssertEqual((0..<32).map { pattern.isSet(x: $0, y: 1) }, (0..<32).map { $0 < 4 })
+    }
+
+    func testAPatternedFillOnATransparentBackground() throws {
+        // Kind 0x0E: one colour, then a 32 by 32 bitmap with only the first pixel set.
+        var polygon: [UInt8] = [0x0E, 0x00, 0x80, 0x00, 0x01]
+        polygon += [UInt8](repeating: 0, count: 127)
+        let style = try GarminTypStyle(bytes: makeTyp(line: [0x06, 0, 0, 0, 0, 1], polygon: polygon))
+        let fill = try XCTUnwrap(style.fillStyles[5])
+        XCTAssertEqual(fill.colour, GarminTypStyle.RGB(red: 0, green: 0x80, blue: 0))
+        XCTAssertNil(fill.background)
+        let pattern = try XCTUnwrap(fill.pattern)
+        XCTAssertEqual(pattern.rows, 32)
+        XCTAssertTrue(pattern.isSet(x: 0, y: 0))
+        XCTAssertFalse(pattern.isSet(x: 1, y: 0))
+        XCTAssertEqual(style.fills[5], fill.colour)
+    }
+
     func testNotATypFileIsRejected() {
         XCTAssertThrowsError(try GarminTypStyle(bytes: [UInt8](repeating: 0, count: 0x80)))
     }
@@ -106,5 +157,8 @@ final class GarminTypTests: XCTestCase {
         XCTAssertFalse(style.orderEntries.isEmpty)
         let order = GarminTypStyle.polygonDrawOrder(style)
         XCTAssertEqual(Set(order).count, order.count)
+        // Roads have borders and tracks have patterns in this style.
+        XCTAssertTrue(style.lines.values.contains { $0.border != nil })
+        XCTAssertTrue(style.lines.values.contains { $0.pattern != nil })
     }
 }

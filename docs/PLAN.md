@@ -254,6 +254,10 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G3 | Opus | todo | | map list: on/off, order, zoom range, opacity |
 | G4 | Opus | todo | | map DEM: relief shading and heights |
 | G5 | Opus | todo | | basemap when zoomed out |
-| C1–C7 | see above | blocked | | after B5 / B2; C6 moved to G2 |
+| C3 | Haiku | ready | | colour as a new optional field, so old library files still load; PNG check |
+| C5 | Haiku | ready | | |
+| C7 | Haiku | ready | | PNG check of the printed page |
+| C1, C2, C4 | see above | blocked | | after B5 |
+| C6 | — | moved | | to G2 |
 
-Suggested order for Haiku: A8, A2, A3, A6, A1, A7, A5, A10, A4, A9. These run from the smallest to the ones that need review.
+Suggested order for Haiku now: C5, C7, C3. Phase A is done. Phase G is Opus only; Haiku does not touch the map renderer or the IMG decoder.

@@ -11,7 +11,9 @@ final class GarminTileOverlay: MKTileOverlay {
     init(configuration: GarminMapConfiguration) {
         self.configuration = configuration
         super.init(urlTemplate: nil)
-        canReplaceMapContent = true
+        // Apple's map shows through where the Garmin maps have nothing to draw: zoomed far out, outside their
+        // area, or when no map can be read, so the map is never blank (BaseCamp has its own world basemap there).
+        canReplaceMapContent = false
         maximumZ = 21
     }
 
@@ -116,18 +118,14 @@ enum WebMercator {
 enum GarminPainter {
     /// Inside a map's coverage, where no area is filled.
     static let land = NSColor(calibratedRed: 0.976, green: 0.973, blue: 0.949, alpha: 1)
-    /// Where no map has data.
-    static let noData = NSColor(calibratedWhite: 0.88, alpha: 1)
 
-    /// Draws the maps bottom first: the background (land where a full map has data), then each map's features, with
-    /// its opacity. `patternOrigin` is the context origin's position in the pattern grid, so area patterns meet
+    /// Draws the maps bottom first: land where a full map is drawn, then each map's features, with its opacity.
+    /// Elsewhere the picture stays transparent, so whatever is under it shows. `patternOrigin` is the context origin's position in the pattern grid, so area patterns meet
     /// across tiles. `step` thins long paths for large pictures: every `step`-th point is drawn.
     static func draw(
         _ drawings: [GarminMapDrawing], in rect: NSRect, patternOrigin: NSPoint, step: Int = 1,
         project: (Coordinate) -> NSPoint
     ) {
-        noData.setFill()
-        rect.fill()
         land.setFill()
         for drawing in drawings where !drawing.isOverlay {
             for bounds in drawing.features.coverage {

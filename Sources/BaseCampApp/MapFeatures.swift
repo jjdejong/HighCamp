@@ -107,11 +107,12 @@ actor MapFeatureCache {
                 guard !Task.isCancelled else { return MapFeatureSet() }
                 guard let bounds = subfile.bounds, subfile.parts.contains("RGN"),
                       MapFeatureReader.intersects(bounds, area) else { continue }
-                coverage.append(bounds)
-                // A map tile shows nothing when zoomed out past its coarsest level, so its cells are not even read.
+                // A map tile shows nothing when zoomed out past its coarsest level, so its cells are not even read,
+                // and its area is left to whatever is under the map.
                 guard let levels = levels(for: subfile.name, in: file.url.path, image: open.image),
                       let level = MapFeatureReader.level(levels, forBits: wantedBits),
                       let subdivisions = subdivisions(for: subfile.name, in: file.url.path, image: open.image) else { continue }
+                coverage.append(bounds)
 
                 for (index, cell) in subdivisions.enumerated()
                 where cell.level == level.level && MapFeatureReader.intersects(cell.bounds, area) {

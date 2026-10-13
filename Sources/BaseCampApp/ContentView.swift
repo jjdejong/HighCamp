@@ -139,6 +139,7 @@ struct ContentView: View {
         .sheet(isPresented: $showMapList) {
             GarminMapListSheet()
                 .environment(garminMaps)
+                .task { await garminMaps.reload(folder: mapSettings.folder) }
         }
         .sheet(isPresented: $store.showMaps) {
             MapsSheet()

@@ -60,7 +60,8 @@ struct MapPane: View {
             await garminMaps.reload(folder: mapSettings.folder)
             await coverage.reload(folder: mapSettings.folder)
         }
-        .overlay {
+        .overlay(alignment: .bottom) {
+            // A small bar, so the map stays usable everywhere else: BaseCamp shows nothing over its map.
             if store.library.isEmpty && planner.via.isEmpty {
                 emptyState
             }
@@ -292,15 +293,18 @@ struct MapPane: View {
     }
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("Nothing to show", systemImage: "map")
-        } description: {
-            Text("Drop GPX files here, or import them to add waypoints, routes and tracks.")
-        } actions: {
-            Button("Import GPX…") {
+        HStack(spacing: 10) {
+            Image(systemName: "tray")
+            Text("Your library is empty. Drop GPX files on the map, or")
+            Button("Import…") {
                 store.showImportPanel()
             }
         }
+        .font(.callout)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.regularMaterial, in: Capsule())
+        .padding(.bottom, 36)
     }
 }
 

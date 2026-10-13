@@ -13,6 +13,16 @@ struct GarminMapListSheet: View {
                 .font(.title2.bold())
             Text("Maps higher in the list are drawn on top. Drag to reorder. Overlays, such as contour maps, are drawn without a background.")
                 .foregroundStyle(.secondary)
+            if let problem = maps.problem {
+                Label(problem, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+            if let folder = maps.folder {
+                Text("Map folder: \(folder.path)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
             if maps.entries.isEmpty {
                 ContentUnavailableView("No maps", systemImage: "map", description: Text("Put .img maps in the map folder, chosen in Settings."))
             } else {

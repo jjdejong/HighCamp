@@ -12,6 +12,8 @@ final class GarminMapListStore {
 
     private(set) var entries: [MapListEntry]
     private(set) var folder: URL?
+    /// Why the folder could not be read, for the list to show. Nil when it was read.
+    private(set) var problem: String?
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.defaultsKey),
@@ -25,14 +27,34 @@ final class GarminMapListStore {
     /// Reads the folder's maps, finds which are overlays, and updates the list. Opening the maps happens off the
     /// main thread.
     func reload(folder: URL) async {
-        let files = await Task.detached { () -> [(fileName: String, isOverlay: Bool)] in
-            ((try? MapFolder.imgMaps(in: folder)) ?? []).compactMap { file in
-                guard let map = try? GarminIMG(url: file.url) else { return nil }
-                return (file.url.lastPathComponent, map.isTransparent)
+        let result = await Task.detached { () -> Result<[(fileName: String, isOverlay: Bool)], Error> in
+            Result {
+                try MapFolder.imgMaps(in: folder).compactMap { file in
+                    guard let map = try? GarminIMG(url: file.url) else { return nil }
+                    return (file.url.lastPathComponent, map.isTransparent)
+                }
             }
         }.value
         self.folder = folder
-        update(MapList.synced(entries, with: files))
+        switch result {
+        case .success(let files):
+            problem = nil
+            update(MapList.synced(entries, with: files))
+        case .failure(let error):
+            // Keep the list as it was: the maps are still there, the app just cannot see them now.
+            problem = Self.explain(error, folder: folder)
+        }
+    }
+
+    private static func explain(_ error: Error, folder: URL) -> String {
+        let code = (error as NSError).code
+        if code == NSFileReadNoPermissionError || code == EPERM || code == EACCES {
+            return "macOS does not let BaseCamp Clone read \(folder.path). Allow it in System Settings > Privacy & Security > Files and Folders, then reopen this list."
+        }
+        if code == NSFileReadNoSuchFileError {
+            return "The map folder \(folder.path) does not exist. Choose another one in Settings."
+        }
+        return "The map folder \(folder.path) could not be read. \(error.localizedDescription)"
     }
 
     func setEnabled(_ enabled: Bool, for fileName: String) {

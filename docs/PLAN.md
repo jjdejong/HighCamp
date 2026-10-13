@@ -203,12 +203,12 @@ The largest change.
 | A1 | Haiku | done | f3cb911, 4c797b9 | |
 | A2 | Haiku | done | a79ee4c | |
 | A3 | Haiku | done | 69624f6 | |
-| A4 | Haiku → Opus | done | d3ebc89, 8dda86b | for Opus review; see HANDOFF |
+| A4 | Haiku → Opus | reviewed | d3ebc89, 8dda86b, adb56f8 | accepted; tile flip fixed in review |
 | A5 | Haiku | done | 9a72f99 | offline check by user; see HANDOFF |
 | A6 | Haiku | done | 96a2d8d | |
 | A7 | Haiku | done | 3f22733 | `--library` debug-only; decided in HANDOFF |
 | A8 | Haiku | done | ba2332a | |
-| A9 | Haiku → Opus | done | fa454fe | for Opus review; see HANDOFF |
+| A9 | Haiku → Opus | reviewed | fa454fe, cdc8a04 | accepted; DEM check by user |
 | A10 | Haiku | done | c2028ea | on-device check by user (not sent to the device) |
 | B1 | Opus | todo | | Haiku: call-site list |
 | B2 | Opus | todo | | Haiku: timings |

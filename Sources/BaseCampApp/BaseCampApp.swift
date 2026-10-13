@@ -84,6 +84,7 @@ struct BaseCampApp: App {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                     brouter.stop()
+                    store.flushSaving()
                 }
         }
         .defaultSize(width: 1280, height: 820)

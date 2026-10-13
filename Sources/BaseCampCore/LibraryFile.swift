@@ -31,19 +31,46 @@ public enum LibraryFile {
         return (stored.library, stored.version)
     }
 
+    /// Writes the library atomically: the new file is written and synced under a temporary name next to `url`, then
+    /// renamed over it. A failure removes the temporary file and leaves `url` as it was.
     public static func save(_ library: Library, to url: URL) throws {
         let data = try encoder().encode(Stored(version: currentVersion, library: library))
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try data.write(to: url, options: .atomic)
+        let temporary = savingURL(for: url)
+        do {
+            try writeSynced(data, to: temporary)
+            guard rename(temporary.path, url.path) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+        } catch {
+            try? FileManager.default.removeItem(at: temporary)
+            throw error
+        }
     }
 
+    /// The temporary name a save is written under, for `url`: `Library.json` gives `Library.json.saving`.
+    static func savingURL(for url: URL) -> URL {
+        url.appendingPathExtension("saving")
+    }
+
+    private static func writeSynced(_ data: Data, to url: URL) throws {
+        guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+        try handle.write(contentsOf: data)
+        try handle.synchronize()
+    }
+
+    /// Compact JSON: no pretty printing, which costs time and space on a large library.
     private static func encoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.outputFormatting = [.sortedKeys]
         return encoder
     }
 

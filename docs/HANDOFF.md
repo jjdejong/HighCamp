@@ -146,6 +146,34 @@ Notes:
 - Selected items keep their colour, so a selected track or route is no longer drawn red. Selection is marked only by the halo.
 Next step: C7b (a taller profile on page 2).
 
+## B3-impl — 2026-10-13 — Haiku, for Opus review
+State: done
+Commits: this commit (the hash goes in the status table in the next commit)
+What was checked:
+- Nine tests of `LibrarySaver` in temporary folders, with short delays: a burst of 20 changes gives one or two writes
+  and the last value; steady changes give at least two writes within the maximum delay; `flush` writes at once and
+  writes nothing when nothing is pending; a failed write is reported once and leaves no `.saving` file; a failed
+  write leaves the old file as it was; a leftover `.saving` file is removed and not read; the first write backs up
+  the existing file and later writes do not within the interval; only the newest five backups are kept; the file is
+  compact and loads back equal. The `LibraryFile` tests still pass.
+- Gate green: 242 tests passing, 3 skipped, no DIAG. The app bundle was rebuilt with `Tools/make-app-bundle.sh release`.
+- App, on a scratch library (never the user's): an import wrote `Library.json` compact, with no newlines and no backup
+  (nothing to copy yet). A second launch with one change made one backup, `Backups/Library-yyyyMMdd-HHmmss.json`,
+  which equals the first version, and `Library.json` had the change. No `.saving` file was left.
+- Measured in release: 50 tracks of 20 000 points (one million points).
+  - Before (pretty printed): encode 2.17 s, write 0.07 s, file 224 MB.
+  - After (compact, synced, atomic): encode 2.10 s, save 2.11 s (encoding included), file 94 MB.
+  The encoding time is the same, but it now runs on the saver's queue, not the main thread.
+Decisions and open questions:
+- A backup that fails blocks the save, and the failure is reported. The alternative is to save anyway and report only
+  the backup failure. Opus, decide which.
+- The quit flush (`flushSaving` in the `willTerminate` handler) is wired in, and `flush` is tested. I did not exercise
+  a quit with a change still pending, since the timing is too tight to reproduce by hand.
+- The library file is now one line of JSON. Anyone who reads it by hand will need a formatter.
+- The save uses only one queue: `LibrarySaver`'s own serial queue, as the design allows. Nothing else changed in
+  concurrency, `UndoHistory`, the edit flow or the file version.
+Next step: Opus reviews this commit. Then B5a (Haiku → Opus) and C2 and C4 (Haiku → Opus), which are unblocked.
+
 ## C3b — 2026-10-13 — Haiku
 State: done
 Commits: 5922795

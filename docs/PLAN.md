@@ -274,7 +274,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | B1 | Opus | done | 8247d30 | Replace checked on the Edge with EdgeSend; in-app dialog by user |
 | B2 | Opus | done | 7ffe83e, b87aa68 | hover 61 → 2.5 ms; area fills only on Apple bases |
 | B3 | Opus | done | | design in HANDOFF |
-| B3-impl | Haiku → Opus | todo | | next for Haiku |
+| B3-impl | Haiku → Opus | done | this commit | background saver, compact atomic writes, backups; for Opus review |
 | B4 | Opus | todo | | |
 | B5 | Opus | done | 1d2f670 | design in HANDOFF; core: stops and legs, library file v2 |
 | B5a | Haiku → Opus | todo | | GPX stops and shape |

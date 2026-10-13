@@ -48,9 +48,18 @@ final class LibraryStore {
     var showFind = false
 
     private let fileURL: URL
+    /// Writes the library in the background, after changes settle (see `LibrarySaver`).
+    private let saver: LibrarySaver
 
     init(fileURL: URL = LibraryStore.defaultFileURL) {
         self.fileURL = fileURL
+        saver = LibrarySaver(fileURL: fileURL)
+        saver.onError = { [weak self] error in
+            let message = "The library could not be saved. \(error.localizedDescription)"
+            Task { @MainActor in
+                self?.errorMessage = message
+            }
+        }
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
         do {
             let stored = try LibraryFile.read(from: fileURL)
@@ -84,11 +93,17 @@ final class LibraryStore {
         return support.appendingPathComponent("BaseCampClone/Library.json")
     }
 
+    /// Schedules the library for saving. The write happens shortly after the changes settle.
     private func save() {
+        saver.schedule(library)
+    }
+
+    /// Writes any change still waiting to be saved, now. Called when the app quits.
+    func flushSaving() {
         do {
-            try LibraryFile.save(library, to: fileURL)
+            try saver.flush()
         } catch {
-            errorMessage = "The library could not be saved. \(error.localizedDescription)"
+            FileHandle.standardError.write(Data("The library could not be saved at quit. \(error.localizedDescription)\n".utf8))
         }
     }
 

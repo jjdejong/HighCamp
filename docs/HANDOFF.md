@@ -10,7 +10,7 @@ State: accepted. Gate green: 167 tests, 3 skipped, no DIAG. Checked a PDF for T0
 
 ## C3c — 2026-10-13 — Haiku
 State: done
-Commits: this commit (the hash goes in the status table in the next commit)
+Commits: ea02d0b
 What was checked:
 - Saved picture (`--map-image`), the same framing unselected and selected: a red track with no halo when unselected, and
   with a white halo about four points wider when selected. Compared at three times magnification. Both use the same

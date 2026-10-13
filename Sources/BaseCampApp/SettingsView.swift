@@ -1,0 +1,223 @@
+import AppKit
+import BaseCampCore
+import Foundation
+import SwiftUI
+
+/// Settings (⌘,): the folder that holds the map files, shared with QMapShack.
+struct SettingsView: View {
+    @Environment(MapSettings.self) private var mapSettings
+    @Environment(RoutingSettings.self) private var routing
+    @Environment(DisplaySettings.self) private var display
+    @Environment(RoutePlanner.self) private var planner
+    @Environment(ElevationSettings.self) private var elevation
+
+    var body: some View {
+        @Bindable var mapSettings = mapSettings
+        @Bindable var routing = routing
+        @Bindable var display = display
+        Form {
+            Section("Units and positions") {
+                Picker("Units", selection: $display.units) {
+                    ForEach(UnitSystem.allCases) { system in
+                        Text(system.label).tag(system)
+                    }
+                }
+                Picker("Positions", selection: $display.coordinates) {
+                    ForEach(CoordinateSystem.allCases) { system in
+                        Text(system.label).tag(system)
+                    }
+                }
+            }
+            Section("Maps") {
+                LabeledContent("Map folder") {
+                    Text(mapSettings.folder.path)
+                        .textSelection(.enabled)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                }
+                HStack {
+                    Button("Choose Folder…") {
+                        chooseFolder()
+                    }
+                    if let qmapshack = MapSettings.qmapshackFolder, qmapshack != mapSettings.folder {
+                        Button("Use QMapShack's Folder") {
+                            mapSettings.folder = qmapshack
+                        }
+                        .help(qmapshack.path)
+                    }
+                }
+                Text("QMapShack keeps its own map folder setting. Set it to the same folder in QMapShack so both apps read the same maps.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Elevation models (DEM)") {
+                LabeledContent("Folder") {
+                    Text(elevation.folder.path)
+                        .textSelection(.enabled)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                }
+                HStack {
+                    Button("Choose Folder…") {
+                        chooseElevationFolder()
+                    }
+                    if let qmapshack = ElevationSettings.qmapshackFolder, qmapshack != elevation.folder {
+                        Button("Use QMapShack's DEM Folder") {
+                            elevation.folder = qmapshack
+                        }
+                    }
+                }
+                Text("Heights for tracks, routes and waypoints that have none come from the first model in this folder that covers the point. Put the best model first, such as Current_DEM.vrt.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            routingProfilesSection
+            Section("Routing") {
+                Picker("Engine", selection: $routing.engine) {
+                    ForEach(RoutingSettings.Engine.allCases) { engine in
+                        Text(engine.label).tag(engine)
+                    }
+                }
+                TextField("Local BRouter address", text: $routing.localServer)
+                TextField("brouter.de address", text: $routing.onlineServer)
+                LabeledContent("BRouter folder") {
+                    Text(routing.brouterFolder.path)
+                        .textSelection(.enabled)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                }
+                Button("Choose BRouter Folder…") {
+                    chooseBRouterFolder()
+                }
+                TextField("Java", text: $routing.javaPath)
+                Text("The BRouter folder holds the BRouter jar, segments4 and profiles2. It defaults to QMapShack's folder. Routes planned with brouter.de send the route points to that site.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 520, height: 720)
+        .padding()
+    }
+
+    /// Edits the limits of the selected routing profile. The planner bar uses the same profiles.
+    @ViewBuilder
+    private var routingProfilesSection: some View {
+        let profile = planner.selectedProfile
+        Section("Routing profiles") {
+            Picker("Profile", selection: Binding(
+                get: { planner.selectedProfileID },
+                set: { planner.selectProfile($0) }
+            )) {
+                ForEach(planner.profiles) { item in
+                    Text(item.name).tag(item.id)
+                }
+            }
+            TextField("Name", text: profileBinding(\.name))
+            Picker("BRouter profile", selection: profileBinding(\.brouterProfile)) {
+                ForEach(brouterProfileNames(including: profile.brouterProfile), id: \.self) { name in
+                    Text(name).tag(name)
+                }
+            }
+            Toggle("Limit grade", isOn: Binding(
+                get: { profile.maxGradePercent != nil },
+                set: { limited in planner.updateSelected { $0.maxGradePercent = limited ? 12 : nil } }
+            ))
+            if let limit = profile.maxGradePercent {
+                Slider(value: Binding(
+                    get: { limit },
+                    set: { value in planner.updateSelected { $0.maxGradePercent = value.rounded() } }
+                ), in: 5...25, step: 1) {
+                    Text("Max grade")
+                } minimumValueLabel: {
+                    Text("5%")
+                } maximumValueLabel: {
+                    Text("25%")
+                }
+                LabeledContent("Max grade", value: "\(Int(limit))%")
+            }
+            Slider(value: Binding(
+                get: { profile.maxDetourPercent },
+                set: { value in planner.updateSelected { $0.maxDetourPercent = (value / 5).rounded() * 5 } }
+            ), in: 10...150, step: 5) {
+                Text("Max detour")
+            }
+            LabeledContent("Max detour", value: "\(Int(profile.maxDetourPercent))% longer")
+            Stepper(value: Binding(
+                get: { profile.maxPasses },
+                set: { value in planner.updateSelected { $0.maxPasses = value } }
+            ), in: 1...10) {
+                LabeledContent("Avoidance passes", value: "\(profile.maxPasses)")
+            }
+            Slider(value: Binding(
+                get: { profile.minimumClimbMeters },
+                set: { value in planner.updateSelected { $0.minimumClimbMeters = (value / 50).rounded() * 50 } }
+            ), in: 100...1000, step: 50) {
+                Text("Minimum climb")
+            }
+            LabeledContent("Minimum climb", value: "\(Int(profile.minimumClimbMeters)) m")
+            HStack {
+                Button("Add Profile") {
+                    planner.addProfile()
+                }
+                Button("Delete Profile") {
+                    planner.deleteSelectedProfile()
+                }
+                .disabled(planner.profiles.count <= 1)
+            }
+            Text("A climb only triggers a detour when it is steeper than the limit and at least the minimum climb long. The BRouter profile names come from the profiles2 folder of the BRouter folder.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// A binding to one field of the selected profile.
+    private func profileBinding(_ keyPath: WritableKeyPath<RoutingProfile, String>) -> Binding<String> {
+        Binding(
+            get: { planner.selectedProfile[keyPath: keyPath] },
+            set: { value in planner.updateSelected { $0[keyPath: keyPath] = value } }
+        )
+    }
+
+    /// The BRouter profiles installed in the BRouter folder, plus the one in use even if it is not installed.
+    private func brouterProfileNames(including current: String) -> [String] {
+        let folder = routing.brouterFolder.appendingPathComponent("profiles2")
+        let installed = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        var names = Set(installed.filter { $0.hasSuffix(".brf") }.map { String($0.dropLast(4)) })
+        names.insert(current)
+        return names.sorted()
+    }
+
+    private func chooseBRouterFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = false
+        panel.directoryURL = routing.brouterFolder
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        routing.brouterFolder = url
+    }
+
+    private func chooseElevationFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = false
+        panel.directoryURL = elevation.folder
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        elevation.folder = url
+    }
+
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = mapSettings.folder
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        mapSettings.folder = url
+    }
+}

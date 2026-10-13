@@ -89,7 +89,7 @@ struct MapPane: View {
             content.pins.append(MapPin(
                 id: "waypoint-\(waypoint.id)",
                 coordinate: waypoint.coordinate,
-                style: .waypoint(selected: selected),
+                style: .waypoint(selected: selected, symbol: waypoint.symbol),
                 item: .waypoint(waypoint.id),
                 title: waypoint.name,
                 showsLabel: true

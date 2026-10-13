@@ -13,7 +13,8 @@ struct RoutePointRef: Equatable {
 
 struct MapPin: Equatable {
     enum Style: Equatable {
-        case waypoint(selected: Bool)
+        /// A waypoint. `symbol` is its GPX symbol name, which picks the glyph drawn in the marker.
+        case waypoint(selected: Bool, symbol: String?)
         case via(number: Int)
         case steep(percent: Int)
         case label(String)
@@ -499,8 +500,13 @@ enum MarkerImage {
         }
         let image: NSImage
         switch style {
-        case .waypoint(let selected):
-            image = dot(diameter: selected ? 14 : 11, fill: selected ? .systemRed : .systemBlue, label: nil)
+        case .waypoint(let selected, let symbol):
+            let fill: NSColor = selected ? .systemRed : .systemBlue
+            if let systemName = WaypointSymbol.systemName(for: symbol) {
+                image = symbolDot(diameter: selected ? 20 : 18, fill: fill, systemName: systemName)
+            } else {
+                image = dot(diameter: selected ? 14 : 11, fill: fill, label: nil)
+            }
         case .via(let number):
             image = dot(diameter: 18, fill: .systemGreen, label: "\(number)")
         case .steep:
@@ -528,6 +534,25 @@ enum MarkerImage {
             NSColor.systemPurple.withAlphaComponent(0.85).setFill()
             NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
             (text as NSString).draw(at: NSPoint(x: 6, y: 2), withAttributes: attributes)
+            return true
+        }
+    }
+
+    /// A filled circle with a white SF Symbol in it, for a waypoint that has a symbol.
+    private static func symbolDot(diameter: CGFloat, fill: NSColor, systemName: String) -> NSImage {
+        NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
+            let circle = NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1))
+            fill.setFill()
+            circle.fill()
+            NSColor.white.setStroke()
+            circle.lineWidth = 1.5
+            circle.stroke()
+            let configuration = NSImage.SymbolConfiguration(pointSize: diameter * 0.5, weight: .semibold)
+                .applying(NSImage.SymbolConfiguration(paletteColors: [.white]))
+            if let glyph = NSImage(systemSymbolName: systemName, accessibilityDescription: nil)?.withSymbolConfiguration(configuration) {
+                let size = glyph.size
+                glyph.draw(in: NSRect(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2, width: size.width, height: size.height))
+            }
             return true
         }
     }

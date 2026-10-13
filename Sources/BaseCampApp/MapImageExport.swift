@@ -243,7 +243,7 @@ enum MapImageExport {
 
     private static func markerColor(_ style: MapPin.Style) -> NSColor {
         switch style {
-        case .waypoint(let selected): selected ? .systemRed : .systemBlue
+        case .waypoint(let selected, _): selected ? .systemRed : .systemBlue
         case .via: .systemGreen
         case .steep: .systemOrange
         case .label: .systemPurple

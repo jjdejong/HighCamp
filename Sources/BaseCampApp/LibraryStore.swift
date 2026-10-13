@@ -651,12 +651,12 @@ final class LibraryStore {
         switch selection {
         case .track(let id)?:
             guard let track = track(id) else { return }
-            let copy = Track(name: track.name + " copy", segments: track.segments)
+            let copy = Track(name: track.name + " copy", segments: track.segments, color: track.color)
             edit("Duplicate") { $0.tracks.append(copy) }
             selection = .track(copy.id)
         case .route(let id)?:
             guard let route = route(id) else { return }
-            let copy = Route(name: route.name + " copy", points: route.points)
+            let copy = Route(name: route.name + " copy", points: route.points, color: route.color)
             edit("Duplicate") { $0.routes.append(copy) }
             selection = .route(copy.id)
         default:

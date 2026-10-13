@@ -22,9 +22,9 @@ public extension Track {
         return copy
     }
 
-    /// Joins the segments of all tracks, in order, into one track named `name`.
+    /// Joins the segments of all tracks, in order, into one track named `name`. It takes the first track's colour.
     static func combined(_ tracks: [Track], name: String) -> Track {
-        Track(name: name, segments: tracks.flatMap(\.segments))
+        Track(name: name, segments: tracks.flatMap(\.segments), color: tracks.first?.color)
     }
 
     /// Cuts the track into two tracks at the point nearest to `coordinate`. The cut point is in both halves.
@@ -36,8 +36,8 @@ public extension Track {
         let segment = segments[segmentIndex]
         before.append(Array(segment[...pointIndex]))
         after.insert(Array(segment[pointIndex...]), at: 0)
-        let first = Track(name: name + " (1)", segments: before)
-        let second = Track(name: name + " (2)", segments: after)
+        let first = Track(name: name + " (1)", segments: before, color: color)
+        let second = Track(name: name + " (2)", segments: after, color: color)
         return (first, second)
     }
 
@@ -53,7 +53,7 @@ public extension Track {
     func asRoute() -> Route {
         Route(name: name, points: segments.flatMap { $0 }.map {
             RoutePoint(coordinate: $0.coordinate, elevation: $0.elevation)
-        })
+        }, color: color)
     }
 
     /// Index of the segment and point nearest to a coordinate, or nil for an empty track.
@@ -76,19 +76,19 @@ public extension Track {
 public extension Route {
     /// The same route run the other way.
     func reversed() -> Route {
-        Route(id: id, name: name, points: points.reversed())
+        Route(id: id, name: name, points: points.reversed(), color: color)
     }
 
     /// The route as a track: one segment with its points.
     func asTrack() -> Track {
         Track(name: name, segments: [points.map {
             TrackPoint(coordinate: $0.coordinate, elevation: $0.elevation)
-        }])
+        }], color: color)
     }
 
     /// Fewer points, with the shape kept to within `tolerance` metres.
     func simplified(tolerance: Double) -> Route {
-        Route(id: id, name: name, points: DouglasPeucker.simplify(points, tolerance: tolerance, coordinate: \.coordinate))
+        Route(id: id, name: name, points: DouglasPeucker.simplify(points, tolerance: tolerance, coordinate: \.coordinate), color: color)
     }
 }
 

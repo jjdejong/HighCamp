@@ -56,15 +56,31 @@ public struct RoutePoint: Equatable, Codable, Sendable {
     }
 }
 
+/// The colour an item is drawn in on the map. Components run from 0 to 1.
+public struct ItemColor: Equatable, Codable, Sendable {
+    public var red: Double
+    public var green: Double
+    public var blue: Double
+
+    public init(red: Double, green: Double, blue: Double) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+    }
+}
+
 public struct Route: Identifiable, Equatable, Codable, Sendable {
     public var id: UUID
     public var name: String
     public var points: [RoutePoint]
+    /// The colour the route is drawn in. Nil means the default colour. Files from before colours have none.
+    public var color: ItemColor?
 
-    public init(id: UUID = UUID(), name: String, points: [RoutePoint] = []) {
+    public init(id: UUID = UUID(), name: String, points: [RoutePoint] = [], color: ItemColor? = nil) {
         self.id = id
         self.name = name
         self.points = points
+        self.color = color
     }
 }
 
@@ -85,11 +101,14 @@ public struct Track: Identifiable, Equatable, Codable, Sendable {
     public var name: String
     /// Each segment is a contiguous run of points. GPX allows gaps between segments.
     public var segments: [[TrackPoint]]
+    /// The colour the track is drawn in. Nil means the default colour. Files from before colours have none.
+    public var color: ItemColor?
 
-    public init(id: UUID = UUID(), name: String, segments: [[TrackPoint]] = []) {
+    public init(id: UUID = UUID(), name: String, segments: [[TrackPoint]] = [], color: ItemColor? = nil) {
         self.id = id
         self.name = name
         self.segments = segments
+        self.color = color
     }
 }
 

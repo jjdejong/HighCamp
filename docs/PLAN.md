@@ -272,7 +272,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | C7 | Haiku | reviewed | bc1a6cc, 69350e5 | accepted; follow-up C7b |
 | C7b | Haiku | ready | | taller profile when it has page 2 to itself |
 | C3b | Haiku | done | 5922795 | saved pictures and reports draw the map's markers, with symbols |
-| C3c | Haiku | ready | | selection highlight that does not hide the item's colour |
+| C3c | Haiku | done | this commit | selected items keep their colour, with a white halo under the line |
 | C1, C2, C4 | see above | blocked | | after B5 |
 | C6 | — | moved | | to G2 |
 

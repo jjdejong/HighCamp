@@ -8,6 +8,23 @@ State: accepted. Gate green: 167 tests, 3 skipped, no DIAG. Checked a PDF for T0
 - Letter paper: left to the user, as the note says.
 - C3b and C3c are still to do, then C7b.
 
+## C3c — 2026-10-13 — Haiku
+State: done
+Commits: this commit (the hash goes in the status table in the next commit)
+What was checked:
+- Saved picture (`--map-image`), the same framing unselected and selected: a red track with no halo when unselected, and
+  with a white halo about four points wider when selected. Compared at three times magnification. Both use the same
+  map position, since the selection includes the two corner waypoints that frame the library.
+- On screen: the app window with the red track selected shows the white halo along both sides of the line, at three
+  times magnification.
+- Gate green (167 tests); release build compiles.
+Notes:
+- The export now uses each line's own width. It used to draw every line 3 points wide, so the report's route line, which
+  is 4 points wide, now prints at 4 points. The on-screen map already used the width.
+- Halos are drawn before all the selected lines, so one selected item's halo never covers another selected line.
+- Selected items keep their colour, so a selected track or route is no longer drawn red. Selection is marked only by the halo.
+Next step: C7b (a taller profile on page 2).
+
 ## C3b — 2026-10-13 — Haiku
 State: done
 Commits: 5922795

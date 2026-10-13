@@ -136,7 +136,7 @@ enum MapImageExport {
         for line in scene.lines where line.coordinates.count > 1 {
             let path = NSBezierPath()
             addPath(line.coordinates, to: path, projection: projection, closed: false)
-            path.lineWidth = 3
+            path.lineWidth = CGFloat(line.width)
             path.lineJoinStyle = .round
             (line.rgb?.nsColor ?? line.color.nsColor).setStroke()
             path.stroke()

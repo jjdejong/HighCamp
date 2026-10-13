@@ -96,17 +96,20 @@ struct MapPane: View {
             ))
         }
 
-        // Selected lines are drawn last, so they are not hidden under the others.
+        // Selected lines are drawn last, so they are not hidden under the others. Each has a halo under it, and all
+        // the halos are drawn before any selected line, so one item's halo never covers another selected line.
+        var selectedHalos: [MapLine] = []
         var selectedLines: [MapLine] = []
         for route in store.library.routes {
             let selected = store.selectedItems.contains(.route(route.id))
             let line = MapLine(
                 id: "route-\(route.id)",
                 coordinates: route.points.map(\.coordinate),
-                color: selected ? .red : .blue,
-                rgb: selected ? nil : route.color.map(MapRGB.init)
+                color: .blue,
+                rgb: route.color.map(MapRGB.init)
             )
             if selected {
+                selectedHalos.append(Self.selectionHalo(for: line))
                 selectedLines.append(line)
             } else {
                 content.lines.append(line)
@@ -134,18 +137,24 @@ struct MapPane: View {
                 let line = MapLine(
                     id: "track-\(track.id)-\(index)",
                     coordinates: segment.map(\.coordinate),
-                    color: selected ? .red : .orange,
-                    rgb: selected ? nil : track.color.map(MapRGB.init)
+                    color: .orange,
+                    rgb: track.color.map(MapRGB.init)
                 )
                 if selected {
+                    selectedHalos.append(Self.selectionHalo(for: line))
                     selectedLines.append(line)
                 } else {
                     content.lines.append(line)
                 }
             }
         }
-        content.lines += selectedLines
+        content.lines += selectedHalos + selectedLines
         return content
+    }
+
+    /// The pale halo under a selected line: the same path, four points wider, in white. The item keeps its colour.
+    private static func selectionHalo(for line: MapLine) -> MapLine {
+        MapLine(id: "halo-\(line.id)", coordinates: line.coordinates, color: line.color, rgb: MapRGB(red: 1, green: 1, blue: 1), width: line.width + 4)
     }
 
     private var plannerLayer: MapLayerContent {

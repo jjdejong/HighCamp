@@ -141,3 +141,66 @@ enum DouglasPeucker {
         return (dx * dx + dy * dy).squareRoot()
     }
 }
+
+/// Edits that replace items with new ones. Each one moves the collections over with the item:
+/// a collection that held the old item holds the new one in its place, and references to removed items are pruned.
+public extension Library {
+    /// Joins the tracks `ids` into `combined`, which takes the place of the first of them.
+    /// Returns false when the first id is not a track in the library.
+    @discardableResult
+    mutating func combineTracks(_ ids: [UUID], into combined: Track) -> Bool {
+        guard let first = ids.first, let index = tracks.firstIndex(where: { $0.id == first }) else { return false }
+        tracks[index] = combined
+        tracks.removeAll { ids.contains($0.id) }
+        replaceCollectionItems(ids.map(CollectionItem.track), with: [.track(combined.id)])
+        pruneCollections()
+        return true
+    }
+
+    /// Replaces a track with its two pieces, which take its place. Returns false when there is no such track.
+    @discardableResult
+    mutating func splitTrack(_ id: UUID, into pieces: (Track, Track)) -> Bool {
+        guard let index = tracks.firstIndex(where: { $0.id == id }) else { return false }
+        tracks.replaceSubrange(index...index, with: [pieces.0, pieces.1])
+        replaceCollectionItems([.track(id)], with: [.track(pieces.0.id), .track(pieces.1.id)])
+        pruneCollections()
+        return true
+    }
+
+    /// Replaces a track with a route, which takes its place in the collections. Returns false when there is no such track.
+    @discardableResult
+    mutating func convertTrack(_ id: UUID, to route: Route) -> Bool {
+        guard tracks.contains(where: { $0.id == id }) else { return false }
+        tracks.removeAll { $0.id == id }
+        routes.append(route)
+        replaceCollectionItems([.track(id)], with: [.route(route.id)])
+        pruneCollections()
+        return true
+    }
+
+    /// Replaces a route with a track, which takes its place in the collections. Returns false when there is no such route.
+    @discardableResult
+    mutating func convertRoute(_ id: UUID, to track: Track) -> Bool {
+        guard routes.contains(where: { $0.id == id }) else { return false }
+        routes.removeAll { $0.id == id }
+        tracks.append(track)
+        replaceCollectionItems([.route(id)], with: [.track(track.id)])
+        pruneCollections()
+        return true
+    }
+
+    /// In each collection that holds any of `old`, puts `new` where the first of them was and drops the rest.
+    private mutating func replaceCollectionItems(_ old: [CollectionItem], with new: [CollectionItem]) {
+        for index in collections.indices where collections[index].items.contains(where: { old.contains($0) }) {
+            var items: [CollectionItem] = []
+            for item in collections[index].items {
+                if !old.contains(item) {
+                    items.append(item)
+                } else if !items.contains(where: { new.contains($0) }) {
+                    items += new
+                }
+            }
+            collections[index].items = items
+        }
+    }
+}

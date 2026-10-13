@@ -10,7 +10,7 @@ State: accepted. Gate green: 167 tests, 3 skipped, no DIAG. Checked a PDF for T0
 
 ## C7b — 2026-10-13 — Haiku
 State: done
-Commits: this commit (the hash goes in the status table in the next commit)
+Commits: 068596c
 What was checked:
 - PDF from `--report-pdf` for the Ride track: page 2 has the title and the profile about 400 points high, at the same
   width as before. Page 1 is unchanged, with no profile. A report that fits on one page keeps the 170-point chart,

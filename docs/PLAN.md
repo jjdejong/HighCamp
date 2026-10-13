@@ -270,7 +270,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |
 | C5 | Haiku | reviewed | 2a26c42 | accepted; table next to the list; `--sidebar table` hook (debug) |
 | C7 | Haiku | reviewed | bc1a6cc, 69350e5 | accepted; follow-up C7b |
-| C7b | Haiku | done | this commit | profile on page 2 is 400 points high; 170 on page 1 |
+| C7b | Haiku | done | 068596c | profile on page 2 is 400 points high; 170 on page 1 |
 | C3b | Haiku | done | 5922795 | saved pictures and reports draw the map's markers, with symbols |
 | C3c | Haiku | done | ea02d0b | selected items keep their colour, with a white halo under the line |
 | C1, C2, C4 | see above | blocked | | after B5 |

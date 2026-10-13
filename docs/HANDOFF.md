@@ -8,6 +8,17 @@ State: accepted. Gate green: 167 tests, 3 skipped, no DIAG. Checked a PDF for T0
 - Letter paper: left to the user, as the note says.
 - C3b and C3c are still to do, then C7b.
 
+## C7b — 2026-10-13 — Haiku
+State: done
+Commits: this commit (the hash goes in the status table in the next commit)
+What was checked:
+- PDF from `--report-pdf` for the Ride track: page 2 has the title and the profile about 400 points high, at the same
+  width as before. Page 1 is unchanged, with no profile. A report that fits on one page keeps the 170-point chart,
+  since that path passes 170 and nothing else changed.
+- Gate green (167 tests); release build compiles.
+Notes: the chart height is now a parameter of `ProfileChart`. Page 1 uses 170 and page 2 uses 400.
+Next step: none of the Haiku tasks is ready now. C1, C2 and C4 wait for B5.
+
 ## C3c — 2026-10-13 — Haiku
 State: done
 Commits: ea02d0b

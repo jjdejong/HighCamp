@@ -47,7 +47,7 @@ struct ReportView: View {
                 }
             }
             if showsProfile {
-                ProfileChart(profile: profile, units: units)
+                ProfileChart(profile: profile, units: units, height: 170)
             }
         }
         .padding(36)
@@ -61,6 +61,8 @@ struct ReportView: View {
 struct ProfileChart: View {
     let profile: [ElevationProfilePoint]
     let units: UnitSystem
+    /// The chart's height in points. On the first page it is 170; alone on the second page it is taller.
+    let height: CGFloat
 
     var body: some View {
         if profile.count > 1 {
@@ -80,7 +82,7 @@ struct ProfileChart: View {
             .chartYScale(domain: .automatic(includesZero: false))
             .chartXAxisLabel(UnitFormat.distanceUnitName(units))
             .chartYAxisLabel(UnitFormat.elevationUnitName(units))
-            .frame(height: 170)
+            .frame(height: height)
         }
     }
 }
@@ -95,7 +97,7 @@ struct ProfilePageView: View {
         VStack(alignment: .leading, spacing: 18) {
             Text("\(title): elevation profile")
                 .font(.system(size: 18, weight: .semibold))
-            ProfileChart(profile: profile, units: units)
+            ProfileChart(profile: profile, units: units, height: 400)
         }
         .padding(36)
         .frame(width: ReportView.width, alignment: .leading)

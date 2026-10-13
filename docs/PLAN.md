@@ -211,7 +211,7 @@ The largest change.
 | A9 | Haiku → Opus | reviewed | fa454fe, cdc8a04 | accepted; DEM check by user |
 | A10 | Haiku | done | c2028ea | on-device check by user (not sent to the device) |
 | B1 | Opus | done | 8247d30 | Replace checked on the Edge with EdgeSend; in-app dialog by user |
-| B2 | Opus | todo | | Haiku: timings |
+| B2 | Opus | done | 7ffe83e, b87aa68 | hover 61 → 2.5 ms; area fills only on Apple bases |
 | B3 | Opus → Haiku | todo | | |
 | B4 | Opus | todo | | |
 | B5 | Opus → Haiku | todo | | |

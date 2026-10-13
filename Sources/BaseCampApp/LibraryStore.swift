@@ -308,9 +308,15 @@ final class LibraryStore {
                             : "No elevation model in \(folder.lastPathComponent) covers this track."
                         return
                     }
+                    var applied = false
                     edit("Elevations from Model") { library in
-                        guard let index = library.tracks.firstIndex(where: { $0.id == id }) else { return }
-                        library.tracks[index] = result.item
+                        guard let index = library.tracks.firstIndex(where: { $0.id == id }),
+                              let updated = library.tracks[index].applyingElevations(from: result.item, computedFrom: track) else { return }
+                        library.tracks[index] = updated
+                        applied = true
+                    }
+                    if !applied {
+                        errorMessage = "The track changed while heights were being read; try again."
                     }
                 } catch {
                     errorMessage = error.localizedDescription
@@ -329,9 +335,15 @@ final class LibraryStore {
                             : "No elevation model in \(folder.lastPathComponent) covers this route."
                         return
                     }
+                    var applied = false
                     edit("Elevations from Model") { library in
-                        guard let index = library.routes.firstIndex(where: { $0.id == id }) else { return }
-                        library.routes[index] = result.item
+                        guard let index = library.routes.firstIndex(where: { $0.id == id }),
+                              let updated = library.routes[index].applyingElevations(from: result.item, computedFrom: route) else { return }
+                        library.routes[index] = updated
+                        applied = true
+                    }
+                    if !applied {
+                        errorMessage = "The route changed while heights were being read; try again."
                     }
                 } catch {
                     errorMessage = error.localizedDescription

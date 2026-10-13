@@ -204,3 +204,63 @@ public extension Library {
         }
     }
 }
+
+/// Copies the heights that `filled` added to `original` onto `points`. A point takes the new height only if its own
+/// height is still the one it had in `original`, so a height edited in the meantime is kept. Returns nil unless
+/// `points` has the same coordinates as `original`, in the same order, so the heights cannot land on the wrong points.
+private func withAddedHeights<Point>(
+    _ points: [Point],
+    filled: [Point],
+    original: [Point],
+    coordinate: KeyPath<Point, Coordinate>,
+    elevation: WritableKeyPath<Point, Double?>
+) -> [Point]? {
+    guard points.count == original.count, filled.count == original.count,
+          zip(points, original).allSatisfy({ $0[keyPath: coordinate] == $1[keyPath: coordinate] }) else { return nil }
+    var result = points
+    for index in result.indices {
+        let before = original[index][keyPath: elevation]
+        let added = filled[index][keyPath: elevation]
+        if added != before && result[index][keyPath: elevation] == before {
+            result[index][keyPath: elevation] = added
+        }
+    }
+    return result
+}
+
+public extension Track {
+    /// This track with the heights that `filled` added to `original` (see `withAddedHeights`). Nil when this track
+    /// no longer has the same points as `original`.
+    func applyingElevations(from filled: Track, computedFrom original: Track) -> Track? {
+        guard let points = withAddedHeights(
+            segments.flatMap { $0 },
+            filled: filled.segments.flatMap { $0 },
+            original: original.segments.flatMap { $0 },
+            coordinate: \.coordinate,
+            elevation: \.elevation
+        ) else { return nil }
+        var copy = self
+        var start = 0
+        copy.segments = segments.map { segment in
+            let slice = Array(points[start..<start + segment.count])
+            start += segment.count
+            return slice
+        }
+        return copy
+    }
+}
+
+public extension Route {
+    /// This route with the heights that `filled` added to `original` (see `withAddedHeights`). Nil when this route
+    /// no longer has the same points as `original`.
+    func applyingElevations(from filled: Route, computedFrom original: Route) -> Route? {
+        guard let updated = withAddedHeights(
+            points,
+            filled: filled.points,
+            original: original.points,
+            coordinate: \.coordinate,
+            elevation: \.elevation
+        ) else { return nil }
+        return Route(id: id, name: name, points: updated)
+    }
+}

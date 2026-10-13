@@ -205,7 +205,7 @@ The largest change.
 | A3 | Haiku | done | | |
 | A4 | Haiku → Opus | todo | | |
 | A5 | Haiku | todo | | |
-| A6 | Haiku | todo | | |
+| A6 | Haiku | done | | |
 | A7 | Haiku | todo | | |
 | A8 | Haiku | done | | |
 | A9 | Haiku → Opus | todo | | |

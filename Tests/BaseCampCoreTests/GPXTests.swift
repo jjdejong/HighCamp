@@ -30,7 +30,7 @@ final class GPXTests: XCTestCase {
     """
 
     func testReadsWaypointRouteAndTrack() throws {
-        let library = try GPX.read(Data(sample.utf8))
+        let library = try GPX.read(Data(sample.utf8)).library
 
         XCTAssertEqual(library.waypoints.count, 1)
         let waypoint = try XCTUnwrap(library.waypoints.first)
@@ -88,7 +88,7 @@ final class GPXTests: XCTestCase {
             ]
         )
 
-        let read = try GPX.read(GPX.write(original))
+        let read = try GPX.read(GPX.write(original)).library
 
         XCTAssertEqual(read.waypoints.map(\.name), ["Camp"])
         XCTAssertEqual(read.waypoints[0].comment, "Water here")
@@ -105,26 +105,86 @@ final class GPXTests: XCTestCase {
             Waypoint(name: "Fish & chips <\"best\">", coordinate: Coordinate(latitude: 1, longitude: 2), comment: "A & B"),
         ])
 
-        let read = try GPX.read(GPX.write(original))
+        let read = try GPX.read(GPX.write(original)).library
 
         XCTAssertEqual(read.waypoints.first?.name, "Fish & chips <\"best\">")
         XCTAssertEqual(read.waypoints.first?.comment, "A & B")
     }
 
-    func testRejectsOutOfRangeCoordinate() {
-        let xml = #"<gpx xmlns="http://www.topografix.com/GPX/1/1"><wpt lat="91" lon="0"><name>Bad</name></wpt></gpx>"#
+    func testOutOfRangeWaypointIsSkippedAndCounted() throws {
+        let xml = #"<gpx xmlns="http://www.topografix.com/GPX/1/1"><wpt lat="91" lon="0"><name>Bad</name></wpt><wpt lat="48" lon="2"><name>Good</name></wpt></gpx>"#
 
-        XCTAssertThrowsError(try GPX.read(Data(xml.utf8))) { error in
-            XCTAssertEqual(error as? GPXError, .invalidCoordinate(element: "wpt"))
-        }
+        let result = try GPX.read(Data(xml.utf8))
+
+        XCTAssertEqual(result.skipped, 1)
+        XCTAssertEqual(result.library.waypoints.map(\.name), ["Good"])
     }
 
-    func testRejectsMissingCoordinate() {
-        let xml = #"<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="10"/></trkseg></trk></gpx>"#
+    func testBadTrackPointAmongGoodOnesImportsTheGoodOnes() throws {
+        let xml = """
+        <gpx xmlns="http://www.topografix.com/GPX/1/1">
+          <trk><name>Ride</name><trkseg>
+            <trkpt lat="48.85" lon="2.35"/>
+            <trkpt lon="2.36"/>
+            <trkpt lat="north" lon="2.37"/>
+            <trkpt lat="48.87" lon="2.38"/>
+          </trkseg></trk>
+        </gpx>
+        """
 
-        XCTAssertThrowsError(try GPX.read(Data(xml.utf8))) { error in
-            XCTAssertEqual(error as? GPXError, .missingCoordinate(element: "trkpt"))
-        }
+        let result = try GPX.read(Data(xml.utf8))
+
+        XCTAssertEqual(result.skipped, 2)
+        let segment = try XCTUnwrap(result.library.tracks.first?.segments.first)
+        XCTAssertEqual(segment.map(\.coordinate.latitude), [48.85, 48.87])
+    }
+
+    func testSkippedRoutePointsAreCountedAcrossTheFile() throws {
+        let xml = """
+        <gpx xmlns="http://www.topografix.com/GPX/1/1">
+          <rte><name>Loop</name>
+            <rtept lat="48.85" lon="2.35"><name>Start</name></rtept>
+            <rtept lat="99" lon="2.36"><name>Ghost</name></rtept>
+          </rte>
+          <wpt lat="48" lon="2"/>
+        </gpx>
+        """
+
+        let result = try GPX.read(Data(xml.utf8))
+
+        XCTAssertEqual(result.skipped, 1)
+        XCTAssertEqual(result.library.routes.first?.points.map(\.name), ["Start"])
+        XCTAssertEqual(result.library.waypoints.count, 1)
+    }
+
+    func testTimesWithFractionsAndOffsetsParse() throws {
+        let xml = """
+        <gpx xmlns="http://www.topografix.com/GPX/1/1">
+          <trk><trkseg>
+            <trkpt lat="48" lon="2"><time>2024-05-01T08:00:00.500Z</time></trkpt>
+            <trkpt lat="48" lon="2"><time>2024-05-01T08:00:00+02:00</time></trkpt>
+          </trkseg></trk>
+        </gpx>
+        """
+
+        let points = try XCTUnwrap(GPX.read(Data(xml.utf8)).library.tracks.first?.segments.first)
+
+        XCTAssertEqual(points[0].time?.timeIntervalSince1970 ?? 0, 1_714_550_400.5, accuracy: 1e-6)
+        XCTAssertEqual(points[1].time?.timeIntervalSince1970 ?? 0, 1_714_543_200, accuracy: 1e-6)
+    }
+
+    func testOutOfRangeTimeIsDroppedAndThePointKept() throws {
+        let xml = #"<gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg><trkpt lat="48" lon="2"><time>2024-05-01T25:00:00Z</time></trkpt></trkseg></trk></gpx>"#
+
+        let result = try GPX.read(Data(xml.utf8))
+
+        XCTAssertEqual(result.skipped, 0)
+        XCTAssertNil(result.library.tracks.first?.segments.first?.first?.time)
+        XCTAssertEqual(result.library.tracks.first?.pointCount, 1)
+    }
+
+    func testCleanFileSkipsNothing() throws {
+        XCTAssertEqual(try GPX.read(Data(sample.utf8)).skipped, 0)
     }
 
     func testRejectsMalformedXML() {

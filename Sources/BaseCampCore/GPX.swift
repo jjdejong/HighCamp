@@ -2,8 +2,6 @@ import Foundation
 
 public enum GPXError: Error, Equatable {
     case malformedXML(String)
-    case missingCoordinate(element: String)
-    case invalidCoordinate(element: String)
 }
 
 extension GPXError: LocalizedError {
@@ -11,18 +9,15 @@ extension GPXError: LocalizedError {
         switch self {
         case .malformedXML(let detail):
             "The file is not valid XML: \(detail)"
-        case .missingCoordinate(let element):
-            "A <\(element)> element has no valid lat and lon."
-        case .invalidCoordinate(let element):
-            "A <\(element)> element has coordinates outside the valid range."
         }
     }
 }
 
 /// Reads and writes GPX 1.1 files: waypoints, routes and tracks.
-/// Elements the planner does not use are skipped on read.
+/// Elements the planner does not use are skipped on read. A point whose lat or lon is missing or
+/// out of range is skipped as well, and counted in `skipped`.
 public enum GPX {
-    public static func read(_ data: Data) throws -> Library {
+    public static func read(_ data: Data) throws -> (library: Library, skipped: Int) {
         try GPXReader().read(data)
     }
 
@@ -33,9 +28,9 @@ public enum GPX {
 
 private final class GPXReader: NSObject, XMLParserDelegate {
     private var library = Library()
+    private var skipped = 0
     private var stack: [String] = []
     private var text = ""
-    private var failure: GPXError?
 
     private var waypoint: Waypoint?
     private var route: Route?
@@ -44,17 +39,13 @@ private final class GPXReader: NSObject, XMLParserDelegate {
     private var segment: [TrackPoint]?
     private var trackPoint: TrackPoint?
 
-    func read(_ data: Data) throws -> Library {
+    func read(_ data: Data) throws -> (library: Library, skipped: Int) {
         let parser = XMLParser(data: data)
         parser.delegate = self
-        let succeeded = parser.parse()
-        if let failure {
-            throw failure
-        }
-        if !succeeded {
+        guard parser.parse() else {
             throw GPXError.malformedXML(parser.parserError?.localizedDescription ?? "unknown error")
         }
-        return library
+        return (library, skipped)
     }
 
     func parser(
@@ -68,19 +59,19 @@ private final class GPXReader: NSObject, XMLParserDelegate {
         text = ""
         switch elementName {
         case "wpt":
-            guard let coordinate = coordinate(attributes, element: elementName, parser: parser) else { return }
+            guard let coordinate = coordinate(attributes) else { return }
             waypoint = Waypoint(name: "", coordinate: coordinate)
         case "rte":
             route = Route(name: "")
         case "rtept":
-            guard let coordinate = coordinate(attributes, element: elementName, parser: parser) else { return }
+            guard let coordinate = coordinate(attributes) else { return }
             routePoint = RoutePoint(coordinate: coordinate)
         case "trk":
             track = Track(name: "")
         case "trkseg":
             segment = []
         case "trkpt":
-            guard let coordinate = coordinate(attributes, element: elementName, parser: parser) else { return }
+            guard let coordinate = coordinate(attributes) else { return }
             trackPoint = TrackPoint(coordinate: coordinate)
         default:
             break
@@ -155,23 +146,19 @@ private final class GPXReader: NSObject, XMLParserDelegate {
         }
     }
 
-    private func coordinate(_ attributes: [String: String], element: String, parser: XMLParser) -> Coordinate? {
+    /// The point's coordinate. A point whose lat or lon is missing or out of range gives nil and is counted as skipped.
+    private func coordinate(_ attributes: [String: String]) -> Coordinate? {
         guard let latitudeText = attributes["lat"], let longitudeText = attributes["lon"],
               let latitude = Double(latitudeText), let longitude = Double(longitudeText) else {
-            fail(.missingCoordinate(element: element), parser: parser)
+            skipped += 1
             return nil
         }
         let coordinate = Coordinate(latitude: latitude, longitude: longitude)
         guard coordinate.isValid else {
-            fail(.invalidCoordinate(element: element), parser: parser)
+            skipped += 1
             return nil
         }
         return coordinate
-    }
-
-    private func fail(_ error: GPXError, parser: XMLParser) {
-        failure = error
-        parser.abortParsing()
     }
 }
 
@@ -246,17 +233,26 @@ private enum GPXWriter {
 }
 
 private enum GPXDate {
+    // Made once. ISO8601DateFormatter took about 2.4 s for 100k timestamps; the format style takes about 0.06 s.
+    private static let fractionalParser = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+    private static let plainParser = Date.ISO8601FormatStyle()
+    private static let formatter = ISO8601DateFormatter()
+
     static func parse(_ text: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fractional.date(from: text) {
-            return date
-        }
-        return ISO8601DateFormatter().date(from: text)
+        guard hasValidTimeOfDay(text) else { return nil }
+        return (try? fractionalParser.parse(text)) ?? (try? plainParser.parse(text))
     }
 
     static func string(_ date: Date) -> String {
-        ISO8601DateFormatter().string(from: date)
+        formatter.string(from: date)
+    }
+
+    /// The format style rolls an out-of-range time over to the next day (25:00 becomes 01:00), where
+    /// the formatter rejected it. So the hour, minute and second are checked before parsing.
+    private static func hasValidTimeOfDay(_ text: String) -> Bool {
+        guard let separator = text.firstIndex(of: "T") else { return false }
+        let fields = text[text.index(after: separator)...].prefix(8).split(separator: ":").compactMap { Int($0) }
+        return fields.count == 3 && fields[0] <= 23 && fields[1] <= 59 && fields[2] <= 60
     }
 }
 

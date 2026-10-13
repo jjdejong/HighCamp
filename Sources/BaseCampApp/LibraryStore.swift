@@ -138,7 +138,8 @@ final class LibraryStore {
     func importFiles(_ urls: [URL]) {
         guard !urls.isEmpty else { return }
         var imported = Library()
-        var failures: [String] = []
+        var messages: [String] = []
+        var skippedPoints = 0
         for url in urls {
             do {
                 let data = try Data(contentsOf: url)
@@ -151,15 +152,20 @@ final class LibraryStore {
                 case "tcx":
                     imported.merge(try TCX.read(data))
                 default:
-                    imported.merge(try GPX.read(data))
+                    let gpx = try GPX.read(data)
+                    imported.merge(gpx.library)
+                    skippedPoints += gpx.skipped
                 }
             } catch {
-                failures.append("Could not import \(url.lastPathComponent). \(error.localizedDescription)")
+                messages.append("Could not import \(url.lastPathComponent). \(error.localizedDescription)")
             }
         }
         edit("Import") { $0.merge(imported) }
-        if !failures.isEmpty {
-            errorMessage = failures.joined(separator: "\n")
+        if skippedPoints > 0 {
+            messages.append("\(skippedPoints) \(skippedPoints == 1 ? "point was" : "points were") skipped because their latitude or longitude is missing or out of range.")
+        }
+        if !messages.isEmpty {
+            errorMessage = messages.joined(separator: "\n")
         }
         fitCamera()
     }

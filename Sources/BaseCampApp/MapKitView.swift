@@ -244,12 +244,15 @@ struct MapKitView: NSViewRepresentable {
         }
 
         func fit(_ coordinates: [Coordinate], on map: MKMapView) {
-            var rect = MKMapRect.null
-            for coordinate in coordinates {
-                let point = MKMapPoint(coordinate.clLocation)
-                rect = rect.union(MKMapRect(x: point.x, y: point.y, width: 0, height: 0))
-            }
-            guard !rect.isNull else { return }
+            guard let area = MapFraming.area(enclosing: coordinates) else { return }
+            let corner = MKMapPoint(area.southWest.clLocation)
+            let opposite = MKMapPoint(area.northEast.clLocation)
+            let rect = MKMapRect(
+                x: min(corner.x, opposite.x),
+                y: min(corner.y, opposite.y),
+                width: abs(opposite.x - corner.x),
+                height: abs(opposite.y - corner.y)
+            )
             let padding = NSEdgeInsets(top: 40, left: 40, bottom: 40, right: 40)
             map.setVisibleMapRect(rect.insetBy(dx: -rect.width * 0.05, dy: -rect.height * 0.05), edgePadding: padding, animated: true)
         }

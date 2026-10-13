@@ -13,6 +13,18 @@ final class FITActivityTests: XCTestCase {
         }
     }
 
+    /// Seconds from the start to each point at the default speed of 20 km/h.
+    private func expectedOffsets() -> [Double] {
+        let points = samplePoints()
+        var total = 0.0
+        var result = [0.0]
+        for (previous, next) in zip(points, points.dropFirst()) {
+            total += Geodesy.distance(from: previous.coordinate, to: next.coordinate)
+            result.append(total / (20 * 1000 / 3600))
+        }
+        return result
+    }
+
     func testReadsRecordPositionsAltitudeAndTime() throws {
         let data = try FITCourse.encode(name: "Round trip", points: samplePoints(), startTime: start)
 
@@ -22,12 +34,14 @@ final class FITActivityTests: XCTestCase {
         XCTAssertEqual(track.segments.count, 1)
         let points = track.segments[0]
         XCTAssertEqual(points.count, 12)
+        let offsets = expectedOffsets()
         for (index, point) in points.enumerated() {
             XCTAssertEqual(point.coordinate.latitude, 45.0 + Double(index) * 0.0008, accuracy: 1e-6)
             XCTAssertEqual(point.coordinate.longitude, 5.0 + Double(index) * 0.0004, accuracy: 1e-6)
             // Altitude is stored in steps of 0.2 m.
             XCTAssertEqual(try XCTUnwrap(point.elevation), 300 + Double(index) * 2, accuracy: 0.2)
-            XCTAssertEqual(point.time, start.addingTimeInterval(Double(index)))
+            // Timestamps are whole seconds, so they can be half a second from the exact offset.
+            XCTAssertEqual(try XCTUnwrap(point.time).timeIntervalSince(start), offsets[index], accuracy: 0.5)
         }
     }
 

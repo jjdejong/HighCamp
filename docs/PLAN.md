@@ -209,7 +209,7 @@ The largest change.
 | A7 | Haiku | done | | `--library` wrapped too; see HANDOFF |
 | A8 | Haiku | done | | |
 | A9 | Haiku → Opus | todo | | |
-| A10 | Haiku | todo | | on-device check by user |
+| A10 | Haiku | done | | on-device check by user (not sent to the device) |
 | B1 | Opus | todo | | Haiku: call-site list |
 | B2 | Opus | todo | | Haiku: timings |
 | B3 | Opus → Haiku | todo | | |

@@ -13,6 +13,7 @@ public struct CoursePoint: Equatable, Sendable {
 
 public enum FITCourseError: Error, Equatable {
     case tooFewPoints
+    case invalidSpeed
 }
 
 /// Encodes a course as a FIT file, the format Edge devices keep in `Garmin/Courses`.
@@ -36,16 +37,22 @@ public enum FITCourse {
     private static let manufacturerDevelopment: UInt16 = 255
     private static let sportCycling: UInt8 = 2
 
-    /// Builds a complete course file. Timestamps start at `startTime` and advance one second per point.
-    public static func encode(name: String, points: [CoursePoint], startTime: Date = Date()) throws -> Data {
+    /// Builds a complete course file. Each point is timed at its distance along the course divided by
+    /// `assumedSpeedKilometresPerHour`, counted from `startTime`. Edge devices pace their virtual partner by these times.
+    public static func encode(name: String, points: [CoursePoint], startTime: Date = Date(), assumedSpeedKilometresPerHour: Double = 20) throws -> Data {
         guard points.count >= 2 else {
             throw FITCourseError.tooFewPoints
+        }
+        guard assumedSpeedKilometresPerHour > 0 else {
+            throw FITCourseError.invalidSpeed
         }
 
         let start = fitTimestamp(startTime)
         let nameBytes = Array(truncatedName(name).utf8)
-        let end = start &+ UInt32(points.count - 1)
         let cumulative = cumulativeDistances(points)
+        let offsets = timeOffsets(cumulative, speedKilometresPerHour: assumedSpeedKilometresPerHour)
+        let end = start &+ offsets[offsets.count - 1]
+        let duration = UInt32(clamping: UInt64(offsets[offsets.count - 1]) * 1000)
 
         var body = Writer()
 
@@ -80,6 +87,8 @@ public enum FITCourse {
             Field(number: 4, size: 4, baseType: .sint32),
             Field(number: 5, size: 4, baseType: .sint32),
             Field(number: 6, size: 4, baseType: .sint32),
+            Field(number: 7, size: 4, baseType: .uint32),
+            Field(number: 8, size: 4, baseType: .uint32),
             Field(number: 9, size: 4, baseType: .uint32),
             Field(number: 25, size: 1, baseType: .enumeration),
         ])
@@ -91,6 +100,9 @@ public enum FITCourse {
         body.int32(semicircles(points[0].coordinate.longitude))
         body.int32(semicircles(points[points.count - 1].coordinate.latitude))
         body.int32(semicircles(points[points.count - 1].coordinate.longitude))
+        // Elapsed and timer time are equal: the course has no pauses. Both are in milliseconds (scale 1000).
+        body.uint32(duration)
+        body.uint32(duration)
         body.uint32(centimetres(cumulative[cumulative.count - 1]))
         body.byte(sportCycling)
 
@@ -103,7 +115,7 @@ public enum FITCourse {
         ])
         for (index, point) in points.enumerated() {
             body.byte(3)
-            body.uint32(start &+ UInt32(index))
+            body.uint32(start &+ offsets[index])
             body.int32(semicircles(point.coordinate.latitude))
             body.int32(semicircles(point.coordinate.longitude))
             body.uint32(centimetres(cumulative[index]))
@@ -160,6 +172,12 @@ public enum FITCourse {
         guard let elevation else { return 0xFFFF }
         let scaled = ((elevation + 500) * 5).rounded()
         return UInt16(clamping: Int(max(0, min(scaled, 65_534))))
+    }
+
+    /// Whole seconds from the start to each point, at a constant speed.
+    private static func timeOffsets(_ cumulative: [Double], speedKilometresPerHour: Double) -> [UInt32] {
+        let metresPerSecond = speedKilometresPerHour * 1000 / 3600
+        return cumulative.map { UInt32(min(($0 / metresPerSecond).rounded(), Double(UInt32.max))) }
     }
 
     private static func cumulativeDistances(_ points: [CoursePoint]) -> [Double] {

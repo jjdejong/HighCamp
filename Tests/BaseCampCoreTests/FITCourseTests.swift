@@ -66,6 +66,50 @@ final class FITCourseTests: XCTestCase {
         XCTAssertEqual(FITCourse.fileName(for: ""), "Course.fit")
     }
 
+    /// Distance along the points, in metres, at each point.
+    private func distances(_ points: [CoursePoint]) -> [Double] {
+        var total = 0.0
+        var result = [0.0]
+        for (previous, next) in zip(points, points.dropFirst()) {
+            total += Geodesy.distance(from: previous.coordinate, to: next.coordinate)
+            result.append(total)
+        }
+        return result
+    }
+
+    func testRecordTimesFollowDistanceAtTheAssumedSpeed() throws {
+        // About 556 m between points, so 20 km/h spaces them about 100 s apart.
+        let points = (0..<10).map { CoursePoint(coordinate: Coordinate(latitude: 45 + Double($0) * 0.005, longitude: 5)) }
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let data = try FITCourse.encode(name: "Pace", points: points, startTime: start)
+        let times = try FITActivity.read(data, name: "Pace").segments[0].compactMap(\.time)
+
+        XCTAssertEqual(times.count, points.count)
+        for (time, metres) in zip(times, distances(points)) {
+            XCTAssertEqual(time.timeIntervalSince(start), metres / (20 * 1000 / 3600), accuracy: 0.5)
+        }
+        for (earlier, later) in zip(times, times.dropFirst()) {
+            XCTAssertEqual(later.timeIntervalSince(earlier), 100, accuracy: 1)
+        }
+    }
+
+    func testAssumedSpeedChangesTheSpacing() throws {
+        let points = (0..<10).map { CoursePoint(coordinate: Coordinate(latitude: 45 + Double($0) * 0.005, longitude: 5)) }
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let data = try FITCourse.encode(name: "Slow", points: points, startTime: start, assumedSpeedKilometresPerHour: 10)
+        let times = try FITActivity.read(data, name: "Slow").segments[0].compactMap(\.time)
+
+        XCTAssertEqual(times[1].timeIntervalSince(times[0]), 200, accuracy: 1)
+    }
+
+    func testZeroSpeedIsAnError() {
+        XCTAssertThrowsError(try FITCourse.encode(name: "Stopped", points: samplePoints, assumedSpeedKilometresPerHour: 0)) { error in
+            XCTAssertEqual(error as? FITCourseError, .invalidSpeed)
+        }
+    }
+
     func testTooFewPointsIsAnError() {
         XCTAssertThrowsError(try FITCourse.encode(name: "One", points: [samplePoints[0]])) { error in
             XCTAssertEqual(error as? FITCourseError, .tooFewPoints)

@@ -261,6 +261,8 @@ extension FITCourseError: LocalizedError {
         switch self {
         case .tooFewPoints:
             "A course needs at least two points."
+        case .invalidSpeed:
+            "The course speed must be more than zero."
         }
     }
 }

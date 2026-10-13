@@ -200,16 +200,16 @@ The largest change.
 
 | Task | Owner | State | Commit | Notes |
 |---|---|---|---|---|
-| A1 | Haiku | done | | |
-| A2 | Haiku | done | | |
-| A3 | Haiku | done | | |
-| A4 | Haiku → Opus | done | | for Opus review |
-| A5 | Haiku | done | | |
-| A6 | Haiku | done | | |
-| A7 | Haiku | done | | `--library` wrapped too; see HANDOFF |
-| A8 | Haiku | done | | |
-| A9 | Haiku → Opus | done | | for Opus review |
-| A10 | Haiku | done | | on-device check by user (not sent to the device) |
+| A1 | Haiku | done | f3cb911, 4c797b9 | |
+| A2 | Haiku | done | a79ee4c | |
+| A3 | Haiku | done | 69624f6 | |
+| A4 | Haiku → Opus | done | d3ebc89, 8dda86b | for Opus review; see HANDOFF |
+| A5 | Haiku | done | 9a72f99 | offline check by user; see HANDOFF |
+| A6 | Haiku | done | 96a2d8d | |
+| A7 | Haiku | done | 3f22733 | `--library` wrapped too; decision in HANDOFF |
+| A8 | Haiku | done | ba2332a | |
+| A9 | Haiku → Opus | done | fa454fe | for Opus review; see HANDOFF |
+| A10 | Haiku | done | c2028ea | on-device check by user (not sent to the device) |
 | B1 | Opus | todo | | Haiku: call-site list |
 | B2 | Opus | todo | | Haiku: timings |
 | B3 | Opus → Haiku | todo | | |

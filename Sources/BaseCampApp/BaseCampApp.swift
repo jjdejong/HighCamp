@@ -36,6 +36,10 @@ struct BaseCampApp: App {
                             store.selectItem(named: String(name), addingToSelection: true)
                         }
                     }
+                    // `--sidebar table` shows the items as a table instead of a list, for testing.
+                    if Self.launchValue("--sidebar") == "table" {
+                        store.sidebarStyle = .table
+                    }
                     // `--show find|maps|activities|measure` opens that window at launch, for testing. Settings open from the content view.
                     if let what = Self.launchValue("--show") {
                         try? await Task.sleep(for: .seconds(Double(Self.launchValue("--show-delay") ?? "3") ?? 3))

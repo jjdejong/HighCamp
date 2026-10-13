@@ -16,7 +16,10 @@ struct ContentView: View {
         @Bindable var mapLayers = mapLayers
         NavigationSplitView {
             SidebarView()
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260)
+                .navigationSplitViewColumnWidth(
+                    min: store.sidebarStyle == .table ? 500 : 220,
+                    ideal: store.sidebarStyle == .table ? 500 : 260
+                )
         } detail: {
             MapPane()
                 .safeAreaInset(edge: .bottom, spacing: 0) {

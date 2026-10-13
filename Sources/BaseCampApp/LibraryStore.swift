@@ -27,6 +27,8 @@ final class LibraryStore {
     var renameRequests = 0
     /// The collection the sidebar shows, or nil for every item. Not saved.
     var activeCollectionID: UUID?
+    /// Whether the sidebar lists the items or shows them in a table. Not saved.
+    var sidebarStyle = SidebarStyle.list
     /// Everything selected in the sidebar. The inspector shows the item when exactly one is selected.
     var selectedItems: Set<LibraryItem> = []
     /// The single selected item, or nil when nothing or several items are selected.

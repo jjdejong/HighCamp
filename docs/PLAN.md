@@ -267,7 +267,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | B6 | Opus | todo | | |
 | G1 | Opus | done | 577e13a, 6ae12af | Garmin base map; overlay removed |
 | G2 | Opus | todo | | labels and icons |
-| G3 | Opus | todo | | map list: on/off, order, zoom range, opacity; do before G2 (stacked maps look wrong) |
+| G3 | Opus | done | bbfd0a3, 423ba46 | map list sheet; overlays use their finest level; default: first full map on |
 | G0 | Opus | closed | | not a decoder bug: the contour maps' coarse levels are roughly simplified (OFM's too, less); handled by G3 zoom ranges |
 | G4 | Opus | todo | | map DEM: relief shading and heights |
 | G5 | Opus | todo | | basemap when zoomed out |

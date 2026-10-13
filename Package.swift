@@ -25,6 +25,7 @@ let package = Package(
             providers: [.brew(["libmtp"])]
         ),
         .target(name: "BaseCampMTP", dependencies: ["CLibMTP"]),
+        .testTarget(name: "BaseCampMTPTests", dependencies: ["BaseCampMTP"]),
 
         // GDAL, installed with `brew install gdal`. Reads the elevation models (DEM) that QMapShack uses.
         .systemLibrary(

@@ -148,6 +148,16 @@ struct ContentView: View {
         } message: {
             Text(device.sendMessage ?? "")
         }
+        .alert(
+            "Replace the course on the Edge?",
+            isPresented: replacementIsPresented,
+            presenting: device.pendingReplacement
+        ) { course in
+            Button("Replace") { device.replace(course) }
+            Button("Cancel", role: .cancel) {}
+        } message: { course in
+            Text("Garmin/Courses already has \(course.fileName). The new course is copied and checked before the old one is deleted.")
+        }
         .onAppear {
             device.refresh()
             #if DEBUG
@@ -170,6 +180,13 @@ struct ContentView: View {
         Binding(
             get: { device.sendMessage != nil },
             set: { if !$0 { device.sendMessage = nil } }
+        )
+    }
+
+    private var replacementIsPresented: Binding<Bool> {
+        Binding(
+            get: { device.pendingReplacement != nil },
+            set: { if !$0 { device.pendingReplacement = nil } }
         )
     }
 

@@ -7,6 +7,9 @@ public enum MTPError: Error, Equatable {
     case openFailed
     case folderNotFound(String)
     case operationFailed(String)
+    case alreadyExists(name: String, folder: String)
+    case notEnoughSpace(needed: UInt64, free: UInt64)
+    case cancelled
 }
 
 /// What the USB descriptor says about the device, read before the connection is opened.
@@ -34,7 +37,7 @@ public struct MTPEntry: Equatable, Sendable {
 /// A connection to one MTP device, wrapping libmtp.
 ///
 /// libmtp is not thread-safe. Use one connection from one thread at a time.
-public final class MTPConnection {
+public final class MTPConnection: MTPLink {
     private static let rootFolder: UInt32 = 0xFFFF_FFFF
 
     private let device: UnsafeMutablePointer<LIBMTP_mtpdevice_t>
@@ -103,13 +106,8 @@ public final class MTPConnection {
         return try children(of: folder, storageID: storageID)
     }
 
-    /// Sends a local file into `path` on one storage, under `name`, then checks it on the device.
-    ///
-    /// libmtp's return code is unreliable on Edge devices: a send can report an error and still
-    /// succeed. The device contents decide success, so the return code is only used for diagnosis.
-    /// Refuses to overwrite an existing file with the same name.
-    ///
-    /// `progress` receives bytes sent and the total. Returning false cancels the transfer.
+    /// Sends a local file into `path` under `name`, checks it on the device, and removes anything partial.
+    /// See `MTPTransfers.upload`.
     public func upload(
         localFile: URL,
         to path: [String],
@@ -117,13 +115,19 @@ public final class MTPConnection {
         storageID: UInt32,
         progress: ((UInt64, UInt64) -> Bool)? = nil
     ) throws {
-        let parent = try folderID(for: path, storageID: storageID)
-        let existing = try children(of: parent, storageID: storageID)
-        guard !existing.contains(where: { !$0.isFolder && $0.name == name }) else {
-            throw MTPError.operationFailed("\(name) already exists in /\(path.joined(separator: "/"))")
-        }
+        try MTPTransfers.upload(self, localFile: localFile, to: path, as: name, storageID: storageID, progress: progress)
+    }
 
-        let size = try fileSize(localFile)
+    /// Deletes one file from `path` on one storage, then checks that it is gone.
+    public func delete(entryID: UInt32, named name: String, in path: [String], storageID: UInt32) throws {
+        try MTPTransfers.delete(self, entryID: entryID, named: name, in: path, storageID: storageID)
+    }
+
+    public func send(
+        localFile: URL, size: UInt64, to path: [String], as name: String, storageID: UInt32,
+        progress: ((UInt64, UInt64) -> Bool)?
+    ) throws -> Int32 {
+        let parent = try folderID(for: path, storageID: storageID)
         guard let file = LIBMTP_new_file_t() else {
             throw MTPError.operationFailed("could not allocate a file record")
         }
@@ -134,54 +138,20 @@ public final class MTPConnection {
         file.pointee.filesize = size
         file.pointee.filename = strdup(name)
 
-        let status: Int32
-        if let progress {
-            let box = ProgressBox(handler: progress)
-            status = withExtendedLifetime(box) {
-                LIBMTP_Send_File_From_File(
-                    device, localFile.path, file, mtpProgressCallback,
-                    UnsafeRawPointer(Unmanaged.passUnretained(box).toOpaque())
-                )
-            }
-        } else {
-            status = LIBMTP_Send_File_From_File(device, localFile.path, file, nil, nil)
+        guard let progress else {
+            return LIBMTP_Send_File_From_File(device, localFile.path, file, nil, nil)
         }
-
-        let remote = try children(of: parent, storageID: storageID)
-            .first { !$0.isFolder && $0.name == name }
-        guard let remote, remote.size == size else {
-            throw MTPError.operationFailed(lastError(fallback: "\(name) is not on the device (libmtp status \(status))"))
-        }
-
-        if size <= Self.byteCompareLimit {
-            let sent = try Data(contentsOf: localFile)
-            let readback = FileManager.default.temporaryDirectory
-                .appendingPathComponent(UUID().uuidString)
-            defer { try? FileManager.default.removeItem(at: readback) }
-            try download(entryID: remote.id, to: readback)
-            guard try Data(contentsOf: readback) == sent else {
-                throw MTPError.operationFailed("\(name) on the device differs from the local file")
-            }
+        let box = ProgressBox(handler: progress)
+        return withExtendedLifetime(box) {
+            LIBMTP_Send_File_From_File(
+                device, localFile.path, file, mtpProgressCallback,
+                UnsafeRawPointer(Unmanaged.passUnretained(box).toOpaque())
+            )
         }
     }
 
-    /// Deletes one file from `path` on one storage, then checks that it is gone.
-    public func delete(entryID: UInt32, named name: String, in path: [String], storageID: UInt32) throws {
-        let parent = try folderID(for: path, storageID: storageID)
-        let status = LIBMTP_Delete_Object(device, entryID)
-
-        let remaining = try children(of: parent, storageID: storageID)
-        guard !remaining.contains(where: { $0.id == entryID }) else {
-            throw MTPError.operationFailed(lastError(fallback: "\(name) is still on the device (libmtp status \(status))"))
-        }
-    }
-
-    /// Files up to this size are read back and compared byte for byte.
-    private static let byteCompareLimit: UInt64 = 100 * 1024 * 1024
-
-    private func fileSize(_ url: URL) throws -> UInt64 {
-        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-        return (attributes[.size] as? NSNumber)?.uint64Value ?? 0
+    public func deleteObject(_ id: UInt32) -> Int32 {
+        LIBMTP_Delete_Object(device, id)
     }
 
     /// Copies one file from the device to a local path.
@@ -226,7 +196,7 @@ public final class MTPConnection {
         return entries
     }
 
-    private func lastError(fallback: String) -> String {
+    public func lastError(fallback: String) -> String {
         guard let stack = LIBMTP_Get_Errorstack(device) else {
             return fallback
         }

@@ -8,6 +8,23 @@ State: accepted. Gate green: 167 tests, 3 skipped, no DIAG. Checked a PDF for T0
 - Letter paper: left to the user, as the note says.
 - C3b and C3c are still to do, then C7b.
 
+## C3b — 2026-10-13 — Haiku
+State: done
+Commits: this commit (the hash goes in the status table in the next commit)
+What was checked:
+- Export picture (`--map-image`, Apple base) of the five symbol waypoints from `symbols.gpx`: the summit, food, flag and
+  unknown-name pins show their glyphs, and the waypoint with no symbol keeps its dot. Markers are centred on their
+  coordinates, as on the map.
+- Report PNG for the Ride track, with two waypoints inside its map (water source, food) and one outside (summit): the two
+  inside show their symbols, and the one outside is not drawn.
+- Gate green (167 tests); release build compiles.
+Notes:
+- The report map now shows the library's waypoints that lie in its area. Before this, the report drew only the track,
+  so waypoints never appeared on a report. Waypoints outside the area are not listed. Say if they should be.
+- Exports draw every pin with the map's `MarkerImage`, so planner pins (the numbered via points and the steep marks) look
+  the same in a picture as on the map. Label-only pins are still skipped in exports, as before.
+Next step: C3c (the selection halo), then C7b.
+
 ## C7 (page breaks) — 2026-10-13 — Haiku
 State: done
 Commits: bc1a6cc (scale bar), and the page-break commit that records this note

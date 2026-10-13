@@ -205,7 +205,8 @@ enum ReportPrinter {
         }
 
         let bounds = reportBounds(for: coordinates)
-        let rendered = await mapImage(for: coordinates, bounds: bounds, base: base)
+        let pins = bounds.map { area in waypointPins(in: area, waypoints: store.library.waypoints) } ?? []
+        let rendered = await mapImage(for: coordinates, bounds: bounds, pins: pins, base: base)
         if let message = rendered?.missingTilesMessage {
             store.errorMessage = message
         }
@@ -378,10 +379,22 @@ enum ReportPrinter {
         )
     }
 
-    /// The base map of the item's area, with the item drawn on it.
-    private static func mapImage(for coordinates: [Coordinate], bounds: GeoBounds?, base: PictureBase) async -> RenderedMap? {
+    /// The library's waypoints that lie in the report's map area, drawn with their symbols.
+    private static func waypointPins(in area: GeoBounds, waypoints: [Waypoint]) -> [MapPin] {
+        waypoints.filter { waypoint in
+            let point = waypoint.coordinate
+            return point.latitude <= area.north && point.latitude >= area.south
+                && point.longitude <= area.east && point.longitude >= area.west
+        }.map { waypoint in
+            MapPin(id: "waypoint-\(waypoint.id)", coordinate: waypoint.coordinate, style: .waypoint(selected: false, symbol: waypoint.symbol), item: nil, title: waypoint.name)
+        }
+    }
+
+    /// The base map of the item's area, with the item drawn on it and the waypoints in the area.
+    private static func mapImage(for coordinates: [Coordinate], bounds: GeoBounds?, pins: [MapPin], base: PictureBase) async -> RenderedMap? {
         guard let bounds else { return nil }
-        let scene = MapScene(lines: [MapLine(id: "report", coordinates: coordinates, color: .red, rgb: nil, width: 4)])
+        let line = MapLine(id: "report", coordinates: coordinates, color: .red, rgb: nil, width: 4)
+        let scene = MapScene(layers: [.library: MapLayerContent(pins: pins, lines: [line])])
         return try? await MapImageExport.render(scene: scene, bounds: bounds, size: pictureSize, base: base)
     }
 }

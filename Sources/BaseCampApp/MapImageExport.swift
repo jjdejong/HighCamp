@@ -144,12 +144,12 @@ enum MapImageExport {
         for pin in scene.pins {
             guard !isLabelOnly(pin.style) else { continue }
             let point = projection.point(pin.coordinate)
-            let dot = NSBezierPath(ovalIn: NSRect(x: point.x - 5, y: point.y - 5, width: 10, height: 10))
-            markerColor(pin.style).setFill()
-            NSColor.white.setStroke()
-            dot.lineWidth = 1.5
-            dot.fill()
-            dot.stroke()
+            // The same marker as the map, centred on the coordinate.
+            let marker = MarkerImage.image(for: pin.style)
+            marker.draw(
+                in: NSRect(x: point.x - marker.size.width / 2, y: point.y - marker.size.height / 2, width: marker.size.width, height: marker.size.height),
+                from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil
+            )
         }
     }
 
@@ -239,17 +239,6 @@ enum MapImageExport {
     private static func isLabelOnly(_ style: MapPin.Style) -> Bool {
         if case .label = style { return true }
         return false
-    }
-
-    private static func markerColor(_ style: MapPin.Style) -> NSColor {
-        switch style {
-        case .waypoint(let selected, _): selected ? .systemRed : .systemBlue
-        case .via: .systemGreen
-        case .steep: .systemOrange
-        case .label: .systemPurple
-        case .cursor: .systemRed
-        case .routePoint: .systemBlue
-        }
     }
 }
 

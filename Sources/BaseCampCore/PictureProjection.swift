@@ -21,16 +21,18 @@ public struct PictureProjection {
     public init(north: Double, east: Double, south: Double, west: Double, width: Double, height: Double) {
         self.width = width
         self.height = height
-        self.east = east
-        self.west = west
-        let left = Self.mercatorX(west)
-        let right = Self.mercatorX(east)
+        var left = Self.mercatorX(west)
+        var right = Self.mercatorX(east)
         var top = Self.mercatorY(north)
         var bottom = Self.mercatorY(south)
-        // Widen the area in the direction that is too short for the picture's shape.
-        let neededHeight = (right - left) * (height / width)
-        let extra = (neededHeight - (bottom - top)) / 2
-        if extra > 0 {
+        // Widen the area in whichever direction is too short for the picture's shape.
+        let pictureAspect = width / height
+        if (right - left) / (bottom - top) < pictureAspect {
+            let extra = ((bottom - top) * pictureAspect - (right - left)) / 2
+            left -= extra
+            right += extra
+        } else {
+            let extra = ((right - left) / pictureAspect - (bottom - top)) / 2
             top -= extra
             bottom += extra
         }
@@ -40,6 +42,8 @@ public struct PictureProjection {
         self.bottom = bottom
         self.north = Self.latitude(fromMercatorY: top)
         self.south = Self.latitude(fromMercatorY: bottom)
+        self.east = Self.longitude(fromMercatorX: right)
+        self.west = Self.longitude(fromMercatorX: left)
     }
 
     /// The picture position of a coordinate, with the origin at the top left, in points.
@@ -77,5 +81,9 @@ public struct PictureProjection {
 
     private static func latitude(fromMercatorY y: Double) -> Double {
         atan(sinh(.pi * (1 - 2 * y))) * 180 / .pi
+    }
+
+    private static func longitude(fromMercatorX x: Double) -> Double {
+        x * 360 - 180
     }
 }

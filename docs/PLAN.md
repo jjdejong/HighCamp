@@ -203,7 +203,7 @@ The largest change.
 | A1 | Haiku | done | | |
 | A2 | Haiku | done | | |
 | A3 | Haiku | done | | |
-| A4 | Haiku → Opus | todo | | |
+| A4 | Haiku → Opus | done | | for Opus review |
 | A5 | Haiku | done | | |
 | A6 | Haiku | done | | |
 | A7 | Haiku | done | | `--library` wrapped too; see HANDOFF |

@@ -2,6 +2,25 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## C4 range — 2026-10-13 — Haiku, for Opus review
+State: done, for Opus review. The drag itself was not checked, because the sandbox cannot drive a mouse drag. Opus checks it.
+Commits: 28227d6 (distance values back to metres), 5298213 (range selection, delete, menu, hook)
+What was checked:
+- Core: `UnitFormat.distanceMeters(fromValue:_:)` converts back to metres in metric, statute and nautical (one test). The removal was tested earlier, in `PointFilterTests`.
+- Picture, from a scratch copy of the track "Sensor ride" (9.82 km): with the DEBUG hook `--profile-range 2 4`, the elevation profile shows a band from 2 to 4 km, from the lowest to the highest point. "Delete Selected Points" is enabled below the chart. The layout was changed for the picture only, and restored from a backup.
+- Gate: 248 tests, 0 failures, no DIAG. The release bundle was rebuilt.
+Not checked (for Opus):
+- The drag. The chart has both `chartXSelection(value:)` (the hover) and `chartXSelection(range:)` (the drag). Check that hover still marks the map while a range exists.
+- The delete, in the running app: not clicked. The button and the Track menu item both call `LibraryStore.deleteProfileRange()`, which makes one "Delete Points" edit and clears the range. Undo should bring the points back in one step.
+- Routes: the profile of a route is not pickable.
+Notes:
+- The picked stretch is stored in metres (`LibraryStore.profileRange`), so it stays right when the units change. It is cleared whenever the selection changes.
+- It works for any series, because the axis is distance for every series.
+- The band and the delete use the same distances as the profile plots (`Track.pointDistances`).
+- `--profile-range FROM TO` (kilometres) is a DEBUG launch hook, for pictures only.
+Open questions: none.
+Next step: Opus checks the drag, the hover with a range present, and delete with undo, by mouse.
+
 ## C1 — 2026-10-13 — Haiku, for Opus review
 State: done, for Opus review. The real-file test for the sensor fields waits for a BaseCamp GPX with sensor data.
 Commits: bf6b16a (colours), f891991 (waypoint address and proximity), dd32c49 (sensor fields)

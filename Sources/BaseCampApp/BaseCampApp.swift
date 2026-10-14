@@ -200,6 +200,19 @@ struct BaseCampCommands: Commands {
                     }
                 }
             }
+            Menu("Filter Points") {
+                ForEach([5.0, 10.0, 30.0], id: \.self) { seconds in
+                    Button("Every \(Int(seconds)) s") {
+                        store.thinSelectedTrack(everySeconds: seconds)
+                    }
+                }
+                Divider()
+                ForEach([10.0, 25.0, 50.0], id: \.self) { metres in
+                    Button("Every \(Int(metres)) m") {
+                        store.thinSelectedTrack(everyMetres: metres)
+                    }
+                }
+            }
             Button("Split at Profile Position") {
                 store.splitSelectedTrackAtCursor()
             }

@@ -661,6 +661,17 @@ final class LibraryStore {
         editSelection("Simplify", track: { $0.simplified(tolerance: tolerance) }, route: { $0.simplified(tolerance: tolerance) })
     }
 
+    /// Keeps one point every `seconds` in the selected track (see `Track.thinned(everySeconds:)`). Routes have no
+    /// times or readings to filter by, so they are left as they are.
+    func thinSelectedTrack(everySeconds seconds: TimeInterval) {
+        editSelection("Filter Points", track: { $0.thinned(everySeconds: seconds) }, route: { $0 })
+    }
+
+    /// Keeps one point every `metres` along the selected track (see `Track.thinned(everyMetres:)`).
+    func thinSelectedTrack(everyMetres metres: Double) {
+        editSelection("Filter Points", track: { $0.thinned(everyMetres: metres) }, route: { $0 })
+    }
+
     /// Moves one stop of a route, for example by dragging it on the map. The legs on either side become straight
     /// until they are recalculated (see `Route.moveStop`).
     func moveRouteStop(_ id: UUID, at index: Int, to coordinate: Coordinate) {

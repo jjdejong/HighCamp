@@ -2,6 +2,26 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## C4 — 2026-10-13 — Haiku, for Opus review
+State: partial. Filtering by time or distance is done. Deleting a range by profile selection has its core function, but no way to select the range yet, because that is a design choice.
+Commits: <work hash>
+What was checked:
+- Core tests, `Tests/BaseCampCoreTests/PointFilterTests.swift` (8 tests). The tests were written first and failed to compile, then the code was added.
+  - `pointDistances` equals the distances the elevation profile plots, point by point, across two segments.
+  - Removing a distance range drops the points inside it. A segment left empty is dropped. A range with no points returns nil.
+  - Thinning every 30 s keeps points 0, 3, … 30 of 31 (one per 30 s). Thinning every 250 m keeps 0, 3, … 18, and 20 (the last point of the segment). Each segment keeps its first and last points. Points without times are kept. Heart rate stays with its point.
+- Gate: build clean, 226 tests, 3 skipped, 0 failures, no DIAG.
+- Picture (scratch library, track "Sensor ride"): the Edit section shows Filter Points after Simplify. The menu itself was not clicked, because synthetic clicks do not reach the app here. The menu calls `editSelection`, as Simplify does. The logic is tested in core.
+- Not checked: the filter in the running app, on a real track. Undo follows the existing `edit`, which records a step only when the library changes.
+Open questions:
+- How the user selects the range for "Delete a range by profile selection". Options:
+  (a) drag across the elevation profile, as BaseCamp does, then Delete (menu item). This needs one gesture and shows the band.
+  (b) two marks set from the profile cursor, as "Split at Profile Position" uses it today.
+  Recommendation: (a). It matches BaseCamp. It needs a click-through, because the sandbox cannot drive mouse drags on the chart. The core is ready: `Track.removingPoints(distanceIn:)` takes the profile's distance range, so the chart only has to report a range.
+- Filter presets are menu items: every 5, 10 or 30 s, and every 10, 25 or 50 m. Opus may prefer a text field.
+- The filter applies to tracks only. Routes have no times or readings, and are left as they are.
+Next step: decide the range selection (a) or (b). Then wire the delete to the chart and add a picture of the band.
+
 ## C2 — 2026-10-13 — Haiku, for Opus review
 State: done for Opus review, except the GPX sensor reading, which waits for C1. The status row stays "partial".
 Commits: 8a542f8 (part 1: fields, FIT reading, statistics); d8b0aa8 (part 2: inspector and profiles)

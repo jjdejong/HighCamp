@@ -2,6 +2,23 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## C1 — 2026-10-13 — Haiku, for Opus review
+State: done, for Opus review. The real-file test for the sensor fields waits for a BaseCamp GPX with sensor data.
+Commits: bf6b16a (colours), f891991 (waypoint address and proximity), dd32c49 (sensor fields)
+What was checked:
+- Colours, `GPXColourTests` (6). On Bretagne 2023.GPX the reader gives tracks Blue 3, DarkBlue 4, DarkRed 1, Red 4, and the route Magenta 1. An independent XML count of the same file gives the same numbers.
+- Waypoints, `GPXWaypointExtensionTests` (5). On Bretagne 2023.GPX (13 waypoints, 12 addresses, 1 phone number) and Loire 2024.gpx (9 waypoints, 9 addresses) the reader's counts match an independent XML count exactly. No file here has a proximity.
+- Sensors, `GPXSensorTests` (7), with made-up readings. The real BaseCamp exports on this Mac have no sensor tags, so the sensor fields are not checked against a real file yet.
+- Gate after each part: 235, 240 and 247 tests, 0 failures, no DIAG. The existing library file tests pass with the new optional `Waypoint` fields.
+Notes:
+- The RGB values for the 16 DisplayColor names are the usual web values, for example DarkBlue #00008B and Green #00FF00. BaseCamp's own values are not published, so check a shade in BaseCamp before relying on it.
+- Power is written as `power:PowerInWatts` (PowerExtension v1), and read from that or from a plain `power` element.
+- Hr, cad and atemp are written in TrackPointExtension v1, in the order atemp, hr, cad.
+- A route read from GPX now keeps its colour. Before, it was dropped.
+Open questions:
+- The real-file test for the sensor fields: a BaseCamp GPX with heart rate, cadence, temperature or power. Please send one. An excerpt is shown to you before it is added as a fixture.
+Next step: Opus reviews bf6b16a, f891991 and dd32c49. Then the C4 range selection, which is the next Haiku task.
+
 ## Opus review of C2, C4, B5c and the C1 questions — 2026-10-14 — Opus
 State: C2, C4 (filter part) and B5c accepted, with three small fixes in this commit. C1 unblocked.
 Checked: the diff 64c4299..aa41f62. FIT record fields 3 (heart_rate, uint8), 4 (cadence, uint8), 7 (power,

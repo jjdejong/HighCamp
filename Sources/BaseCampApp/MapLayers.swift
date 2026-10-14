@@ -27,7 +27,7 @@ enum BaseMapLayer: String, CaseIterable, Identifiable {
 
     var attribution: String {
         switch self {
-        case .garmin: "Garmin maps from the map folder"
+        case .garmin: "Garmin maps from the map folder; elsewhere © OpenStreetMap contributors"
         case .appleStandard, .appleHybrid: "Apple Maps"
         case .ignPlan: "IGN Plan V2, Etalab licence"
         case .openTopoMap: "© OpenStreetMap, © OpenTopoMap (CC-BY-SA)"

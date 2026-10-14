@@ -11,9 +11,10 @@ final class GarminTileOverlay: MKTileOverlay {
     init(configuration: GarminMapConfiguration) {
         self.configuration = configuration
         super.init(urlTemplate: nil)
-        // Apple's map shows through where the Garmin maps have nothing to draw: zoomed far out, outside their
-        // area, or when no map can be read, so the map is never blank (BaseCamp has its own world basemap there).
-        canReplaceMapContent = false
+        // The Garmin maps replace Apple's map entirely, so it never shows while tiles load. Where they have nothing
+        // to draw (zoomed far out, outside their area), the tile is filled from OpenStreetMap instead, as BaseCamp
+        // fills it from its world basemap.
+        canReplaceMapContent = true
         maximumZ = 21
     }
 
@@ -85,14 +86,45 @@ enum GarminTileRenderer {
             )
             : nil
 
+        let fallback = covers(bounds, drawings) ? nil : await FallbackTiles.image(z: z, x: x, y: y)
+
         let worldSize = tileSize * tiles
         let origin = NSPoint(x: Double(x) * tileSize, y: Double(y) * tileSize)
         return render(size: tileSize, scale: max(1, scale)) { rect in
+            if let fallback, let context = NSGraphicsContext.current?.cgContext {
+                context.saveGState()
+                context.interpolationQuality = .high
+                context.translateBy(x: rect.minX, y: rect.maxY)
+                context.scaleBy(x: 1, y: -1)
+                context.draw(fallback, in: CGRect(x: 0, y: 0, width: rect.width, height: rect.height))
+                context.restoreGState()
+            }
             GarminPainter.draw(drawings, in: rect, patternOrigin: origin, relief: relief) { coordinate in
                 let world = WebMercator.unit(coordinate)
                 return NSPoint(x: world.x * worldSize - origin.x, y: world.y * worldSize - origin.y)
             }
         }
+    }
+
+    /// Whether the full maps drawn cover the whole tile, tested at a grid of points across it.
+    private static func covers(_ tile: GeoBounds, _ drawings: [GarminMapDrawing]) -> Bool {
+        let areas = drawings
+            .filter { !$0.isOverlay && !($0.features.lines.isEmpty && $0.features.areas.isEmpty) }
+            .flatMap(\.features.coverage)
+        guard !areas.isEmpty else { return false }
+        for i in 0...4 {
+            for j in 0...4 {
+                let latitude = tile.south + (tile.north - tile.south) * Double(i) / 4
+                let longitude = tile.west + (tile.east - tile.west) * Double(j) / 4
+                let inside = areas.contains {
+                    latitude <= $0.north && latitude >= $0.south && longitude >= $0.west && longitude <= $0.east
+                }
+                if !inside {
+                    return false
+                }
+            }
+        }
+        return true
     }
 
     /// A PNG of `size` points at `scale` pixels per point, drawn with the origin at the top left.
@@ -346,5 +378,28 @@ enum GarminPainter {
         let color = NSColor(patternImage: image)
         patterns[style] = color
         return color
+    }
+}
+
+
+/// OpenStreetMap's tiles, for the parts of the Garmin base map that the Garmin maps leave empty. Kept in memory for
+/// a while, and in URLSession's cache.
+enum FallbackTiles {
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.requestCachePolicy = .returnCacheDataElseLoad
+        configuration.urlCache = URLCache(memoryCapacity: 32 << 20, diskCapacity: 256 << 20)
+        return URLSession(configuration: configuration)
+    }()
+
+    static func image(z: Int, x: Int, y: Int) async -> CGImage? {
+        guard z <= 19, let url = URL(string: "https://tile.openstreetmap.org/\(z)/\(x)/\(y).png") else { return nil }
+        var request = URLRequest(url: url)
+        // OpenStreetMap's tile policy asks every app to name itself.
+        request.setValue("BaseCamp Clone/0.1 (macOS)", forHTTPHeaderField: "User-Agent")
+        guard let (data, response) = try? await session.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 }

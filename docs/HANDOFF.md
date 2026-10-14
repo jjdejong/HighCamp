@@ -45,8 +45,9 @@ What was checked:
   - Removing a distance range drops the points inside it. A segment left empty is dropped. A range with no points returns nil.
   - Thinning every 30 s keeps points 0, 3, … 30 of 31 (one per 30 s). Thinning every 250 m keeps 0, 3, … 18, and 20 (the last point of the segment). Each segment keeps its first and last points. Points without times are kept. Heart rate stays with its point.
 - Gate: build clean, 226 tests, 3 skipped, 0 failures, no DIAG.
-- Picture (scratch library, track "Sensor ride"): the Edit section shows Filter Points after Simplify. The menu itself was not clicked, because synthetic clicks do not reach the app here. The menu calls `editSelection`, as Simplify does. The logic is tested in core.
-- Not checked: the filter in the running app, on a real track. Undo follows the existing `edit`, which records a step only when the library changes.
+- Picture (scratch library, track "Sensor ride"): the Edit section shows Filter Points after Simplify.
+- In the running app, through the Track menu (clicked by System Events): a scratch track of 60 points, 5 s apart, with Every 10 s kept 31 points, as predicted (every second point, and the last). The saved scratch file shows 31.
+- Not checked: the Edit section's Filter Points button (it calls the same store action as the Track menu), and undo of a filter. Undo follows the existing `edit`, which records a step only when the library changes.
 Open questions:
 - How the user selects the range for "Delete a range by profile selection". Options:
   (a) drag across the elevation profile, as BaseCamp does, then Delete (menu item). This needs one gesture and shows the band.

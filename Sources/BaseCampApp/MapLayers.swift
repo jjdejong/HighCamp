@@ -176,6 +176,10 @@ final class MapLayerSettings {
     var garminSoftColors: Bool {
         didSet { UserDefaults.standard.set(garminSoftColors, forKey: "map.garminSoftColors") }
     }
+    /// Relief shading on the Garmin maps, from the heights the maps carry, as BaseCamp draws it. 0 is off.
+    var reliefStrength: Double {
+        didSet { UserDefaults.standard.set(reliefStrength, forKey: "map.reliefStrength") }
+    }
     /// Dashed outlines and names for the area each map in the map folder covers.
     var showCoverage: Bool {
         didSet { UserDefaults.standard.set(showCoverage, forKey: "map.showCoverage") }
@@ -191,11 +195,21 @@ final class MapLayerSettings {
         showCoverage = defaults.bool(forKey: "map.showCoverage")
         garminDetail = GarminDetail(rawValue: defaults.string(forKey: "map.garminDetailLevel") ?? "") ?? .normal
         garminSoftColors = defaults.object(forKey: "map.garminSoftColors") as? Bool ?? true
+        reliefStrength = defaults.object(forKey: "map.reliefStrength") as? Double ?? Self.mediumRelief
+    }
+
+    static let lightRelief = 0.3
+    static let mediumRelief = 0.45
+    static let strongRelief = 0.65
+
+    /// The Garmin maps as the map pane draws them.
+    func garminConfiguration(_ maps: GarminMapListStore) -> GarminMapConfiguration {
+        maps.configuration(detail: garminDetail, softColors: garminSoftColors, relief: reliefStrength)
     }
 
     /// The base map for a picture of what the screen shows.
     func pictureBase(garmin: GarminMapListStore) -> PictureBase {
-        PictureBase(layer: base, contours: showContours, garmin: garmin.configuration(detail: garminDetail, softColors: garminSoftColors))
+        PictureBase(layer: base, contours: showContours, garmin: garminConfiguration(garmin))
     }
 
     /// Attribution for the layers on screen.

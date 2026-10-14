@@ -2,6 +2,27 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## G4: the maps' own heights, relief shading — 2026-10-14 — Opus
+State: shading done (dd8e815 reader, this commit shading). Gate: 323 tests in four bundles (core 265), 3 skipped,
+no DIAG. Note: earlier HANDOFF entries quote only the core bundle's count.
+- `GarminDEM` (BaseCampIMG) reads a subfile's DEM part: levels (layer 0 only), tile table, JPEG-LS tiles; heights
+  in metres (feet converted), "no height" pixels as nil. Ported from GPXSee, GPL-3.0 only: NOTICE says so, and
+  that the program as a whole is therefore distributed under GPL-3. `fill(_:latitudes:longitudes:level:)`
+  samples a whole grid, fetching each tile once (134² points: 22 ms debug, 1.8 ms release).
+- Checked against the user's EU-DEM folder (gdallocationinfo) at Grenoble, Voreppe, Chamrousse, Belledonne:
+  within 12 m. OFM tiles carry four levels (0.00083°, 0.00083°, 0.00111°, 0.0037° per pixel).
+- `ReliefShading` (core): Horn slopes in true metres, Lambert light from 315°/45°, GPXSee's lightening and
+  square root, black with alpha. Exaggeration grows with the grid spacing (√spacing × 0.9, 1.5...12). Box blur.
+- `GarminReliefRenderer` (app): per Web Mercator tile, a 128-point grid (+3 margin), blurred by 2, drawn over the
+  full maps and under the overlays (contours stay crisp), only where a full map draws something, from z8.
+  `MapReliefCache` actor keeps opened maps and up to 96 DEM parts.
+- Map menu > Garmin maps > Relief Shading: Off, Light 0.3, Medium 0.45 (default), Strong 0.65
+  (`map.reliefStrength`). Part of `GarminMapConfiguration`, so changing it redraws the tiles.
+- Seen in the debug app around Grenoble at z12 and z15 (window captures only).
+Not done: saved pictures and printed reports (`MapImageExport`) do not draw the shading yet; the maps' heights are
+not yet used for Elevations from Model, waypoint heights or the planner (rest of G4). Once, at launch, the map
+showed only the Garmin land colour at z10 with shading on; it did not happen again in three more launches.
+
 ## Toolbar tooltips, activities icon — 2026-10-14 — Opus
 State: done (this commit). SwiftUI's `.help` on the buttons of the toolbar's item group never reached AppKit (the
 accessibility help of every toolbar item was empty, checked with System Events). `ToolbarTooltips` holds the texts;

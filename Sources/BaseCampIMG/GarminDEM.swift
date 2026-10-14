@@ -160,6 +160,56 @@ public final class GarminDEM: @unchecked Sendable {
         return p0 * (1 - dx) * (1 - dy) + p1 * dx * (1 - dy) + p2 * (1 - dx) * dy + p3 * dx * dy
     }
 
+    /// Heights on a grid of places, row by row: `latitudes` from north to south, `longitudes` from west to east.
+    /// Only places still NaN in `heights` are filled, so several maps' parts can fill one grid in turn. Much faster
+    /// than one `elevation` call per place: each tile is fetched once per call.
+    public func fill(_ heights: inout [Double], latitudes: [Double], longitudes: [Double], level index: Int) {
+        let level = levels[index]
+        let width = longitudes.count
+        guard heights.count == width * latitudes.count, level.width > 1, level.height > 1 else { return }
+        var tiles: [Int: [Int16]] = [:]
+        var missing = Set<Int>()
+        func value(_ x: Int, _ y: Int) -> Double? {
+            guard x >= 0, y >= 0, x < level.width, y < level.height else { return nil }
+            let column = min(x / max(level.tileWidth, 1), level.columns - 1)
+            let row = min(y / max(level.tileHeight, 1), level.rows - 1)
+            let tileIndex = row * level.columns + column
+            guard !missing.contains(tileIndex) else { return nil }
+            let grid: [Int16]
+            if let cached = tiles[tileIndex] {
+                grid = cached
+            } else if let decoded = self.heights(level: index, tile: tileIndex) {
+                tiles[tileIndex] = decoded
+                grid = decoded
+            } else {
+                missing.insert(tileIndex)
+                return nil
+            }
+            let tile = level.tiles[tileIndex]
+            let localX = x - column * level.tileWidth, localY = y - row * level.tileHeight
+            guard localX < tile.width, localY < tile.height else { return nil }
+            let height = grid[localY * tile.width + localX]
+            return height == Self.noHeight ? nil : Double(height)
+        }
+        let columns = longitudes.map { ($0 - level.west) / level.pixelWidth }
+        for (rowIndex, latitude) in latitudes.enumerated() {
+            let y = (level.north - latitude) / level.pixelHeight
+            guard y >= 0, y <= Double(level.height - 1) else { continue }
+            let row = min(Int(y), level.height - 2)
+            let dy = y - Double(row)
+            for (columnIndex, x) in columns.enumerated() where heights[rowIndex * width + columnIndex].isNaN {
+                guard x >= 0, x <= Double(level.width - 1) else { continue }
+                let column = min(Int(x), level.width - 2)
+                let dx = x - Double(column)
+                guard let p0 = value(column, row) else { continue }
+                let p1 = value(column + 1, row) ?? p0
+                let p2 = value(column, row + 1) ?? p0
+                let p3 = value(column + 1, row + 1) ?? p0
+                heights[rowIndex * width + columnIndex] = p0 * (1 - dx) * (1 - dy) + p1 * dx * (1 - dy) + p2 * (1 - dx) * dy + p3 * dx * dy
+            }
+        }
+    }
+
     /// The height of one grid pixel of level `level`, or nil where there is none.
     func pixel(_ x: Int, _ y: Int, level index: Int) -> Double? {
         let level = levels[index]

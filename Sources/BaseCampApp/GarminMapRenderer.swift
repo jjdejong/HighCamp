@@ -76,11 +76,19 @@ enum GarminTileRenderer {
         let middle = (bounds.north + bounds.south) / 2 * .pi / 180
         let metersPerPoint = 40_075_016.686 * cos(middle) / (tileSize * tiles)
         let drawings = await configuration.drawings(in: area, metersPerPoint: metersPerPoint, zoom: z)
+        // Shading only where a full map draws something, so it never darkens Apple's map on its own.
+        let drawsMap = drawings.contains { !$0.isOverlay && !($0.features.lines.isEmpty && $0.features.areas.isEmpty) }
+        let relief = drawsMap
+            ? await GarminReliefRenderer.image(
+                z: z, x: x, y: y, strength: configuration.relief,
+                maps: configuration.layers.filter { $0.isVisible(atZoom: z) }.map(\.url)
+            )
+            : nil
 
         let worldSize = tileSize * tiles
         let origin = NSPoint(x: Double(x) * tileSize, y: Double(y) * tileSize)
         return render(size: tileSize, scale: max(1, scale)) { rect in
-            GarminPainter.draw(drawings, in: rect, patternOrigin: origin) { coordinate in
+            GarminPainter.draw(drawings, in: rect, patternOrigin: origin, relief: relief) { coordinate in
                 let world = WebMercator.unit(coordinate)
                 return NSPoint(x: world.x * worldSize - origin.x, y: world.y * worldSize - origin.y)
             }
@@ -132,7 +140,7 @@ enum GarminPainter {
     /// the map under it with a blank sheet. `patternOrigin` is the context origin's position in the pattern grid, so area patterns meet
     /// across tiles. `step` thins long paths for large pictures: every `step`-th point is drawn.
     static func draw(
-        _ drawings: [GarminMapDrawing], in rect: NSRect, patternOrigin: NSPoint, step: Int = 1,
+        _ drawings: [GarminMapDrawing], in rect: NSRect, patternOrigin: NSPoint, step: Int = 1, relief: CGImage? = nil,
         project: (Coordinate) -> NSPoint
     ) {
         let context = NSGraphicsContext.current?.cgContext
@@ -142,12 +150,25 @@ enum GarminPainter {
         if softening {
             context?.beginTransparencyLayer(auxiliaryInfo: nil)
         }
+        // The relief's shadows go over the full maps and under the overlays, so contours stay crisp.
+        var shading = relief
         func endSoftening() {
-            guard softening else { return }
-            NSColor.white.withAlphaComponent(Self.softening).setFill()
-            rect.fill(using: .sourceAtop)
-            context?.endTransparencyLayer()
-            softening = false
+            if softening {
+                NSColor.white.withAlphaComponent(Self.softening).setFill()
+                rect.fill(using: .sourceAtop)
+                context?.endTransparencyLayer()
+                softening = false
+            }
+            if let image = shading {
+                context?.saveGState()
+                context?.interpolationQuality = .high
+                // The context is flipped; the picture is drawn upright into it.
+                context?.translateBy(x: rect.minX, y: rect.maxY)
+                context?.scaleBy(x: 1, y: -1)
+                context?.draw(image, in: CGRect(x: 0, y: 0, width: rect.width, height: rect.height))
+                context?.restoreGState()
+                shading = nil
+            }
         }
         land.setFill()
         for drawing in drawings where !drawing.isOverlay && !(drawing.features.lines.isEmpty && drawing.features.areas.isEmpty) {

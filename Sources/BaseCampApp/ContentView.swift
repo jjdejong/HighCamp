@@ -127,6 +127,12 @@ struct ContentView: View {
                                     }
                                 }
                                 Toggle("Softer Colours", isOn: $mapLayers.garminSoftColors)
+                                Picker("Relief Shading", selection: $mapLayers.reliefStrength) {
+                                    Text("Off").tag(0.0)
+                                    Text("Light").tag(MapLayerSettings.lightRelief)
+                                    Text("Medium").tag(MapLayerSettings.mediumRelief)
+                                    Text("Strong").tag(MapLayerSettings.strongRelief)
+                                }
                             }
                             Divider()
                             Picker("Base map", selection: $mapLayers.base) {

@@ -91,3 +91,29 @@ final class GarminDEMTests: XCTestCase {
         }
     }
 }
+
+extension GarminDEMTests {
+    func testGridFillMatchesSingleLookups() throws {
+        guard let path = ProcessInfo.processInfo.environment["IMG_TEST_PATH"], !path.isEmpty,
+              path.hasSuffix("OFM-EU2026_SW_GPS.img") else {
+            throw XCTSkip("Set IMG_TEST_PATH to OFM-EU2026_SW_GPS.img")
+        }
+        let image = try GarminIMG(url: URL(fileURLWithPath: path))
+        let subfile = try XCTUnwrap(image.subfiles.first { subfile in
+            guard let b = subfile.bounds else { return false }
+            return 45.11 <= b.north && 45.11 >= b.south && 5.88 >= b.west && 5.88 <= b.east
+        })
+        let dem = try XCTUnwrap(try image.dem(of: subfile.name))
+        let latitudes = (0..<134).map { 45.15 - Double($0) * 0.0006 }
+        let longitudes = (0..<134).map { 5.82 + Double($0) * 0.0008 }
+        var grid = [Double](repeating: .nan, count: 134 * 134)
+        let start = Date()
+        dem.fill(&grid, latitudes: latitudes, longitudes: longitudes, level: 0)
+        let elapsed = Date().timeIntervalSince(start)
+        print("fill 134x134:", elapsed)
+        for (row, column) in [(0, 0), (40, 77), (133, 133), (90, 12)] {
+            let single = dem.elevation(latitude: latitudes[row], longitude: longitudes[column], level: 0)
+            XCTAssertEqual(grid[row * 134 + column], try XCTUnwrap(single), accuracy: 1e-9)
+        }
+    }
+}

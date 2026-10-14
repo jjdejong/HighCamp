@@ -149,14 +149,15 @@ struct BaseCampApp: App {
             },
             detailOffset: 0, softColors: true, relief: Double(launchValue("--relief") ?? "0.45") ?? 0.45
         )
-        let done = DispatchSemaphore(value: 0)
         Task.detached {
             let data = await GarminTileRenderer.png(z: numbers[0], x: numbers[1], y: numbers[2], scale: 2, configuration: configuration)
             try? data?.write(to: URL(fileURLWithPath: output))
-            done.signal()
+            exit(0)
         }
-        done.wait()
-        exit(0)
+        // The main run loop keeps going, since Apple's map snapshots for empty areas answer on the main thread.
+        while true {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        }
     }
 
     /// Set by `--map-image`, so the map view is saved there without asking.

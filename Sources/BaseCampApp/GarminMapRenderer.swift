@@ -11,9 +11,8 @@ final class GarminTileOverlay: MKTileOverlay {
     init(configuration: GarminMapConfiguration) {
         self.configuration = configuration
         super.init(urlTemplate: nil)
-        // The Garmin maps replace Apple's map entirely, so it never shows while tiles load. Where they have nothing
-        // to draw (zoomed far out, outside their area), the tile is filled from OpenStreetMap instead, as BaseCamp
-        // fills it from its world basemap.
+        // The Garmin maps replace Apple's map, so it does not flash through while tiles load. Where they have
+        // nothing to draw (zoomed far out, outside their area), the tile is filled with Apple's map instead.
         canReplaceMapContent = true
         maximumZ = 21
     }
@@ -382,24 +381,29 @@ enum GarminPainter {
 }
 
 
-/// OpenStreetMap's tiles, for the parts of the Garmin base map that the Garmin maps leave empty. Kept in memory for
-/// a while, and in URLSession's cache.
+/// Apple's map, for the parts of the Garmin base map that the Garmin maps leave empty: a snapshot of exactly the
+/// tile's area, so it lines up with the tiles around it. Kept in memory for a while.
 enum FallbackTiles {
-    private static let session: URLSession = {
-        let configuration = URLSessionConfiguration.default
-        configuration.requestCachePolicy = .returnCacheDataElseLoad
-        configuration.urlCache = URLCache(memoryCapacity: 32 << 20, diskCapacity: 256 << 20)
-        return URLSession(configuration: configuration)
-    }()
+    private static let cache = NSCache<NSString, CGImageBox>()
+
+    final class CGImageBox {
+        let image: CGImage
+        init(_ image: CGImage) { self.image = image }
+    }
 
     static func image(z: Int, x: Int, y: Int) async -> CGImage? {
-        guard z <= 19, let url = URL(string: "https://tile.openstreetmap.org/\(z)/\(x)/\(y).png") else { return nil }
-        var request = URLRequest(url: url)
-        // OpenStreetMap's tile policy asks every app to name itself.
-        request.setValue("BaseCamp Clone/0.1 (macOS)", forHTTPHeaderField: "User-Agent")
-        guard let (data, response) = try? await session.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        return CGImageSourceCreateImageAtIndex(source, 0, nil)
+        let key = "\(z)/\(x)/\(y)" as NSString
+        if let cached = cache.object(forKey: key) {
+            return cached.image
+        }
+        let size = MKMapSize.world.width / pow(2, Double(z))
+        let options = MKMapSnapshotter.Options()
+        options.mapRect = MKMapRect(x: Double(x) * size, y: Double(y) * size, width: size, height: size)
+        options.size = NSSize(width: GarminTileRenderer.tileSize, height: GarminTileRenderer.tileSize)
+        options.appearance = NSAppearance(named: .aqua)
+        guard let snapshot = try? await MKMapSnapshotter(options: options).start(),
+              let image = snapshot.image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        cache.setObject(CGImageBox(image), forKey: key)
+        return image
     }
 }

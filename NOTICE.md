@@ -14,6 +14,11 @@ See `LICENSE`.
   - `GarminTyp.swift`: `src/qmapshack/map/garmin/CGarminTyp.cpp`, and the polygon draw order from
     `src/qmapshack/map/CMapIMG.cpp`.
   Each file names its source in the header.
+- The reader of the maps' own heights, `Sources/BaseCampIMG/GarminDEM.swift`, is ported from GPXSee, Copyright (C)
+  Martin Tůma, licensed under the GNU General Public License version 3 only: `src/map/IMG/demfile.cpp`,
+  `demfile.h`, `demtile.h`, `demtree.cpp`, `jls.cpp`, `jls.h`. The relief shading follows GPXSee's
+  `src/map/hillshading.cpp`. Because GPXSee is GPL-3.0 only, the program as a whole is distributed under
+  version 3 of the GPL; the rest of the code stays available under version 3 or later.
 
 ## Map and data sources
 

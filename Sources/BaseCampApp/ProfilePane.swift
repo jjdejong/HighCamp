@@ -8,7 +8,13 @@ import SwiftUI
 struct ProfilePane: View {
     @Environment(LibraryStore.self) private var store
     @Environment(DisplaySettings.self) private var display
+    @Environment(TrackDEMStore.self) private var trackDEMs
+    @Environment(ElevationSettings.self) private var elevation
     @State private var series = ProfileSeries.elevation
+    /// Heights read every few metres from the item's track DEM, when it has one.
+    @State private var demProfile: [ElevationProfilePoint]?
+    /// Show the heights from the track DEM rather than the line's own points, when there is a track DEM.
+    @AppStorage("display.profileFromDEM") private var fromDEM = true
     /// The stretch shown, in metres. Nil shows the whole profile.
     @State private var domain: ClosedRange<Double>?
     @State private var isHovering = false
@@ -43,8 +49,10 @@ struct ProfilePane: View {
             if let item {
                 let choices = item.statistics.availableSeries
                 let shown = choices.contains(series) ? series : (choices.first ?? .elevation)
-                let points = item.profile(shown)
-                let heights = shown == .elevation ? points : item.profile(.elevation)
+                let dem = fromDEM ? demProfile.flatMap { $0.count > 1 ? $0 : nil } : nil
+                let ownHeights = item.profile(.elevation)
+                let heights = dem ?? ownHeights
+                let points = shown == .elevation ? heights : item.profile(shown)
                 header(item, choices: choices, shown: shown, heights: heights, length: points.last?.distanceMeters ?? 0)
                 Divider()
                 if points.count > 1 {
@@ -67,6 +75,11 @@ struct ProfilePane: View {
         .background(.background)
         .onChange(of: store.selection) { _, _ in
             domain = nil
+        }
+        .task(id: DEMRequest(item: store.selection, library: store.revision, dem: trackDEMs.revision)) {
+            demProfile = nil
+            guard let item = store.selection else { return }
+            demProfile = await trackDEMs.profile(for: item, store: store)
         }
         .onAppear { installScrollMonitor() }
         .onDisappear { removeScrollMonitor() }
@@ -93,14 +106,45 @@ struct ProfilePane: View {
                     .labelsHidden()
                     .fixedSize()
                 }
+                demControls
                 Spacer(minLength: 8)
                 buttons(item, length: length)
             }
-            readout(series: shown, profile: item.profile(shown), heights: heights)
+            readout(series: shown, profile: shown == .elevation ? heights : item.profile(shown), heights: heights)
         }
         .controlSize(.small)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+    }
+
+    /// Where the heights come from: the line's own points, or its track DEM, read every few metres. Without a
+    /// track DEM, a button builds one; while it is built, what is happening.
+    @ViewBuilder
+    private var demControls: some View {
+        if let status = trackDEMs.status {
+            ProgressView().controlSize(.mini)
+            Text(status)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        } else if let selection = store.selection, let info = trackDEMs.info(for: selection, store: store) {
+            Picker("Heights", selection: $fromDEM) {
+                Text("Points").tag(false)
+                Text("DEM \(Self.resolutionText(info.resolution))").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .help("Heights at the line's own points, or read from its track DEM every few metres (\(info.tiles) tiles within \(Int(info.corridor)) m)")
+        } else if let selection = store.selection {
+            Button("Build Track DEM") {
+                Task { await trackDEMs.build(selection, store: store, tileFolder: elevation.tileFolder, corridor: elevation.corridor) }
+            }
+            .help("Gather the high-resolution tiles along this line from \(elevation.tileFolder.lastPathComponent) into a DEM of its own, for an exact profile")
+        }
+    }
+
+    private static func resolutionText(_ metres: Double) -> String {
+        metres < 10 ? String(format: "%g m", (metres * 10).rounded() / 10) : "\(Int(metres.rounded())) m"
     }
 
     private func buttons(_ item: Item, length: Double) -> some View {
@@ -127,6 +171,12 @@ struct ProfilePane: View {
             .help("Hide the profile (⌥⌘P)")
         }
         .fixedSize()
+    }
+
+    private struct DEMRequest: Equatable {
+        let item: LibraryItem?
+        let library: Int
+        let dem: Int
     }
 
     /// The values at the cursor on one line, and the size and averages of the picked stretch on the next.

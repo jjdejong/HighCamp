@@ -202,6 +202,13 @@ public struct ElevationProfilePoint: Equatable, Sendable, Identifiable {
     /// The height in metres, or the reading of the series the profile plots.
     public var value: Double
     public var coordinate: Coordinate
+
+    public init(id: Int, distanceMeters: Double, value: Double, coordinate: Coordinate) {
+        self.id = id
+        self.distanceMeters = distanceMeters
+        self.value = value
+        self.coordinate = coordinate
+    }
 }
 
 public extension Track {

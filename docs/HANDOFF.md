@@ -2,6 +2,27 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Track DEMs: high-resolution profiles from a folder of tiles — 2026-10-14 — Opus
+State: done (e809ca8 core and DEM, this commit app). Gate: 345 tests in four bundles (core 277), 3 skipped, no
+DIAG. Not seen on screen (the user was at the machine); the pipeline was timed on the user's whole DEM folder.
+User request: from a folder of high-resolution DEM tiles (their QMapShack/DEM: IGN RGE ALTI 5 m and 1 m `.asc`
+in Lambert-93 without .prj, EU-DEM 25 m), make "local" DEM data along a track for an exact profile, as their
+Python scripts (extract_tiles_for_track.py: hard links of the tiles a GPX crosses) did.
+- Settings > Track DEMs: tile folder (default: the DEM model folder), corridor 50/100/200/500 m (default 100)
+  (`dem.tileFolder`, `dem.corridor`).
+- Track and Route menus: Build / Rebuild / Remove Track DEM; the profile pane shows "Build Track DEM" when there
+  is none, progress while building, and a Points | DEM n m switch when there is one (`display.profileFromDEM`).
+- `TrackDEMStore`: the tile index is kept beside the library ("DEM tile index.json"; unchanged files reused:
+  4,804 tiles in 1.8 s first, much less after); a track DEM is "Track DEMs/<item id>/" with VRTs per projection
+  and resolution, finest first ("1 - 1 m.vrt", "2 - 5 m.vrt", "3 - 25 m.vrt") plus "track DEM.json". The VRTs
+  reference the tiles (no copy); QMapShack can open them. The library file is unchanged.
+- DEM profile: every max(2 m, finest resolution) along the line (at most 40,000 samples), same distances as the
+  line's profile, so cursor, picked stretch, delete and split still line up. 13 km across the Vercors: 6,495
+  samples in 0.44 s. Replace Elevations from Model uses the track DEM when the item has one.
+- Tiles without a projection are taken as Lambert-93 when the name says LAMB93/L93 or the coordinates fit.
+Not done: the inspector's small profile still uses the points; a track DEM is not removed when its item is
+deleted (harmless, a few kB of VRT).
+
 ## Sharper Garmin tiles on 1× screens — 2026-10-14 — Opus
 State: done (this commit). Gate: 338 tests, 3 skipped, no DIAG.
 User report: OFM looks blurry when towns start showing streets, unlike IGN. The user's screen is 1× (5120×1440).

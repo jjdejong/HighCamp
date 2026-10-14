@@ -15,6 +15,7 @@ struct BaseCampApp: App {
     @State private var elevation = ElevationSettings()
     @State private var garminMaps = GarminMapListStore()
     @State private var recalculator = RouteRecalculator()
+    @State private var trackDEMs = TrackDEMStore()
 
     init() {
         #if DEBUG
@@ -35,6 +36,7 @@ struct BaseCampApp: App {
                 .environment(mapCoverage)
                 .environment(display)
                 .environment(elevation)
+                .environment(trackDEMs)
                 .environment(garminMaps)
                 .environment(recalculator)
                 .frame(minWidth: 960, minHeight: 620)
@@ -103,7 +105,7 @@ struct BaseCampApp: App {
         .commands {
             BaseCampCommands(
                 store: store, planner: planner, recalculator: recalculator, routing: routing,
-                elevation: elevation, display: display, layers: mapLayers, garminMaps: garminMaps
+                elevation: elevation, display: display, layers: mapLayers, garminMaps: garminMaps, trackDEMs: trackDEMs
             )
         }
 
@@ -114,6 +116,7 @@ struct BaseCampApp: App {
                 .environment(display)
                 .environment(planner)
                 .environment(elevation)
+                .environment(trackDEMs)
         }
     }
 
@@ -196,6 +199,27 @@ struct BaseCampCommands: Commands {
     let display: DisplaySettings
     let layers: MapLayerSettings
     let garminMaps: GarminMapListStore
+    let trackDEMs: TrackDEMStore
+
+    /// Building and removing the selected track's or route's own high-resolution DEM.
+    @ViewBuilder
+    private var trackDEMCommands: some View {
+        let item = store.selection.flatMap { item -> LibraryItem? in
+            if case .waypoint = item { return nil }
+            return item
+        }
+        Button(item.flatMap { trackDEMs.info(for: $0, store: store) } == nil ? "Build Track DEM" : "Rebuild Track DEM") {
+            guard let item else { return }
+            Task { await trackDEMs.build(item, store: store, tileFolder: elevation.tileFolder, corridor: elevation.corridor) }
+        }
+        .disabled(item == nil || trackDEMs.status != nil)
+        Button("Remove Track DEM") {
+            if let item {
+                trackDEMs.remove(item, store: store)
+            }
+        }
+        .disabled(item.flatMap { trackDEMs.info(for: $0, store: store) } == nil)
+    }
 
     /// True when the selected item is a route with legs. A route without a profile takes the route tool's profile.
     private var canRecalculateSelection: Bool {
@@ -252,6 +276,8 @@ struct BaseCampCommands: Commands {
                 }
             }
             .disabled(!canRecalculateSelection)
+            Divider()
+            trackDEMCommands
         }
 
         CommandMenu("Track") {
@@ -300,8 +326,12 @@ struct BaseCampCommands: Commands {
                 store.fillElevationsFromModel(folder: elevation.folder, replaceExisting: false)
             }
             Button("Replace Elevations from Model") {
-                store.fillElevationsFromModel(folder: elevation.folder, replaceExisting: true)
+                store.fillElevationsFromModel(
+                    folder: trackDEMs.modelFolder(for: store.selection, store: store) ?? elevation.folder, replaceExisting: true
+                )
             }
+            Divider()
+            trackDEMCommands
         }
 
         CommandGroup(after: .sidebar) {

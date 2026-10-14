@@ -71,6 +71,26 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("Track DEMs (high resolution)") {
+                LabeledContent("Tile folder") {
+                    Text(elevation.tileFolder.path)
+                        .textSelection(.enabled)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                }
+                Button("Choose Tile Folder…") {
+                    chooseTileFolder()
+                }
+                Picker("Corridor", selection: Bindable(elevation).corridor) {
+                    Text("50 m").tag(50.0)
+                    Text("100 m").tag(100.0)
+                    Text("200 m").tag(200.0)
+                    Text("500 m").tag(500.0)
+                }
+                Text("Build Track DEM (Track and Route menus, or the profile) gathers the tiles of this folder and its subfolders that lie within the corridor of the selected line into a small DEM for it, finest tiles first, without copying them. Its profile is then read every few metres along the line.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             routingProfilesSection
             Section("Routing") {
                 Picker("Engine", selection: $routing.engine) {
@@ -197,6 +217,17 @@ struct SettingsView: View {
         panel.prompt = "Choose"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         routing.brouterFolder = url
+    }
+
+    private func chooseTileFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.directoryURL = elevation.tileFolder
+        panel.prompt = "Use Folder"
+        if panel.runModal() == .OK, let url = panel.url {
+            elevation.tileFolder = url
+        }
     }
 
     private func chooseElevationFolder() {

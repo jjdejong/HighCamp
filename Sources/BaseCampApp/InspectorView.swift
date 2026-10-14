@@ -7,6 +7,7 @@ struct InspectorView: View {
     @Environment(DeviceStore.self) private var device
     @Environment(DisplaySettings.self) private var display
     @Environment(ElevationSettings.self) private var elevation
+    @Environment(TrackDEMStore.self) private var trackDEMs
     @Environment(RoutePlanner.self) private var planner
     /// The series the profile shows, for an item that has it. Not saved.
     @State private var chartSeries = ProfileSeries.elevation
@@ -326,8 +327,11 @@ struct InspectorView: View {
             }
             .help("Fill in heights where the track or route has none")
             Button("Replace Elevations from Model") {
-                store.fillElevationsFromModel(folder: elevation.folder, replaceExisting: true)
+                store.fillElevationsFromModel(
+                    folder: trackDEMs.modelFolder(for: store.selection, store: store) ?? elevation.folder, replaceExisting: true
+                )
             }
+            .help("Take every point's height from the model: the track DEM when there is one")
         }
     }
 

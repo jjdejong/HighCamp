@@ -85,6 +85,8 @@ final class LibraryStore {
     var showFind = false
 
     private let fileURL: URL
+    /// The folder of the library file, where the app keeps what goes with the library (track DEMs, say).
+    var dataFolder: URL { fileURL.deletingLastPathComponent() }
     /// Writes the library in the background, after changes settle (see `LibrarySaver`).
     private let saver: LibrarySaver
 

@@ -287,6 +287,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G3 | Opus | done | bbfd0a3, 423ba46 | map list sheet; overlays use their finest level; default: first full map on |
 | G0 | Opus | done | | was a decoder bug after all: the y "same sign" flag was read from the x bit when x was signed, so lines zigzagged (contours and roads); fixed 2026-10-13 with a test |
 | G4 | Opus | in progress | dd8e815, (this commit) | DEM reader (GPXSee port) and relief shading on the Garmin maps done; heights for Elevations from Model, waypoints and the planner still to do |
+| D1 | Opus | done | e809ca8, (this commit) | track DEMs from a folder of high-resolution tiles (user request); profile from the track DEM; not yet seen on screen |
 | G5 | Opus | todo | | basemap when zoomed out |
 | C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |
 | C5 | Haiku | reviewed | 2a26c42 | accepted; table next to the list; `--sidebar table` hook (debug) |

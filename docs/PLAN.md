@@ -294,7 +294,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | C7b | Haiku | reviewed | 068596c | profile on page 2 is 400 points high; 170 on page 1 |
 | C3b | Haiku | reviewed | 5922795 | saved pictures and reports draw the map's markers, with symbols |
 | C3c | Haiku | reviewed | ea02d0b | selected items keep their colour, with a white halo under the line |
-| C1 | Haiku → Opus | todo | | unblocked: decisions in HANDOFF (Opus review 2026-10-14); real sample test when the user sends one |
+| C1 | Haiku → Opus | partial | | colours done (track and route DisplayColor); address and proximity, then sensor fields, still to do |
 | C2 | Haiku → Opus | partial | 8a542f8, d8b0aa8 | reviewed and accepted; GPX sensor reading is done with C1 |
 | C4 | Haiku → Opus | partial | 98ebfbb | filter reviewed and accepted; range: drag across the profile (decided, see HANDOFF), todo |
 | C6 | — | moved | | to G2 |

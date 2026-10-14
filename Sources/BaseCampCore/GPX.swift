@@ -141,6 +141,8 @@ private final class GPXReader: NSObject, XMLParserDelegate {
 
         case ("name", "rte"):
             route?.name = value
+        case ("DisplayColor", "RouteExtension") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
+            route?.color = GarminColour.color(named: value)
         case ("name", "rtept"):
             routePoint?.point.name = value.nonEmpty
         case ("ele", "rtept"):
@@ -149,12 +151,18 @@ private final class GPXReader: NSObject, XMLParserDelegate {
             if let routePoint { routePoints.append(routePoint) }
             routePoint = nil
         case ("rte", _):
-            if let route { library.routes.append(Self.route(id: route.id, name: route.name, points: routePoints)) }
+            if let route {
+                var built = Self.route(id: route.id, name: route.name, points: routePoints)
+                built.color = route.color
+                library.routes.append(built)
+            }
             route = nil
             routePoints = []
 
         case ("name", "trk"):
             track?.name = value
+        case ("DisplayColor", "TrackExtension") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
+            track?.color = GarminColour.color(named: value)
         case ("ele", "trkpt"):
             trackPoint?.elevation = Double(value)
         case ("time", "trkpt"):
@@ -243,6 +251,7 @@ private enum GPXWriter {
         for route in library.routes {
             xml += "  <rte>\n"
             xml += element("name", route.name, indent: "    ")
+            xml += colourExtension("RouteExtension", route.color, indent: "    ")
             let last = route.stops.count - 1
             for (index, stop) in route.stops.enumerated() {
                 xml += "    <rtept\(attributes(stop.coordinate))>\n"
@@ -269,6 +278,7 @@ private enum GPXWriter {
         for track in library.tracks {
             xml += "  <trk>\n"
             xml += element("name", track.name, indent: "    ")
+            xml += colourExtension("TrackExtension", track.color, indent: "    ")
             for segment in track.segments {
                 xml += "    <trkseg>\n"
                 for point in segment {
@@ -292,6 +302,17 @@ private enum GPXWriter {
 
     private static func number(_ value: Double) -> String {
         String(format: "%.7f", value)
+    }
+
+    /// `<extensions>` holding the item's colour name, or nothing when the item has no colour.
+    private static func colourExtension(_ element: String, _ color: ItemColor?, indent: String) -> String {
+        guard let color else { return "" }
+        let name = GarminColour.name(nearest: color)
+        return "\(indent)<extensions>\n"
+            + "\(indent)  <gpxx:\(element)>\n"
+            + "\(indent)    <gpxx:DisplayColor>\(name)</gpxx:DisplayColor>\n"
+            + "\(indent)  </gpxx:\(element)>\n"
+            + "\(indent)</extensions>\n"
     }
 
     /// Writes `<name>value</name>`, or nothing when the value is missing or empty.

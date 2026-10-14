@@ -4,13 +4,14 @@ import Foundation
 /// palette of 16, plus Transparent, which means no colour. A name reads as its exact colour; a colour is written as
 /// the nearest name, so a colour that came from a name gives back that name.
 ///
-/// The RGB values are the usual web values for these names. BaseCamp's own values are not published; check them in
-/// BaseCamp before relying on a particular shade.
+/// The RGB values are the classic 16-colour palette these names come from (Windows' and Qt's named colours, which
+/// QMapShack uses for the same names), so the two apps draw a shared file alike. Check a shade in BaseCamp before
+/// relying on it.
 enum GarminColour {
     private static let palette: [(name: String, hex: UInt32)] = [
-        ("Black", 0x000000), ("DarkRed", 0x8B0000), ("DarkGreen", 0x006400), ("DarkYellow", 0x808000),
-        ("DarkBlue", 0x00008B), ("DarkMagenta", 0x8B008B), ("DarkCyan", 0x008B8B), ("LightGray", 0xD3D3D3),
-        ("DarkGray", 0xA9A9A9), ("Red", 0xFF0000), ("Green", 0x00FF00), ("Yellow", 0xFFFF00),
+        ("Black", 0x000000), ("DarkRed", 0x800000), ("DarkGreen", 0x008000), ("DarkYellow", 0x808000),
+        ("DarkBlue", 0x000080), ("DarkMagenta", 0x800080), ("DarkCyan", 0x008080), ("LightGray", 0xC0C0C0),
+        ("DarkGray", 0x808080), ("Red", 0xFF0000), ("Green", 0x00FF00), ("Yellow", 0xFFFF00),
         ("Blue", 0x0000FF), ("Magenta", 0xFF00FF), ("Cyan", 0x00FFFF), ("White", 0xFFFFFF),
     ]
 

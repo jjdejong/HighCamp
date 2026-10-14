@@ -106,10 +106,10 @@ struct ElevationChart: View {
                 return UnitFormat.distanceValue(picked.lowerBound, units)...UnitFormat.distanceValue(picked.upperBound, units)
             },
             set: { picked in
-                guard pickable else { return }
-                store.profileRange = picked.map {
-                    UnitFormat.distanceMeters(fromValue: $0.lowerBound, units)...UnitFormat.distanceMeters(fromValue: $0.upperBound, units)
-                }
+                // Charts sets nil when the mouse is released, which would drop the stretch before it can be deleted.
+                // So nil is ignored; the stretch is cleared by Clear, by deleting it, or by selecting another item.
+                guard pickable, let picked else { return }
+                store.profileRange = UnitFormat.distanceMeters(fromValue: picked.lowerBound, units)...UnitFormat.distanceMeters(fromValue: picked.upperBound, units)
             }
         )
     }

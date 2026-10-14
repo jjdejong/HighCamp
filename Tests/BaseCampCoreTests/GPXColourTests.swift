@@ -34,7 +34,7 @@ final class GPXColourTests: XCTestCase {
 
     func testReadsTheTrackColourName() throws {
         let library = try GPX.read(track(colour: "DarkBlue")).library
-        XCTAssertEqual(library.tracks.first?.color, ItemColor(red: 0, green: 0, blue: Double(0x8B) / 255))
+        XCTAssertEqual(library.tracks.first?.color, ItemColor(red: 0, green: 0, blue: Double(0x80) / 255))
     }
 
     func testReadsTheRouteColourName() throws {
@@ -58,7 +58,7 @@ final class GPXColourTests: XCTestCase {
 
     func testPaletteNamesRoundTrip() throws {
         let library = Library(
-            routes: [Route(name: "Loop", color: ItemColor(red: 0, green: 0, blue: Double(0x8B) / 255))],
+            routes: [Route(name: "Loop", color: ItemColor(red: 0, green: 0, blue: Double(0x80) / 255))],
             tracks: [Track(
                 name: "Ride",
                 segments: [[TrackPoint(coordinate: Coordinate(latitude: 45, longitude: 5))]],

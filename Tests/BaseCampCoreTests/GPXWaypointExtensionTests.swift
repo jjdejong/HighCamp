@@ -85,4 +85,19 @@ final class GPXWaypointExtensionTests: XCTestCase {
         let read = try XCTUnwrap(GPX.read(GPX.write(Library(waypoints: [original]))).library.waypoints.first)
         XCTAssertEqual(read.address?.phone, "+00 0 00 00 00 00")
     }
+
+    func testAddressIsWrittenInTheSchemaOrderWithTwoStreetLines() throws {
+        let original = Waypoint(
+            name: "Two lines",
+            coordinate: Coordinate(latitude: 45, longitude: 5),
+            address: WaypointAddress(street: "Building A\n10 Test Street", city: "Testville", postalCode: "00000", country: "Testland")
+        )
+        let xml = waypointXML(original)
+        let order = ["<gpxx:StreetAddress>Building A<", "<gpxx:StreetAddress>10 Test Street<", "<gpxx:City>", "<gpxx:Country>", "<gpxx:PostalCode>"]
+            .map { try? XCTUnwrap(xml.range(of: $0)).lowerBound }
+        XCTAssertFalse(order.contains(nil))
+        XCTAssertEqual(order.compactMap { $0 }, order.compactMap { $0 }.sorted())
+        let read = try XCTUnwrap(GPX.read(Data(xml.utf8)).library.waypoints.first)
+        XCTAssertEqual(read.address, original.address)
+    }
 }

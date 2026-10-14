@@ -2,6 +2,24 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Opus review of C1 and the C4 range — 2026-10-14 — Opus
+State: both accepted, with fixes in this commit. Gate: 249 tests, 3 skipped, no DIAG.
+C1 fixes:
+- Colour values: the 16 DisplayColor names now use the classic 16-colour palette they come from (Windows' and Qt's
+  named colours, which QMapShack uses), e.g. DarkRed #800000, DarkGray #808080, LightGray #C0C0C0, not web values.
+- Address order: the writer put PostalCode before Country. BaseCamp's own file (Bretagne 2023.GPX) and the schema
+  have City, State, Country, PostalCode. Fixed. The schema allows two StreetAddress lines: they are now read as one
+  street of two lines and written back as two elements. Test added.
+C4 range, checked by mouse on a scratch track (200 points, 11 km):
+- Bug found: Swift Charts sets the range binding to nil when the mouse is released, so the band vanished and
+  Delete Selected Points never became enabled. The picture with `--profile-range` could not show this. Fixed: nil
+  from Charts is ignored; the stretch is cleared by a new Clear button, by deleting it, or by selecting another item.
+- After the fix: dragging 2-5 km leaves the band; hovering still marks the map; Delete removed 56 points (200 to
+  144); Undo Delete Points brought back all 200 in one step.
+Lesson for pictures: a launch hook that sets state can hide a bug in how the state is set by the user.
+Tool note: two processes are named BaseCampApp when the user's app bundle is running. Target System Events by unix
+id, never by process name.
+
 ## C4 range — 2026-10-13 — Haiku, for Opus review
 State: done, for Opus review. The drag itself was not checked, because the sandbox cannot drive a mouse drag. Opus checks it.
 Commits: 28227d6 (distance values back to metres), 5298213 (range selection, delete, menu, hook)

@@ -554,11 +554,17 @@ struct InspectorView: View {
                 }
                 ElevationChart(profile: points, series: shown, pickable: pickable)
                 if pickable {
-                    Button("Delete Selected Points") {
-                        store.deleteProfileRange()
+                    HStack {
+                        Button("Delete Selected Points") {
+                            store.deleteProfileRange()
+                        }
+                        .help("Drag across the profile to pick points, then delete them")
+                        Button("Clear") {
+                            store.profileRange = nil
+                        }
+                        .help("Forget the stretch picked on the profile")
                     }
                     .disabled(store.profileRange == nil)
-                    .help("Drag across the profile to pick points, then delete them")
                 }
             }
         }

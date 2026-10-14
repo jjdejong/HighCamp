@@ -140,7 +140,11 @@ private final class GPXReader: NSObject, XMLParserDelegate {
         case ("Proximity", "WaypointExtension") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
             waypoint?.proximity = Double(value)
         case ("StreetAddress", "Address") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
-            setAddress { $0.street = value.nonEmpty }
+            // The schema allows two street lines; they are kept as one, on two lines.
+            setAddress { address in
+                guard let line = value.nonEmpty else { return }
+                address.street = address.street.map { $0 + "\n" + line } ?? line
+            }
         case ("City", "Address") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
             setAddress { $0.city = value.nonEmpty }
         case ("State", "Address") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
@@ -363,9 +367,11 @@ private enum GPXWriter {
         let address = waypoint.address
         let parts = [
             ("gpxx:StreetAddress", address?.street), ("gpxx:City", address?.city), ("gpxx:State", address?.state),
-            ("gpxx:PostalCode", address?.postalCode), ("gpxx:Country", address?.country),
+            ("gpxx:Country", address?.country), ("gpxx:PostalCode", address?.postalCode),
         ]
-        let addressXML = parts.map { element($0.0, $0.1, indent: inner + "    ") }.joined()
+        // The schema's order. A street of two lines is written as its two StreetAddress elements.
+        let streets = (address?.street ?? "").split(separator: "\n").prefix(2).map { ("gpxx:StreetAddress", Optional(String($0))) }
+        let addressXML = (streets + parts.dropFirst()).map { element($0.0, $0.1, indent: inner + "    ") }.joined()
         var body = ""
         if let proximity = waypoint.proximity {
             body += "\(inner)<gpxx:Proximity>\(number(proximity))</gpxx:Proximity>\n"

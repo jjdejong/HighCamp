@@ -30,6 +30,8 @@ struct MapPin: Equatable {
         case insertHandle
         /// A place name from the Garmin maps, drawn as text only. `rank` and `size` are its importance (see `MapPlace`).
         case place(rank: Int, size: Int)
+        /// A street or river name, turned to follow its line. `angle` in degrees, counterclockwise from east.
+        case street(angle: Int, importance: Int, water: Bool)
     }
 
     let id: String
@@ -481,6 +483,18 @@ struct MapKitView: NSViewRepresentable {
                 view.zPriority = .min
                 return view
             }
+            if case .street(let angle, let importance, let water) = pin.style {
+                view.image = MarkerImage.street(pin.title ?? "", angle: angle, water: water)
+                view.centerOffset = .zero
+                view.canShowCallout = false
+                view.isDraggable = false
+                view.isEnabled = false
+                view.collisionMode = .rectangle
+                // Under every place name, so towns keep their names; bigger roads first.
+                view.displayPriority = MKFeatureDisplayPriority(rawValue: Float(100 + min(importance, 40) * 4))
+                view.zPriority = .min
+                return view
+            }
             view.isEnabled = true
             view.displayPriority = .required
             view.zPriority = .defaultUnselected
@@ -653,7 +667,7 @@ enum MarkerImage {
                 : dot(diameter: 10, fill: .white, label: nil, ring: .systemBlue)
         case .insertHandle:
             image = dot(diameter: 9, fill: NSColor.white.withAlphaComponent(0.75), label: nil, ring: NSColor.systemBlue.withAlphaComponent(0.6))
-        case .place:
+        case .place, .street:
             image = NSImage(size: NSSize(width: 1, height: 1))
         }
         cache[key] = image
@@ -690,6 +704,44 @@ enum MarkerImage {
             places.removeAll()
         }
         places[key] = image
+        return image
+    }
+
+    nonisolated(unsafe) private static var streets: [String: NSImage] = [:]
+
+    /// A street name turned by `angle` degrees, dark grey (blue and italic for water) with a white halo.
+    static func street(_ name: String, angle: Int, water: Bool) -> NSImage {
+        let key = "\(angle)|\(water)|\(name)"
+        placeLock.lock()
+        defer { placeLock.unlock() }
+        if let cached = streets[key] {
+            return cached
+        }
+        var font = NSFont.systemFont(ofSize: 10.5, weight: .medium)
+        if water {
+            font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+        }
+        let colour = water ? NSColor(calibratedRed: 0.15, green: 0.35, blue: 0.70, alpha: 1) : NSColor(calibratedWhite: 0.25, alpha: 1)
+        let fill: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: colour]
+        let halo: [NSAttributedString.Key: Any] = [.font: font, .strokeColor: NSColor.white.withAlphaComponent(0.9), .strokeWidth: 5.0]
+        let textSize = (name as NSString).size(withAttributes: fill)
+        let radians = CGFloat(angle) * .pi / 180
+        // The picture holds the turned text: its size is the text's box turned.
+        let width = abs(textSize.width * cos(radians)) + abs(textSize.height * sin(radians)) + 4
+        let height = abs(textSize.width * sin(radians)) + abs(textSize.height * cos(radians)) + 4
+        let image = NSImage(size: NSSize(width: ceil(width), height: ceil(height)), flipped: false) { rect in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.translateBy(x: rect.midX, y: rect.midY)
+            context.rotate(by: radians)
+            let origin = NSPoint(x: -textSize.width / 2, y: -textSize.height / 2)
+            (name as NSString).draw(at: origin, withAttributes: halo)
+            (name as NSString).draw(at: origin, withAttributes: fill)
+            return true
+        }
+        if streets.count > 4000 {
+            streets.removeAll()
+        }
+        streets[key] = image
         return image
     }
 

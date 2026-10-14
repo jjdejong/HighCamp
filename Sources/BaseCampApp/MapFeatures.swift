@@ -94,6 +94,52 @@ actor MapFeatureCache {
     private var placeCells: [CellKey: [(name: String, coordinate: Coordinate, size: Int)]] = [:]
     private var placeCellOrder: [CellKey] = []
 
+    /// The named lines of decoded cells, kept like `cells`.
+    private var lineNameCells: [CellKey: [NamedLine]] = [:]
+    private var lineNameOrder: [CellKey] = []
+
+    /// The streets, roads and rivers of one map in `area` with their names, from the level drawn at this scale.
+    /// Railways, routes, boundaries and contour heights are left out.
+    func namedLines(in area: GeoBounds, metersPerPoint: Double, map url: URL, detailOffset: Int) -> [NamedLine] {
+        let drawnBits = MapFeatureReader.detailBits(metersPerPoint: metersPerPoint) + detailOffset
+        var result: [NamedLine] = []
+        for file in files(in: url.deletingLastPathComponent()) where file.url.lastPathComponent == url.lastPathComponent {
+            guard !Task.isCancelled, let open = openMap(file) else { continue }
+            for subfile in open.image.subfiles {
+                guard !Task.isCancelled else { return [] }
+                guard let bounds = subfile.bounds, subfile.parts.contains("RGN"), MapFeatureReader.intersects(bounds, area),
+                      let levels = levels(for: subfile.name, in: file.url.path, image: open.image),
+                      let level = MapFeatureReader.level(levels, forBits: drawnBits),
+                      let subdivisions = subdivisions(for: subfile.name, in: file.url.path, image: open.image),
+                      let labels = labels(for: subfile.name, in: file.url.path, image: open.image) else { continue }
+                for (index, cell) in subdivisions.enumerated()
+                where cell.level == level.level && MapFeatureReader.intersects(cell.bounds, area) {
+                    let key = CellKey(file: file.url.path, subfile: subfile.name, index: index)
+                    if let cached = lineNameCells[key] {
+                        result += cached
+                        continue
+                    }
+                    let named = geometries(key, cell: cell, image: open.image).compactMap { line -> NamedLine? in
+                        guard !line.isPolygon, line.labelOffset != 0, let kind = MapFeatureReader.nameKind(line.type),
+                              let name = labels.name(at: line.labelOffset, inNET: line.labelInNET),
+                              name.contains(where: \.isLetter) else { return nil }
+                        return NamedLine(
+                            name: MapPlace.displayName(name), coordinates: line.coordinates,
+                            importance: kind.importance, isWater: kind.isWater
+                        )
+                    }
+                    lineNameCells[key] = named
+                    lineNameOrder.append(key)
+                    if lineNameOrder.count > Self.maximumCachedCells {
+                        lineNameCells[lineNameOrder.removeFirst()] = nil
+                    }
+                    result += named
+                }
+            }
+        }
+        return result
+    }
+
     /// Places read, at most, for one view, most important first.
     static let maximumPlaces = 1500
 
@@ -267,6 +313,8 @@ actor MapFeatureCache {
         cellOrder.removeAll { $0.file == key }
         placeCells = placeCells.filter { $0.key.file != key }
         placeCellOrder.removeAll { $0.file == key }
+        lineNameCells = lineNameCells.filter { $0.key.file != key }
+        lineNameOrder.removeAll { $0.file == key }
         return open
     }
 
@@ -307,6 +355,34 @@ enum MapFeatureReader {
     /// Nil when the wanted detail is coarser than every such level, as when zoomed far out: the map shows nothing.
     static func level(_ levels: [GarminMapLevel], forBits bits: Int) -> GarminMapLevel? {
         levels.filter { !$0.inherited && $0.bits <= bits }.max { $0.bits < $1.bits }
+    }
+
+    /// Whether a line of this type has its name written along it, and how important the name is: big roads most,
+    /// then streets and tracks, then water. Nil for railways, tram and bus lines, cycle and hiking route networks,
+    /// boundaries, contours and other lines whose names would only clutter the map.
+    static func nameKind(_ type: Int) -> (importance: Int, isWater: Bool)? {
+        let base = baseType(type)
+        if type >= 0x10000 {
+            switch (type >> 8) & 0xFF {
+            case 0x00:
+                // OFM's streets and roads, biggest first; its other lines here are outlines and route numbers.
+                let sub = type & 0xFF
+                return [0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x15, 0x16, 0x18].contains(sub) ? (max(0, 30 - sub), false) : nil
+            case 0x01:
+                // Roads again, drawn another way; 0x02 is a via ferrata.
+                let sub = type & 0xFF
+                return [0x01, 0x03, 0x04, 0x05, 0x06].contains(sub) ? (max(0, 22 - sub), false) : nil
+            case 0x0A:
+                return (8, true)
+            default:
+                return nil
+            }
+        }
+        switch base {
+        case 0x01...0x0D, 0x0F, 0x13, 0x16, 0x26: return (max(0, 30 - base), false)
+        case 0x18, 0x1F: return (8, true)
+        default: return nil
+        }
     }
 
     static func intersects(_ a: GeoBounds, _ b: GeoBounds) -> Bool {

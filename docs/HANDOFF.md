@@ -2,6 +2,25 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Street names; Apple's map no longer shows while Garmin tiles load — 2026-10-14 — Opus
+State: done (3135695, d4aeecf, this commit). Gate: 335 tests in four bundles (core 273), 3 skipped, no DIAG.
+- The Garmin overlay now replaces Apple's map (`canReplaceMapContent`), so Apple's map no longer flashes through
+  while tiles load. Tiles the full Garmin maps do not cover (5 × 5 test points) get an Apple map snapshot of exactly
+  that tile underneath (`FallbackTiles`, MKMapSnapshotter, NSCache). The user said Apple's map is fine where the
+  Garmin maps have nothing; an OpenStreetMap fallback (3135695) was replaced by this. Names in snapshots may be cut
+  at tile edges. The render-tile hook now spins the main run loop, which the snapshotter needs.
+- Lines carry their label (`GarminGeometry.labelOffset`, `labelInNET`; v2 lines' label after the coordinates).
+  `GarminLabels` reads road names through NET1 (offset << net1 shift; 0x400000 = none).
+- `MapFeatureCache.namedLines`: named lines on the drawn level, filtered by `MapFeatureReader.nameKind` (roads,
+  streets, tracks, water; not railways, tram/bus/cycle/hiking route lines, boundaries, contours).
+- Core `StreetLabels.place`: pieces of one name joined end to end (not into hairpins: the halves of a dual
+  carriageway turn back at their ends), a name at the middle of each stretch long enough, repeated about every
+  500 points, turned along the line (never upside down). Central Grenoble at z16: 1,791 pieces → 94 names, 60 ms
+  in debug.
+- Drawn from 4.5 m per point (about z15) as turned text annotations, priority 100-260 (under every place name).
+Not seen on screen yet: the user was at the machine, so the debug window was not opened. To check: zoom to
+z15-16 in a town with the Garmin base map.
+
 ## G2 first part: place names; RGN v2 offsets fixed — 2026-10-14 — Opus
 State: done (6ccda55 fix, this commit names). Gate: 329 tests in four bundles (core 267), 3 skipped, no DIAG.
 User report: no text on the OFM maps (Apple's names showed while tiles loaded, then were covered); BaseCamp and

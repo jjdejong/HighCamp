@@ -10,6 +10,9 @@ final class MapPlaceTests: XCTestCase {
         XCTAssertEqual(MapPlace.displayName("L'ALBENC"), "L'Albenc")
         XCTAssertEqual(MapPlace.displayName("Le Puy-en-Velay"), "Le Puy-en-Velay")
         XCTAssertEqual(MapPlace.displayName("A7"), "A7")
+        XCTAssertEqual(MapPlace.displayName("COURS JEAN JAURÈS (D 1075)"), "Cours Jean Jaurès (D 1075)")
+        XCTAssertEqual(MapPlace.displayName("ROUTE DU PONT DE L’OULE"), "Route du Pont de l’Oule")
+        XCTAssertEqual(MapPlace.displayName("LIGNE DE LYON À MARSEILLE"), "Ligne de Lyon à Marseille")
     }
 
     func testMergingKeepsTheMostImportantOfTheSameNameNearby() {

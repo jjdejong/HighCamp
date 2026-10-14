@@ -6,7 +6,7 @@
 // Ported from QMapShack (src/qmapshack/map/garmin/IGarminStrTbl.cpp, CGarminStrTbl6.cpp, CGarminStrTbl8.cpp,
 // CGarminStrTblUtf8.cpp; the LBL header from src/qmapshack/map/CMapIMG.h and CMapIMG.cpp, readSubfileBasics),
 // Copyright (C) 2008-2014 Oliver Eichler and contributors, GPL-3.0-or-later. Changes: rewritten in Swift without
-// Qt; the LBL part is read whole; road names from the NET part are not ported.
+// Qt; the LBL and NET parts are read whole.
 
 import Foundation
 
@@ -20,9 +20,15 @@ public struct GarminLabels: Sendable {
     private let poiStart: Int
     private let poiLength: Int
     private let encoding: String.Encoding
+    /// The NET part, whose first table gives each road's name: its bytes, the table's start and length, and shift.
+    private var net: (bytes: [UInt8], start: Int, length: Int, shift: Int)?
 
-    /// Reads an LBL part. Nil when its coding is not one QMapShack knows (6-bit, 8-bit or UTF-8).
-    public init?(bytes: [UInt8]) {
+    /// Reads an LBL part, and the NET part for road names when the subfile has one. Nil when the coding is not one
+    /// QMapShack knows (6-bit, 8-bit or UTF-8).
+    public init?(bytes: [UInt8], net: [UInt8]? = nil) {
+        if let net, net.count >= 0x1E {
+            self.net = (net, GarminIMG.field(net, 0x15, 4), GarminIMG.field(net, 0x19, 4), Int(net[0x1D]))
+        }
         guard bytes.count >= 0x60 else { return nil }
         func field(_ offset: Int, _ count: Int) -> Int { GarminIMG.field(bytes, offset, count) }
         coding = Int(bytes[0x1E])
@@ -54,9 +60,17 @@ public struct GarminLabels: Sendable {
     /// The name at `offset`, as a point or line record gives it. `poi` offsets go through the LBL6 table first, as
     /// for points whose record has the 0x400000 flag. The parts of a multi-part name are joined with spaces. Nil
     /// for no name.
-    public func name(at offset: Int, poi: Bool = false) -> String? {
+    public func name(at offset: Int, poi: Bool = false, inNET: Bool = false) -> String? {
         var position = offset
-        if poi {
+        if inNET {
+            // A road's record in NET1 starts with the offset of its first name.
+            guard let net else { return nil }
+            let record = net.start + (offset << net.shift)
+            guard (offset << net.shift) + 4 <= net.length else { return nil }
+            let value = GarminIMG.field(net.bytes, record, 4)
+            guard value & 0x40_0000 == 0 else { return nil }
+            position = value & 0x3F_FFFF
+        } else if poi {
             guard offset + 4 <= poiLength else { return nil }
             position = GarminIMG.field(bytes, poiStart + offset, 4) & 0x3F_FFFF
         }
@@ -160,6 +174,6 @@ public extension GarminIMG {
     /// The string table of a subfile, or nil when it has no LBL part or an unknown coding.
     func labels(of subfile: String) throws -> GarminLabels? {
         guard let bytes = try partBytes(subfile, part: "LBL") else { return nil }
-        return GarminLabels(bytes: bytes)
+        return GarminLabels(bytes: bytes, net: try partBytes(subfile, part: "NET"))
     }
 }

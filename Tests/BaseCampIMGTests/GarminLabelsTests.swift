@@ -97,6 +97,16 @@ final class GarminLabelsTests: XCTestCase {
         XCTAssertNotNil(names["SAINT-ÉGRÈVE"])
 
         let finest = try XCTUnwrap(levels.map(\.level).min())
+        // Streets are named through the NET part.
+        var streets = Set<String>()
+        for cell in cells where cell.level == finest && cell.bounds.north > 45.185 && cell.bounds.south < 45.195 && cell.bounds.west < 5.74 && cell.bounds.east > 5.72 {
+            for line in try image.geometries(of: subfile.name, in: cell) where !line.isPolygon && line.labelInNET {
+                if let name = labels.name(at: line.labelOffset, inNET: true) {
+                    streets.insert(name)
+                }
+            }
+        }
+        XCTAssertTrue(streets.contains("COURS JEAN JAURÈS"))
         let extended = try cells.filter { $0.level == finest }.prefix(40).flatMap { try image.geometries(of: subfile.name, in: $0) }.filter { $0.type >= 0x10000 }
         XCTAssertFalse(extended.isEmpty)
     }

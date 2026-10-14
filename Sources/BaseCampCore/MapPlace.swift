@@ -37,16 +37,19 @@ public struct MapPlace: Equatable, Sendable {
     public static func displayName(_ name: String) -> String {
         guard name == name.uppercased(), name != name.lowercased() else { return name }
         let small: Set<String> = [
-            "de", "des", "du", "la", "le", "les", "en", "sur", "sous", "lès", "lez", "et", "aux", "au", "d", "l",
+            "de", "des", "du", "la", "le", "les", "en", "sur", "sous", "lès", "lez", "et", "aux", "au", "à",
             "y", "del", "di", "da", "von", "am", "im", "an", "der",
         ]
+        // "d" and "l" are small only as elisions, before an apostrophe; "D 1075" is a road number.
+        let elisions: Set<String> = ["d", "l"]
         var result = ""
         var word = ""
         var first = true
-        func flush() {
+        func flush(before next: Character?) {
             guard !word.isEmpty else { return }
             let lower = word.lowercased()
-            result += !first && small.contains(lower) ? lower : lower.prefix(1).uppercased() + lower.dropFirst()
+            let elided = elisions.contains(lower) && (next == "'" || next == "’")
+            result += !first && (small.contains(lower) || elided) ? lower : lower.prefix(1).uppercased() + lower.dropFirst()
             first = false
             word = ""
         }
@@ -54,11 +57,11 @@ public struct MapPlace: Equatable, Sendable {
             if character.isLetter {
                 word.append(character)
             } else {
-                flush()
+                flush(before: character)
                 result.append(character)
             }
         }
-        flush()
+        flush(before: nil)
         return result
     }
 }

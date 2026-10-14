@@ -19,6 +19,8 @@ struct MapPane: View {
     @State private var viewport: PlaceQuery?
     /// The place names of the Garmin maps in view.
     @State private var places: [MapPlace] = []
+    /// The street and river names in view, when zoomed in far enough for them.
+    @State private var streets: [StreetLabel] = []
 
     var body: some View {
         MapKitView(
@@ -116,6 +118,7 @@ struct MapPane: View {
     private func loadPlaces(_ request: PlaceRequest?) async {
         guard let request else {
             places = []
+            streets = []
             return
         }
         // Waits for the map to settle, so panning does not read the maps at every step.
@@ -132,7 +135,25 @@ struct MapPane: View {
         }
         guard !Task.isCancelled else { return }
         places = MapPlace.merged(found)
+
+        // Street names from about zoom 15, where there is room for them between the streets.
+        guard request.viewport.metersPerPoint <= Self.streetNameScale else {
+            streets = []
+            return
+        }
+        var lines: [NamedLine] = []
+        for map in request.maps {
+            lines += await MapFeatureCache.shared.namedLines(
+                in: area, metersPerPoint: request.viewport.metersPerPoint, map: map, detailOffset: request.detailOffset
+            )
+        }
+        guard !Task.isCancelled else { return }
+        let placed = StreetLabels.place(lines, metersPerPoint: request.viewport.metersPerPoint)
+        streets = Array(placed.prefix(600))
     }
+
+    /// Street names are written from this scale in, in metres per point (about zoom 15).
+    static let streetNameScale = 4.5
 
     /// The place names, as text-only markers. MapKit keeps the more important of two that would overlap.
     private var placeLayer: MapLayerContent {
@@ -141,6 +162,15 @@ struct MapPane: View {
             let id = "place-\(place.name)-\(place.coordinate.latitude)-\(place.coordinate.longitude)"
             content.pins.append(MapPin(
                 id: id, coordinate: place.coordinate, style: .place(rank: place.rank, size: place.size), item: nil, title: place.name
+            ))
+        }
+        for street in streets {
+            let degrees = Int((street.angle * 180 / .pi / 3).rounded()) * 3
+            content.pins.append(MapPin(
+                id: "street-\(street.name)-\(street.coordinate.latitude)-\(street.coordinate.longitude)",
+                coordinate: street.coordinate,
+                style: .street(angle: degrees, importance: street.importance, water: street.isWater),
+                item: nil, title: street.name
             ))
         }
         return content

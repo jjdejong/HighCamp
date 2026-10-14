@@ -65,6 +65,10 @@ public struct GarminGeometry: Equatable, Sendable {
     /// The TYP style that gives colours and widths is not ported yet.
     public let type: Int
     public let coordinates: [Coordinate]
+    /// Where the name is in the string table, or 0 for none.
+    public var labelOffset = 0
+    /// The name is found through the NET part, as for roads.
+    public var labelInNET = false
 }
 
 // MARK: - Reading subdivisions and geometry
@@ -591,7 +595,10 @@ enum GarminRGNDecoder {
             firstLongitude: firstLongitude, firstLatitude: firstLatitude, stream: &stream,
             shift: shift, centerLongitude: centerLongitude, centerLatitude: centerLatitude
         )
-        return (GarminGeometry(isPolygon: !line, type: type, coordinates: coordinates), next)
+        return (GarminGeometry(
+            isPolygon: !line, type: type, coordinates: coordinates,
+            labelOffset: labelInfo & 0x3F_FFFF, labelInNET: line && labelInfo & 0x80_0000 != 0
+        ), next)
     }
 
     /// RGN v2 record: a two-byte type, first point deltas, then the packed coordinates.
@@ -648,7 +655,9 @@ enum GarminRGNDecoder {
             firstLongitude: firstLongitude, firstLatitude: firstLatitude, stream: &stream,
             shift: shift, centerLongitude: centerLongitude, centerLatitude: centerLatitude
         )
-        return (GarminGeometry(isPolygon: !line, type: type, coordinates: coordinates), next)
+        // The label follows the packed coordinates.
+        let label = hasLabel ? bytes.u24(position + length) & 0x3F_FFFF : 0
+        return (GarminGeometry(isPolygon: !line, type: type, coordinates: coordinates, labelOffset: label), next)
     }
 
     /// Bit widths and sign conventions from the base byte and the first bitstream byte.

@@ -129,10 +129,11 @@ struct ProfilePane: View {
         .fixedSize()
     }
 
-    /// The values at the cursor, and the size of the picked stretch.
+    /// The values at the cursor on one line, and the size and averages of the picked stretch on the next.
     private func readout(series: ProfileSeries, profile: [ElevationProfilePoint], heights: [ElevationProfilePoint]) -> some View {
         let units = display.units
         var parts: [String] = []
+        var picked: String?
         if let cursor = store.profileCursor {
             parts.append("At \(UnitFormat.distance(cursor, units))")
             if let height = heights.value(at: cursor) {
@@ -146,19 +147,32 @@ struct ProfilePane: View {
             }
         }
         if let range = store.profileRange {
-            var picked = "Picked \(UnitFormat.distance(range.upperBound - range.lowerBound, units))"
+            var line = "Picked \(UnitFormat.distance(range.upperBound - range.lowerBound, units))"
             let inside = heights.filter { range.contains($0.distanceMeters) }.map(\.value)
             if let climb = ActivityStatistics.climb(inside, threshold: ActivityStatistics.elevationNoise) {
-                picked += ", ↑ \(UnitFormat.elevation(climb.ascent, units)) ↓ \(UnitFormat.elevation(climb.descent, units))"
+                line += ", ↑ \(UnitFormat.elevation(climb.ascent, units)) ↓ \(UnitFormat.elevation(climb.descent, units))"
             }
-            parts.append(picked)
+            if let grade = heights.averageGrade(over: range) {
+                line += String(format: ", avg grade %+.1f %%", grade)
+            }
+            if series == .elevation {
+                if let height = heights.average(over: range) {
+                    line += ", avg \(UnitFormat.elevation(height, units))"
+                }
+            } else if let value = profile.average(over: range) {
+                line += ", avg \(Int(value.rounded())) \(series.unitName(units))"
+            }
+            picked = line
         }
-        // Kept one line high when empty, so the chart does not jump when the cursor first appears.
-        return Text(parts.isEmpty ? "Move the pointer over the profile or the line on the map" : parts.joined(separator: "   "))
-            .monospacedDigit()
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .font(.callout)
+        // Both lines are kept when empty, so the chart does not jump when the cursor or a stretch first appears.
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(parts.isEmpty ? "Move the pointer over the profile or the line on the map" : parts.joined(separator: "   "))
+            Text(picked ?? "Drag across the profile to pick a stretch")
+        }
+        .monospacedDigit()
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .font(.callout)
     }
 
     private func zoomButtons(length: Double) -> some View {

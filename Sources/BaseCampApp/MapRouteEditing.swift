@@ -100,6 +100,33 @@ extension MapKitView.Coordinator {
         return best?.distance
     }
 
+    /// The track or route whose line passes nearest to `point`, within `tolerance` points. Of lines drawn over one
+    /// another, the top one wins when they are as near.
+    static func item(at point: CGPoint, in lines: [MapLine], on map: MKMapView, tolerance: CGFloat) -> LibraryItem? {
+        let target = MKMapPoint(map.convert(point, toCoordinateFrom: map))
+        let perScreenPoint = map.visibleMapRect.width / max(Double(map.bounds.width), 1)
+        let limit = Double(tolerance) * perScreenPoint
+        let reach = MKMapRect(x: target.x - limit, y: target.y - limit, width: limit * 2, height: limit * 2)
+        var best: (item: LibraryItem, gap: Double)?
+        for line in lines {
+            guard let item = line.item, line.coordinates.count > 1 else { continue }
+            let points = line.coordinates.map { MKMapPoint($0.clLocation) }
+            for index in 1..<points.count {
+                let start = points[index - 1], end = points[index]
+                let box = MKMapRect(x: min(start.x, end.x), y: min(start.y, end.y), width: abs(end.x - start.x), height: abs(end.y - start.y))
+                guard box.intersects(reach) || box.width == 0 || box.height == 0 else { continue }
+                let dx = end.x - start.x, dy = end.y - start.y
+                let lengthSquared = dx * dx + dy * dy
+                let t = lengthSquared > 0 ? max(0, min(1, ((target.x - start.x) * dx + (target.y - start.y) * dy) / lengthSquared)) : 0
+                let gap = hypot(target.x - (start.x + t * dx), target.y - (start.y + t * dy))
+                if gap <= limit, gap <= (best?.gap ?? .infinity) {
+                    best = (item, gap)
+                }
+            }
+        }
+        return best?.item
+    }
+
     func isOverMap(_ event: NSEvent, _ map: MKMapView) -> Bool {
         guard let content = map.window?.contentView,
               var view = content.hitTest(content.convert(event.locationInWindow, from: nil)) else { return false }

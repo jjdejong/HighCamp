@@ -77,6 +77,30 @@ final class LineMeasureTests: XCTestCase {
         XCTAssertNil(profile.value(at: -1))
     }
 
+    func testAverageOverARangeIsWeightedByDistance() throws {
+        // Heights 0, 1, 2, … about 111 m apart: the mean over any stretch is the height at its middle.
+        let profile = Track(name: "Climb", segments: [northward(10)]).elevationProfile
+        let d = profile.map(\.distanceMeters)
+        let range = (d[1] + (d[2] - d[1]) / 2)...d[6]
+        XCTAssertEqual(try XCTUnwrap(profile.average(over: range)), (1.5 + 6) / 2, accuracy: 1e-6)
+        XCTAssertEqual(try XCTUnwrap(profile.averageGrade(over: range)), 4.5 / (range.upperBound - range.lowerBound) * 100, accuracy: 1e-9)
+        // A range sticking out of the profile is cut to it.
+        XCTAssertEqual(try XCTUnwrap(profile.average(over: -500...d[2])), 1, accuracy: 1e-6)
+        XCTAssertNil(profile.average(over: (d[9] + 10)...(d[9] + 20)))
+        XCTAssertNil(profile.averageGrade(over: d[3]...d[3]))
+    }
+
+    func testAverageWeighsLongStretchesMore() throws {
+        // 100 for the first 10 m, then 200 for 90 m: the mean is not the mean of the three points.
+        let profile = [
+            ElevationProfilePoint(id: 0, distanceMeters: 0, value: 100, coordinate: Coordinate(latitude: 45, longitude: 5)),
+            ElevationProfilePoint(id: 1, distanceMeters: 10, value: 100, coordinate: Coordinate(latitude: 45, longitude: 5)),
+            ElevationProfilePoint(id: 2, distanceMeters: 10, value: 200, coordinate: Coordinate(latitude: 45, longitude: 5)),
+            ElevationProfilePoint(id: 3, distanceMeters: 100, value: 200, coordinate: Coordinate(latitude: 45, longitude: 5)),
+        ]
+        XCTAssertEqual(try XCTUnwrap(profile.average(over: 0...100)), 190, accuracy: 1e-9)
+    }
+
     func testThinningForDrawingKeepsPeaksAndEnds() {
         let profile = Track(name: "Spiky", segments: [northward(1_000) { $0 == 537 ? 900 : 100 }]).elevationProfile
         let thinned = profile.thinnedForDrawing(limit: 100)

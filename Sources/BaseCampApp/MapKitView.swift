@@ -90,6 +90,8 @@ struct MapLine: Equatable {
     var width: Double = 3
     /// Drawn dashed, as a route leg waiting to be recalculated.
     var dashed = false
+    /// The track or route the line draws. Clicking the line selects it.
+    var item: LibraryItem?
 }
 
 struct MapCircleShape: Equatable {
@@ -155,7 +157,8 @@ struct MapKitView: NSViewRepresentable {
     let scene: MapScene
     let fitRequest: Int
     let fitCoordinates: [Coordinate]
-    let onMapClick: (Coordinate) -> Void
+    /// Called for a click on the map that is not on a marker, with the track or route whose line was clicked.
+    let onMapClick: (Coordinate, LibraryItem?) -> Void
     let onSelect: (LibraryItem) -> Void
     /// Called when the visible area changes, with its bounds and metres per point.
     let onViewportChange: (GeoBounds, Double) -> Void
@@ -415,7 +418,7 @@ struct MapKitView: NSViewRepresentable {
             if NSEvent.modifierFlags.contains(.option) {
                 parent.onOptionClick(clicked)
             } else {
-                parent.onMapClick(clicked)
+                parent.onMapClick(clicked, Self.item(at: point, in: parent.scene.lines, on: map, tolerance: 6))
             }
         }
 

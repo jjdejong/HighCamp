@@ -24,11 +24,14 @@ struct MapPane: View {
             scene: scene,
             fitRequest: store.fitRequest,
             fitCoordinates: store.fitCoordinates,
-            onMapClick: { coordinate in
+            onMapClick: { coordinate, line in
                 if planner.isActive {
                     planner.click(coordinate, store: store)
                 } else if store.measuring {
                     store.measurePoints.append(coordinate)
+                } else if let line {
+                    // As in BaseCamp, clicking a track or route on the map selects it in the library.
+                    store.selection = line
                 }
             },
             onSelect: { item in
@@ -179,7 +182,8 @@ struct MapPane: View {
                     id: "track-\(track.id)-\(index)",
                     coordinates: segment.map(\.coordinate),
                     color: .orange,
-                    rgb: track.color.map(MapRGB.init)
+                    rgb: track.color.map(MapRGB.init),
+                    item: .track(track.id)
                 )
                 if selected {
                     selectedHalos.append(Self.selectionHalo(for: line))
@@ -197,7 +201,7 @@ struct MapPane: View {
     private static func routeLines(_ route: Route) -> [MapLine] {
         let rgb = route.color.map(MapRGB.init)
         guard route.legs.contains(where: \.needsRecalculation) else {
-            return [MapLine(id: "route-\(route.id)", coordinates: route.points.map(\.coordinate), color: .blue, rgb: rgb)]
+            return [MapLine(id: "route-\(route.id)", coordinates: route.points.map(\.coordinate), color: .blue, rgb: rgb, item: .route(route.id))]
         }
         var lines: [MapLine] = []
         var run: [Coordinate] = []
@@ -205,7 +209,7 @@ struct MapPane: View {
         for leg in route.legs.indices {
             let waiting = route.legs[leg].needsRecalculation
             if !run.isEmpty, waiting != runIsWaiting {
-                lines.append(MapLine(id: "route-\(route.id)-\(lines.count)", coordinates: run, color: .blue, rgb: rgb, dashed: runIsWaiting))
+                lines.append(MapLine(id: "route-\(route.id)-\(lines.count)", coordinates: run, color: .blue, rgb: rgb, dashed: runIsWaiting, item: .route(route.id)))
                 run = []
             }
             runIsWaiting = waiting
@@ -213,7 +217,7 @@ struct MapPane: View {
             run += run.isEmpty ? line : Array(line.dropFirst())
         }
         if !run.isEmpty {
-            lines.append(MapLine(id: "route-\(route.id)-\(lines.count)", coordinates: run, color: .blue, rgb: rgb, dashed: runIsWaiting))
+            lines.append(MapLine(id: "route-\(route.id)-\(lines.count)", coordinates: run, color: .blue, rgb: rgb, dashed: runIsWaiting, item: .route(route.id)))
         }
         return lines
     }

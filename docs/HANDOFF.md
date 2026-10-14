@@ -2,6 +2,15 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Picked-stretch averages, select a line on the map — 2026-10-14 — Opus
+State: done (this commit). Gate: 259 tests, 3 skipped, no DIAG. Checked by mouse on two 3,000-point scratch tracks.
+- Profile readout: the cursor values on the first line, the picked stretch on the second, now with its average grade
+  (height change end to end over the length) and its average value, weighted by distance (mean height, or mean heart
+  rate, cadence, … for the sensor series). Core: profile `average(over:)` and `averageGrade(over:)`, 2 tests.
+- Clicking a track or route line on the map (within 6 points) selects it, as in BaseCamp, unless the route tool or
+  the measure tool is on. `MapLine.item` names the item a line draws. The sidebar list scrolls to an item selected
+  elsewhere and drops the collection or name filter that would hide it.
+
 ## Profile pane, shared cursor, picked stretch on the map — 2026-10-14 — Opus
 State: done (this commit). Gate: 257 tests, 3 skipped, no DIAG. Checked by mouse on a 3,000-point loop track.
 User report: the profile was too small for fine work; the stretch picked on the profile was not shown on the track;

@@ -157,6 +157,37 @@ public extension Array where Element == ElevationProfilePoint {
         return a.value + (b.value - a.value) * (distance - a.distanceMeters) / span
     }
 
+    /// The mean value over `range` metres, weighted by distance, with the ends placed between points. For a height
+    /// profile this is the mean height, for heart rate the mean heart rate over the distance. Nil where the profile
+    /// does not cover any of the range.
+    func average(over range: ClosedRange<Double>) -> Double? {
+        guard let first, let last else { return nil }
+        let from = Swift.max(range.lowerBound, first.distanceMeters)
+        let to = Swift.min(range.upperBound, last.distanceMeters)
+        guard to >= from, let start = value(at: from) else { return nil }
+        guard to > from else { return start }
+        var area = 0.0
+        var previous = (distance: from, value: start)
+        for point in self where point.distanceMeters > from && point.distanceMeters < to {
+            area += (point.distanceMeters - previous.distance) * (point.value + previous.value) / 2
+            previous = (point.distanceMeters, point.value)
+        }
+        if let end = value(at: to) {
+            area += (to - previous.distance) * (end + previous.value) / 2
+        }
+        return area / (to - from)
+    }
+
+    /// The mean grade in percent over `range` metres: the height gained, or lost, from one end to the other, over
+    /// the distance. For a height profile. Nil where the profile does not cover the range.
+    func averageGrade(over range: ClosedRange<Double>) -> Double? {
+        guard let first, let last else { return nil }
+        let from = Swift.max(range.lowerBound, first.distanceMeters)
+        let to = Swift.min(range.upperBound, last.distanceMeters)
+        guard to > from, let low = value(at: from), let high = value(at: to) else { return nil }
+        return (high - low) / (to - from) * 100
+    }
+
     /// The grade in percent around `distance`, from the values `window` metres before and after it. For a height
     /// profile. Nil where the profile does not reach.
     func grade(at distance: Double, window: Double = 25) -> Double? {

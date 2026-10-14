@@ -33,6 +33,7 @@ struct SidebarView: View {
                     ItemsTable(items: tableItems, selection: $store.selectedItems)
                 }
             } else {
+                ScrollViewReader { proxy in
                 List(selection: $store.selectedItems) {
                     Section {
                         controls
@@ -41,22 +42,29 @@ struct SidebarView: View {
                         ForEach(waypoints) { waypoint in
                             Label(displayName(waypoint.name), systemImage: "mappin")
                                 .tag(LibraryItem.waypoint(waypoint.id))
+                                .id(LibraryItem.waypoint(waypoint.id))
                         }
                     }
                     Section("Routes (\(routes.count))") {
                         ForEach(routes) { route in
                             Label(displayName(route.name), systemImage: "map")
                                 .tag(LibraryItem.route(route.id))
+                                .id(LibraryItem.route(route.id))
                         }
                     }
                     Section("Tracks (\(tracks.count))") {
                         ForEach(tracks) { track in
                             Label(displayName(track.name), systemImage: "waveform.path")
                                 .tag(LibraryItem.track(track.id))
+                                .id(LibraryItem.track(track.id))
                         }
                     }
                 }
                 .searchable(text: $filter, placement: .sidebar, prompt: "Filter by name")
+                .onChange(of: store.selection) { _, item in
+                    reveal(item, with: proxy)
+                }
+                }
             }
         }
         .onDeleteCommand {
@@ -189,6 +197,29 @@ struct SidebarView: View {
     /// The table's rows: the items the list would show, with the same collection and name filter.
     private var tableItems: [ItemSummary] {
         summaries.filter { isShown($0.libraryItem) && matches($0.name) }
+    }
+
+    /// Brings an item selected elsewhere, as by clicking it on the map, into view: the collection and the name
+    /// filter are dropped if they hide it, and the list scrolls to it.
+    private func reveal(_ item: LibraryItem?, with proxy: ScrollViewProxy) {
+        guard let item else { return }
+        if !isShown(item) {
+            store.activeCollectionID = nil
+        }
+        if let name = name(of: item), !matches(name) {
+            filter = ""
+        }
+        DispatchQueue.main.async {
+            proxy.scrollTo(item)
+        }
+    }
+
+    private func name(of item: LibraryItem) -> String? {
+        switch item {
+        case .waypoint(let id): store.library.waypoints.first { $0.id == id }?.name
+        case .route(let id): store.route(id)?.name
+        case .track(let id): store.track(id)?.name
+        }
     }
 
     private func matches(_ name: String) -> Bool {

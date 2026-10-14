@@ -30,7 +30,7 @@ struct SidebarView: View {
                         .textFieldStyle(.roundedBorder)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
-                    ItemsTable(items: tableItems, selection: $store.selectedItems)
+                    ItemsTable(items: tableItems, selection: $store.selectedItems, onOpen: zoom(to:))
                 }
             } else {
                 ScrollViewReader { proxy in
@@ -61,6 +61,11 @@ struct SidebarView: View {
                     }
                 }
                 .searchable(text: $filter, placement: .sidebar, prompt: "Filter by name")
+                .contextMenu(forSelectionType: LibraryItem.self) { items in
+                    zoomMenu(items)
+                } primaryAction: { items in
+                    zoom(to: items)
+                }
                 .onChange(of: store.selection) { _, item in
                     reveal(item, with: proxy)
                 }
@@ -197,6 +202,20 @@ struct SidebarView: View {
     /// The table's rows: the items the list would show, with the same collection and name filter.
     private var tableItems: [ItemSummary] {
         summaries.filter { isShown($0.libraryItem) && matches($0.name) }
+    }
+
+    /// Double-clicking an item frames the map on the whole of it.
+    private func zoom(to items: Set<LibraryItem>) {
+        guard !items.isEmpty else { return }
+        store.selectedItems = items
+        store.zoomToSelection()
+    }
+
+    @ViewBuilder
+    private func zoomMenu(_ items: Set<LibraryItem>) -> some View {
+        if !items.isEmpty {
+            Button("Zoom to Selection") { zoom(to: items) }
+        }
     }
 
     /// Brings an item selected elsewhere, as by clicking it on the map, into view: the collection and the name

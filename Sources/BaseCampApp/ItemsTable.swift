@@ -18,6 +18,8 @@ struct ItemsTable: View {
     @Environment(DisplaySettings.self) private var display
     let items: [ItemSummary]
     @Binding var selection: Set<LibraryItem>
+    /// Called for a double-click, or Zoom to Selection in a row's menu, with the rows it applies to.
+    var onOpen: (Set<LibraryItem>) -> Void = { _ in }
     @State private var order = [KeyPathComparator(\ItemRow.summary.name)]
 
     var body: some View {
@@ -45,6 +47,13 @@ struct ItemsTable: View {
                     .monospacedDigit()
             }
             .width(min: 55, ideal: 60)
+        }
+        .contextMenu(forSelectionType: LibraryItem.self) { items in
+            if !items.isEmpty {
+                Button("Zoom to Selection") { onOpen(items) }
+            }
+        } primaryAction: { items in
+            onOpen(items)
         }
     }
 }

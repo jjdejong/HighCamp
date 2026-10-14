@@ -2,6 +2,12 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Double-click to show an item on the map — 2026-10-14 — Opus
+State: done (this commit), built; not checked by mouse (the user was using the app). Double-clicking a row of the
+sidebar list or table frames the map on the whole item (`LibraryStore.zoomToSelection`, also View > Zoom to
+Selection ⌘L). Via `contextMenu(forSelectionType:primaryAction:)`, so single clicks still select at once; the
+rows' context menu has Zoom to Selection too.
+
 ## G4: the maps' own heights, relief shading — 2026-10-14 — Opus
 State: shading done (dd8e815 reader, this commit shading). Gate: 323 tests in four bundles (core 265), 3 skipped,
 no DIAG. Note: earlier HANDOFF entries quote only the core bundle's count.

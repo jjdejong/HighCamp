@@ -2,6 +2,13 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Toolbar tooltips, activities icon — 2026-10-14 — Opus
+State: done (this commit). SwiftUI's `.help` on the buttons of the toolbar's item group never reached AppKit (the
+accessibility help of every toolbar item was empty, checked with System Events). `ToolbarTooltips` holds the texts;
+`ToolbarTooltipInstaller` sets them on the NSToolbarItems by label, again on each window update. After the fix all
+ten items report their help. The Edge Activities icon is `figure.mixed.cardio`, not a bicycle: activities are not
+only rides.
+
 ## Picked-stretch averages, select a line on the map — 2026-10-14 — Opus
 State: done (this commit). Gate: 259 tests, 3 skipped, no DIAG. Checked by mouse on two 3,000-point scratch tracks.
 - Profile readout: the cursor values on the first line, the picked stretch on the second, now with its average grade

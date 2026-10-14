@@ -52,6 +52,7 @@ struct ContentView: View {
                 }
                 DeviceStatusBar()
             }
+                .background(ToolbarTooltipInstaller())
                 .inspector(isPresented: $showInspector) {
                     InspectorView()
                         .inspectorColumnWidth(min: 260, ideal: 300, max: 420)
@@ -66,7 +67,7 @@ struct ContentView: View {
                         Button("Import", systemImage: "square.and.arrow.down") {
                             store.showImportPanel()
                         }
-                        .help("Import GPX files (⌘O)")
+                        .help(ToolbarTooltips.help("Import"))
 
                         Menu {
                             ForEach(LibraryStore.ExportFormat.allCases) { format in
@@ -78,27 +79,27 @@ struct ContentView: View {
                         } label: {
                             Label("Export", systemImage: "square.and.arrow.up")
                         }
-                        .help("Save the library or the selected route or track")
+                        .help(ToolbarTooltips.help("Export"))
 
                         Button("Maps", systemImage: "map") {
                             store.showMaps = true
                         }
-                        .help("Maps in the shared map folder (⇧⌘M)")
+                        .help(ToolbarTooltips.help("Maps"))
 
                         Toggle(isOn: Binding(get: { display.showsProfilePane }, set: { display.showsProfilePane = $0 })) {
                             Label("Profile", systemImage: "chart.xyaxis.line")
                         }
-                        .help("Show the profile of the selected track or route under the map (⌥⌘P)")
+                        .help(ToolbarTooltips.help("Profile"))
 
                         Button("Find", systemImage: "magnifyingglass") {
                             store.showFind = true
                         }
-                        .help("Find a place and add it as a waypoint (⇧⌘F)")
+                        .help(ToolbarTooltips.help("Find"))
 
-                        Button("Edge Activities", systemImage: "bicycle") {
+                        Button("Edge Activities", systemImage: "figure.mixed.cardio") {
                             store.showActivities = true
                         }
-                        .help("Import rides stored on the Garmin Edge")
+                        .help(ToolbarTooltips.help("Edge Activities"))
                         .disabled(!device.isConnected)
 
                         Menu {
@@ -147,23 +148,23 @@ struct ContentView: View {
                         } label: {
                             Label("Map", systemImage: "square.3.layers.3d")
                         }
-                        .help("Base map, detail and contour lines")
+                        .help(ToolbarTooltips.help("Map"))
 
                         Button("Measure", systemImage: "ruler") {
                             store.toggleMeasuring()
                         }
-                        .help("Measure a distance by clicking the map (⌥⌘M)")
+                        .help(ToolbarTooltips.help("Measure"))
                         .foregroundStyle(store.measuring ? Color.accentColor : Color.primary)
 
                         Button("Plan Route", systemImage: "road.lanes") {
                             planner.isActive.toggle()
                         }
-                        .help("Plan a route by clicking the map (⌥⌘R)")
+                        .help(ToolbarTooltips.help("Plan Route"))
 
                         Button("Inspector", systemImage: "sidebar.trailing") {
                             showInspector.toggle()
                         }
-                        .help("Show or hide the inspector")
+                        .help(ToolbarTooltips.help("Inspector"))
                     }
                 }
         }

@@ -55,7 +55,7 @@ struct ActivitiesSheet: View {
         } else if files.isEmpty {
             ContentUnavailableView(
                 "No activities",
-                systemImage: "bicycle",
+                systemImage: "figure.mixed.cardio",
                 description: Text("Garmin/Activities on the device is empty.")
             )
         } else {

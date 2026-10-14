@@ -36,6 +36,19 @@ Decisions:
 - C4 presets: menu items are fine.
 Next step: Haiku: C1 (with the GPX part of C2), then the C4 range. Opus: G4.
 
+## C2 device check — 2026-10-13 — Haiku
+State: done (a check only; no code changed)
+Commits: none
+What was checked:
+- An Edge 1040 in MTP mode was read, not written to. The two newest rides, from 2026-10-11, were copied off it.
+- An independent decoder (Python, from the public FIT format) and the app's reader (`FITActivity.read`, in a temporary test that was then removed) agree on the heart rate:
+  - Ride 2026-10-11 14:12: the app has 2,847 points with heart rate, 98–172 bpm, mean 136.05. The decoder finds 2,848 records. The one missing from the app has the invalid position 0x7FFFFFFF, which the track format can't hold. The device's session summary says average 136, maximum 172.
+  - Ride 2026-10-11 10:36: the app has 6,897 points, 76–157 bpm, mean 109.43. The decoder finds 6,897 records. The device's summary says 109 and 157.
+- In a debug build on a scratch library, the ride was imported through the Activities sheet. The track shows 2,847 points, and the profile chart shows heart rate.
+Open questions:
+- A record with an invalid GPS position loses its heart rate, because a track point needs a position. Should the track keep such readings? Not changed here.
+Next step: none for C2 from this check. C1 still waits for a BaseCamp GPX with sensor data.
+
 ## C1 — 2026-10-13 — Haiku, for Opus review
 State: blocked. Nothing is written for C1. It needs a sample and two decisions first.
 Commits: none

@@ -2,9 +2,26 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## C1 — 2026-10-13 — Haiku, for Opus review
+State: blocked. Nothing is written for C1. It needs a sample and two decisions first.
+Commits: none
+What was checked (paths and tag counts only; no file was changed or copied):
+- 243 GPX files under Documents, Downloads and Desktop. 142 have `gpxx:DisplayColor`. None has `gpxtpx:` (heart rate, cadence, temperature, power) or `gpxx:Proximity`.
+- `BaseCamp_Export/All_BaseCamp.gpx` (84 MB) has no Garmin extensions at all. Its creator is "BaseCamp internal extractor for QMapShack", so it is not a BaseCamp export of extensions.
+- Bretagne 2023.GPX has 13 `DisplayColor` values (Red, Blue, DarkBlue, DarkRed, Magenta), 12 `gpxx:Address` blocks and 1219 `gpxx:rpt`. St Brieuc - Roscoff.GPX, Loire 2024.gpx and Queyras.GPX are similar.
+- The reader already reads `gpxx:rpt` (B5a). Nothing else in C1 is read or written yet.
+Open questions:
+1. A sample. No file here has sensor data, so the GPX reader cannot be checked against a real answer. The plan says to ask, not to invent one. Please send a GPX that BaseCamp wrote from a ride with heart rate, cadence, temperature or power. Coordinates in a committed test fixture would be yours, so I suggest a trimmed excerpt (about 20 points), shown to you before it is added.
+2. Track and route colour. BaseCamp writes `DisplayColor` as one of a fixed set of names. Our colours are RGB. Options:
+   (a) Map each name to RGB on read, and to the nearest name on write. Simple, but other colours come back as a different name.
+   (b) Keep the BaseCamp name beside the RGB value, and write the name back if the colour has not changed. Exact round trip, one more field.
+   Recommendation: (b).
+3. Address and Proximity. `Waypoint` has no address or proximity fields. Option: an optional address (street, city, state, postal code, country, phone) and an optional proximity in metres, both decoded with `decodeIfPresent` so old files still load. Recommendation: this. Proximity has no sample in any file here, so it is left unwritten until a sample has it.
+Next step: Opus decides questions 2 and 3, and the user sends the sample for question 1. Then C1 is a Haiku task again. It also completes the GPX part of C2.
+
 ## B5c — 2026-10-13 — Haiku
 State: done
-Commits: <work hash>
+Commits: 8259c03
 What was checked:
 - Core, `Tests/BaseCampCoreTests/RouteRecalculateTests.swift` (3 tests). Marking every leg keeps every shape, so the old line stays until the router answers. A route without a profile, and a route without legs, changes nothing and returns false.
 - App, on a scratch copy of the library (route "Loop": 5 stops, a Mountain bike profile, 4 legs, one leg waiting), with the debug build:

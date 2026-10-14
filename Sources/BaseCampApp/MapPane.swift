@@ -57,6 +57,10 @@ struct MapPane: View {
             onStopClick: { reference in
                 store.selectedStop = store.route(reference.route)?.stops[safe: reference.index]?.id
             },
+            profileLine: store.selectedMeasure,
+            onProfileHover: { distance in
+                store.profileCursor = distance
+            },
             contextMenu: contextMenu,
             locateRequest: store.locateRequest,
             onLocationProblem: { message in
@@ -86,6 +90,9 @@ struct MapPane: View {
         }
     }
 
+    /// The colour of the stretch picked on a profile: a magenta that stands out from the tracks, routes and maps.
+    static let pickedStretchColour = MapRGB(red: 0.88, green: 0.10, blue: 0.72)
+
     /// Everything the map draws, built from the library and the planner, one layer at a time.
     private var scene: MapScene {
         var parts: [MapLayerKind: MapLayerContent] = [:]
@@ -94,6 +101,12 @@ struct MapPane: View {
             revision: store.revision, selectedItems: store.selectedItems, selectedStop: store.selectedStop, build: buildLibraryLayer
         )
         parts[.measure] = measureLayer
+        if let range = store.profileRange, let measure = store.selectedMeasure {
+            // Drawn over the selected line, so the stretch picked on the profile can be seen on the map.
+            parts[.profileRange] = MapLayerContent(lines: measure.section(range).enumerated().map { index, piece in
+                MapLine(id: "profile-range-\(index)", coordinates: piece, color: .measure, rgb: Self.pickedStretchColour, width: 7)
+            })
+        }
         if let cursor = store.profileCoordinate {
             parts[.cursor] = MapLayerContent(pins: [
                 MapPin(id: "profile-cursor", coordinate: cursor, style: .cursor, item: nil, title: "Profile position"),

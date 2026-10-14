@@ -13,8 +13,19 @@ struct ContentView: View {
     @Environment(RouteRecalculator.self) private var recalculator
     @Environment(RoutingSettings.self) private var routing
     @Environment(ElevationSettings.self) private var elevation
+    @Environment(DisplaySettings.self) private var display
     @State private var isDropTargeted = false
+    @AppStorage("display.profileHeight") private var profileHeight = 260.0
     @State private var showMapList = false
+
+    /// The profile pane is shown for a selected track or route, unless the user hid it.
+    private var showsProfilePane: Bool {
+        guard display.showsProfilePane else { return false }
+        switch store.selection {
+        case .track?, .route?: return true
+        default: return false
+        }
+    }
 
     var body: some View {
         @Bindable var store = store
@@ -26,15 +37,21 @@ struct ContentView: View {
                     ideal: store.sidebarStyle == .table ? 500 : 260
                 )
         } detail: {
-            MapPane()
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    VStack(spacing: 0) {
-                        if planner.isActive {
-                            RoutePlannerBar()
-                        }
-                        DeviceStatusBar()
-                    }
+            // The map with the route tool's bar, the profile under it in a pane the user can resize, and the
+            // device's status at the bottom. A plain stack: a safe-area inset and VSplitView both left a gap.
+            VStack(spacing: 0) {
+                MapPane()
+                    .frame(minHeight: 200)
+                if planner.isActive {
+                    RoutePlannerBar()
                 }
+                if showsProfilePane {
+                    ProfileResizeHandle(height: $profileHeight)
+                    ProfilePane()
+                        .frame(height: profileHeight)
+                }
+                DeviceStatusBar()
+            }
                 .inspector(isPresented: $showInspector) {
                     InspectorView()
                         .inspectorColumnWidth(min: 260, ideal: 300, max: 420)
@@ -67,6 +84,11 @@ struct ContentView: View {
                             store.showMaps = true
                         }
                         .help("Maps in the shared map folder (⇧⌘M)")
+
+                        Toggle(isOn: Binding(get: { display.showsProfilePane }, set: { display.showsProfilePane = $0 })) {
+                            Label("Profile", systemImage: "chart.xyaxis.line")
+                        }
+                        .help("Show the profile of the selected track or route under the map (⌥⌘P)")
 
                         Button("Find", systemImage: "magnifyingglass") {
                             store.showFind = true
@@ -234,5 +256,35 @@ struct ContentView: View {
             .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [10, 6]))
             .padding(10)
             .allowsHitTesting(false)
+    }
+}
+
+/// The bar above the profile pane. Dragging it up or down makes the profile taller or shorter.
+struct ProfileResizeHandle: View {
+    @Binding var height: Double
+    @State private var startHeight: Double?
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.separator).frame(height: 1)
+            Capsule().fill(.tertiary).frame(width: 36, height: 4)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 9)
+        .background(.background)
+        .contentShape(Rectangle())
+        .onHover { inside in
+            if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                .onChanged { drag in
+                    let start = startHeight ?? height
+                    startHeight = start
+                    height = min(max(start - drag.translation.height, 120), 900)
+                }
+                .onEnded { _ in startHeight = nil }
+        )
+        .help("Drag to resize the profile")
     }
 }

@@ -31,8 +31,13 @@ final class LibraryStore {
     var sidebarStyle = SidebarStyle.list
     /// Everything selected in the sidebar. The inspector shows the item when exactly one is selected.
     var selectedItems: Set<LibraryItem> = [] {
-        // A picked stretch of a profile belongs to the item it was picked on.
-        didSet { if selectedItems != oldValue { profileRange = nil } }
+        // The profile cursor and a picked stretch belong to the item they were set on.
+        didSet {
+            if selectedItems != oldValue {
+                profileRange = nil
+                profileCursor = nil
+            }
+        }
     }
     /// The single selected item, or nil when nothing or several items are selected.
     var selection: LibraryItem? {
@@ -41,10 +46,35 @@ final class LibraryStore {
     }
     /// The stop of the selected route last clicked on the map, highlighted there and in the inspector. Not saved.
     var selectedStop: UUID?
-    /// The point under the cursor of an elevation profile, marked on the map. Not saved.
-    var profileCoordinate: Coordinate?
+    /// The profile cursor, in metres along the selected track or route. Set by hovering over its profile or over its
+    /// line on the map, and kept when the pointer leaves, so it can be used (Split at Profile Position). Not saved.
+    var profileCursor: Double?
+    /// The place of the profile cursor on the map.
+    var profileCoordinate: Coordinate? {
+        profileCursor.flatMap { selectedMeasure?.coordinate(at: $0) }
+    }
     /// The stretch of the selected track picked by dragging across its profile, in metres from the start. Not saved.
     var profileRange: ClosedRange<Double>?
+    /// Distances along the selected track or route, as its profile measures them. Nil for anything else.
+    var selectedMeasure: LineMeasure? {
+        let key: LibraryItem?
+        switch selection {
+        case .track?, .route?: key = selection
+        default: return nil
+        }
+        if let cached = measureCache, cached.item == key, cached.revision == revision {
+            return cached.measure
+        }
+        let measure: LineMeasure?
+        switch key {
+        case .track(let id)?: measure = track(id)?.measure
+        case .route(let id)?: measure = route(id)?.measure
+        default: measure = nil
+        }
+        measureCache = measure.map { (key, revision, $0) }
+        return measure
+    }
+    @ObservationIgnored private var measureCache: (item: LibraryItem?, revision: Int, measure: LineMeasure)?
     /// Bumped each time the map should frame `fitCoordinates`.
     var fitRequest = 0
     /// Read only when the map is refitted (see `fitRequest`), so changing it does not redraw the views that read the library.
@@ -813,8 +843,8 @@ final class LibraryStore {
     /// Returns false when there is no cursor position or the selection is not a track.
     @discardableResult
     func splitSelectedTrackAtCursor() -> Bool {
-        guard case .track(let id)? = selection, let cursor = profileCoordinate,
-              let track = track(id), let pieces = track.split(nearest: cursor) else { return false }
+        guard case .track(let id)? = selection, let cursor = profileCursor,
+              let track = track(id), let pieces = track.split(atDistance: cursor) else { return false }
         edit("Split Track") { $0.splitTrack(id, into: pieces) }
         selection = .track(pieces.0.id)
         return true

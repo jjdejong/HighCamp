@@ -31,6 +31,11 @@ public extension Track {
     /// Returns nil when the track has no points.
     func split(nearest coordinate: Coordinate) -> (Track, Track)? {
         guard let (segmentIndex, pointIndex) = nearestPoint(to: coordinate) else { return nil }
+        return split(segment: segmentIndex, point: pointIndex)
+    }
+
+    /// The track cut at one point, which ends the first part and starts the second.
+    func split(segment segmentIndex: Int, point pointIndex: Int) -> (Track, Track) {
         var before: [[TrackPoint]] = Array(segments[..<segmentIndex])
         var after: [[TrackPoint]] = Array(segments[(segmentIndex + 1)...])
         let segment = segments[segmentIndex]

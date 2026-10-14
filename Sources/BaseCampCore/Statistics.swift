@@ -148,7 +148,7 @@ public struct ActivityStatistics: Equatable, Sendable {
 
     /// Adds up the climb and descent of a series of elevations. A rise or fall only counts once it is
     /// at least `threshold` metres from the last turning point, so GPS jitter does not add height.
-    static func climb(_ values: [Double], threshold: Double) -> (ascent: Double, descent: Double)? {
+    public static func climb(_ values: [Double], threshold: Double) -> (ascent: Double, descent: Double)? {
         guard let first = values.first else { return nil }
         var reference = first
         var extreme = first

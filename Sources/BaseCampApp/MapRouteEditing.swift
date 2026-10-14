@@ -54,9 +54,53 @@ extension MapKitView.Coordinator {
             NSEvent.removeMonitor(mouseMonitor)
         }
         mouseMonitor = nil
+        if let hoverMonitor {
+            NSEvent.removeMonitor(hoverMonitor)
+        }
+        hoverMonitor = nil
     }
 
-    private func isOverMap(_ event: NSEvent, _ map: MKMapView) -> Bool {
+    /// Follows the pointer over the selected track or route, and moves the profile cursor to the place on the line
+    /// under it, as hovering over the profile moves the marker on the map. Off the line, the cursor stays.
+    func installHoverMonitor(on map: MKMapView) {
+        map.window?.acceptsMouseMovedEvents = true
+        hoverMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self, weak map] event in
+            guard let self, let map, event.window === map.window, let line = self.parent.profileLine else { return event }
+            map.window?.acceptsMouseMovedEvents = true
+            let point = map.convert(event.locationInWindow, from: nil)
+            guard map.bounds.contains(point), self.isOverMap(event, map),
+                  let distance = Self.distance(along: line, at: point, on: map, tolerance: 8) else { return event }
+            self.parent.onProfileHover(distance)
+            return event
+        }
+    }
+
+    /// The distance along `line` of the place nearest to `point`, if the line passes within `tolerance` points.
+    /// Works in map points, which are cheap to compute, so long tracks follow the pointer smoothly.
+    static func distance(along line: LineMeasure, at point: CGPoint, on map: MKMapView, tolerance: CGFloat) -> Double? {
+        let target = MKMapPoint(map.convert(point, toCoordinateFrom: map))
+        let perScreenPoint = map.visibleMapRect.width / max(Double(map.bounds.width), 1)
+        let limit = Double(tolerance) * perScreenPoint
+        var best: (distance: Double, gap: Double)?
+        for (segmentIndex, segment) in line.segments.enumerated() {
+            var previous: MKMapPoint?
+            for (index, coordinate) in segment.enumerated() {
+                let current = MKMapPoint(coordinate.clLocation)
+                defer { previous = current }
+                guard let start = previous else { continue }
+                let dx = current.x - start.x, dy = current.y - start.y
+                let lengthSquared = dx * dx + dy * dy
+                let t = lengthSquared > 0 ? max(0, min(1, ((target.x - start.x) * dx + (target.y - start.y) * dy) / lengthSquared)) : 0
+                let gap = hypot(target.x - (start.x + t * dx), target.y - (start.y + t * dy))
+                if gap <= limit, gap < (best?.gap ?? .infinity) {
+                    best = (line.distance(segment: segmentIndex, index: index - 1, fraction: t), gap)
+                }
+            }
+        }
+        return best?.distance
+    }
+
+    func isOverMap(_ event: NSEvent, _ map: MKMapView) -> Bool {
         guard let content = map.window?.contentView,
               var view = content.hitTest(content.convert(event.locationInWindow, from: nil)) else { return false }
         while true {

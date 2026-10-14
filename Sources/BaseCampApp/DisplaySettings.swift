@@ -12,9 +12,14 @@ final class DisplaySettings {
     var coordinates: CoordinateSystem {
         didSet { UserDefaults.standard.set(coordinates.rawValue, forKey: "display.coordinates") }
     }
+    /// Whether the profile pane under the map is shown.
+    var showsProfilePane: Bool {
+        didSet { UserDefaults.standard.set(showsProfilePane, forKey: "display.profilePane") }
+    }
 
     init() {
         let defaults = UserDefaults.standard
+        showsProfilePane = defaults.object(forKey: "display.profilePane") as? Bool ?? true
         units = UnitSystem(rawValue: defaults.string(forKey: "display.units") ?? "") ?? .metric
         coordinates = CoordinateSystem(rawValue: defaults.string(forKey: "display.coordinates") ?? "") ?? .decimalDegrees
     }

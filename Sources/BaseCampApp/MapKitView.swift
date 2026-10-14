@@ -106,6 +106,8 @@ enum MapLayerKind: Int, CaseIterable {
     /// Waypoints, routes and tracks, and the draggable points of the selected route.
     case library
     case measure
+    /// The stretch picked on the selected item's profile.
+    case profileRange
     /// The point under the cursor of an elevation profile.
     case cursor
 }
@@ -165,6 +167,10 @@ struct MapKitView: NSViewRepresentable {
     var editableRoute: Route?
     /// Called when a stop of the selected route is clicked without dragging.
     var onStopClick: (RoutePointRef) -> Void = { _ in }
+    /// The line of the selected track or route. Hovering over it moves the profile cursor (`onProfileHover`).
+    var profileLine: LineMeasure?
+    /// Called with the distance along `profileLine` under the pointer, while the pointer is over that line.
+    var onProfileHover: (Double) -> Void = { _ in }
     /// The items of the context menu for what was right-clicked.
     var contextMenu: (MapContextTarget) -> [MapMenuItem] = { _ in [] }
     /// Bumped to go to the Mac's position.
@@ -202,6 +208,7 @@ struct MapKitView: NSViewRepresentable {
         let click = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.clicked(_:)))
         map.addGestureRecognizer(click)
         context.coordinator.installMouseMonitor(on: map)
+        context.coordinator.installHoverMonitor(on: map)
         return map
     }
 
@@ -212,6 +219,10 @@ struct MapKitView: NSViewRepresentable {
     func updateNSView(_ map: MKMapView, context: Context) {
         let coordinator = context.coordinator
         coordinator.parent = self
+        // Mouse-moved events only reach the window once it asks for them; the window exists from the first update.
+        if profileLine != nil, let window = map.window, !window.acceptsMouseMovedEvents {
+            window.acceptsMouseMovedEvents = true
+        }
         coordinator.applyBase(base, garmin: garmin, on: map)
         coordinator.applyContours(show: showContours, opacity: contourOpacity, on: map)
         coordinator.applyScene(scene, on: map)
@@ -242,6 +253,8 @@ struct MapKitView: NSViewRepresentable {
         var lastLocateRequest = 0
         /// Takes mouse-downs on the selected route before MapKit (see MapRouteEditing.swift).
         var mouseMonitor: Any?
+        /// Follows the pointer over the selected line, for the profile cursor (see MapRouteEditing.swift).
+        var hoverMonitor: Any?
         private let locationFinder = LocationFinder()
 
         private var appliedBase: (layer: BaseMapLayer, garmin: GarminMapConfiguration)?

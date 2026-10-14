@@ -2,6 +2,31 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Profile pane, shared cursor, picked stretch on the map — 2026-10-14 — Opus
+State: done (this commit). Gate: 257 tests, 3 skipped, no DIAG. Checked by mouse on a 3,000-point loop track.
+User report: the profile was too small for fine work; the stretch picked on the profile was not shown on the track;
+the cursor marks between profile and track were glitchy.
+What changed:
+- Core `LineMeasure` (Track/Route `.measure`): distances along the line as the profile measures them, the place at a
+  distance (interpolated), the section of a distance range, and the distance of a place on a given segment.
+  `Track.split(atDistance:)`; profile `value(at:)`, `grade(at:window:)`, `thinnedForDrawing(limit:)` (keeps the
+  lowest and highest point per bucket). Tests: LineMeasureTests (8).
+- The profile cursor is now a distance (`LibraryStore.profileCursor`, metres), not a coordinate. The map marker is
+  placed between points, so it moves smoothly, and a loop that passes a place twice is no longer ambiguous. The
+  cursor stays when the pointer leaves the chart (it used to vanish, so Split at Profile Position could never be
+  clicked). Split cuts at the cursor's distance. Cleared when the selection changes.
+- Both charts draw the cursor as a line and a dot.
+- Hovering over the selected track or route on the map (within 8 points) moves the cursor too.
+- The picked stretch is drawn on the map in magenta, over the selected line (new layer `profileRange`).
+- Profile pane under the map (`ProfilePane`), for the selected track or route: drag the handle to resize (height
+  kept, `display.profileHeight`); scroll up/down over the chart to zoom around the cursor, sideways to pan; Zoom
+  In/Out, Zoom to Picked, Show All; Delete Selected Points, Clear, Split Here; a readout with distance, height,
+  grade over 100 m, the sensor value, and the picked stretch's length, ascent and descent. Toolbar button
+  "Profile" and View > Show/Hide Profile (⌥⌘P), kept in `display.profilePane`.
+- Layout: the map, the route tool's bar, the profile and the device bar are a plain VStack. SwiftUI's VSplitView
+  and the earlier bottom safe-area inset both left a toolbar-high gap above the profile.
+Not done: the inspector keeps its small profile as well.
+
 ## Opus review of C1 and the C4 range — 2026-10-14 — Opus
 State: both accepted, with fixes in this commit. Gate: 249 tests, 3 skipped, no DIAG.
 C1 fixes:

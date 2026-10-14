@@ -282,6 +282,10 @@ struct BaseCampCommands: Commands {
                 store.locateRequest += 1
             }
             .keyboardShortcut("l", modifiers: [.command, .option])
+            Button(display.showsProfilePane ? "Hide Profile" : "Show Profile") {
+                display.showsProfilePane.toggle()
+            }
+            .keyboardShortcut("p", modifiers: [.command, .option])
         }
 
         CommandGroup(replacing: .importExport) {

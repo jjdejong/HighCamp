@@ -286,7 +286,7 @@ struct InspectorView: View {
                 Button("Split at Profile Position") {
                     store.splitSelectedTrackAtCursor()
                 }
-                .disabled(store.profileCoordinate == nil)
+                .disabled(store.profileCursor == nil)
                 .help("Move the pointer over the elevation profile to choose where to cut the track")
             }
             Menu("Add to Collection") {

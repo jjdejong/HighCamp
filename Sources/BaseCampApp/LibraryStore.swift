@@ -759,13 +759,17 @@ final class LibraryStore {
         }
     }
 
-    /// Marks every leg of the route to be calculated again (see `Route.markAllLegsForRecalculation`). Returns false
-    /// when the route has no profile or no legs, so nothing would be calculated.
+    /// Marks every leg of the route to be calculated again (see `Route.markAllLegsForRecalculation`). A route without
+    /// a profile, such as an imported one, takes `fallbackProfile`, as BaseCamp recalculates with the current
+    /// activity. Returns false when the route has no legs, so nothing would be calculated.
     @discardableResult
-    func markRouteForRecalculation(_ id: UUID) -> Bool {
+    func markRouteForRecalculation(_ id: UUID, fallbackProfile: UUID) -> Bool {
         var marked = false
         edit("Recalculate Route") { library in
-            guard let index = library.routes.firstIndex(where: { $0.id == id }) else { return }
+            guard let index = library.routes.firstIndex(where: { $0.id == id }), !library.routes[index].legs.isEmpty else { return }
+            if library.routes[index].profileID == nil {
+                library.routes[index].profileID = fallbackProfile
+            }
             marked = library.routes[index].markAllLegsForRecalculation()
         }
         return marked

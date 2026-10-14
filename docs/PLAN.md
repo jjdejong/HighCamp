@@ -280,7 +280,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | B5a | Haiku → Opus | done | 717e19b | GPX stops and shape; reviewed; user to check the import in BaseCamp and QMapShack |
 | B5b | Haiku | done | 73b6393 | stops in the inspector: name, via or shaping, distance, leg state, routing profile |
 | B5-map | Opus | done | a4050b2 | background recalculation, dashed waiting legs, insert handles, Option-click extends |
-| B5c | Haiku | done | 8259c03 | Route menu: Recalculate Route; checked on a scratch copy of the route Loop |
+| B5c | Haiku | reviewed | 8259c03 | Route menu: Recalculate Route; reviewed; routes without a profile take the route tool's |
 | B6 | Opus | todo | | |
 | G1 | Opus | done | 577e13a, 6ae12af | Garmin base map; overlay removed |
 | G2 | Opus | todo | | labels and icons |
@@ -294,9 +294,9 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | C7b | Haiku | reviewed | 068596c | profile on page 2 is 400 points high; 170 on page 1 |
 | C3b | Haiku | reviewed | 5922795 | saved pictures and reports draw the map's markers, with symbols |
 | C3c | Haiku | reviewed | ea02d0b | selected items keep their colour, with a white halo under the line |
-| C1 | Haiku → Opus | blocked | | needs a BaseCamp GPX with sensor data and two decisions (see HANDOFF) |
-| C2 | Haiku → Opus | partial | 8a542f8, d8b0aa8 | fields, FIT reading, statistics, profiles and inspector done, for Opus review. GPX sensor reading waits for C1 |
-| C4 | Haiku → Opus | partial | 98ebfbb | filter by time or distance done (Edit section and Track menu); delete a range by profile selection waits for the choice of range selection (see HANDOFF) |
+| C1 | Haiku → Opus | todo | | unblocked: decisions in HANDOFF (Opus review 2026-10-14); real sample test when the user sends one |
+| C2 | Haiku → Opus | partial | 8a542f8, d8b0aa8 | reviewed and accepted; GPX sensor reading is done with C1 |
+| C4 | Haiku → Opus | partial | 98ebfbb | filter reviewed and accepted; range: drag across the profile (decided, see HANDOFF), todo |
 | C6 | — | moved | | to G2 |
 
-Suggested order for Haiku now: C2, C4, C1, then B5c. Phase A is done. Phase G is Opus only; Haiku does not touch the map renderer or the IMG decoder.
+Suggested order for Haiku now: C1 (with C2's GPX part), then the C4 range. Phase A is done. Phase G is Opus only; Haiku does not touch the map renderer or the IMG decoder.

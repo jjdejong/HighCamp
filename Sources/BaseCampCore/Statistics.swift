@@ -1,7 +1,5 @@
 import Foundation
 
-/// Distance, time, speed and climb of a track or a route. Values that need timestamps or elevations
-/// are nil when the data is missing.
 /// The average and the maximum of a sensor reading over a track.
 public struct SeriesSummary: Equatable, Sendable {
     public var average: Double
@@ -22,6 +20,8 @@ public enum ProfileSeries: CaseIterable, Sendable {
     case temperature
 }
 
+/// Distance, time, speed and climb of a track or a route. Values that need timestamps or elevations
+/// are nil when the data is missing.
 public struct ActivityStatistics: Equatable, Sendable {
     public var distanceMeters: Double
     public var pointCount: Int

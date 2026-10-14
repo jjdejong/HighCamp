@@ -2,6 +2,40 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Opus review of C2, C4, B5c and the C1 questions — 2026-10-14 — Opus
+State: C2, C4 (filter part) and B5c accepted, with three small fixes in this commit. C1 unblocked.
+Checked: the diff 64c4299..aa41f62. FIT record fields 3 (heart_rate, uint8), 4 (cadence, uint8), 7 (power,
+uint16) and 13 (temperature, sint8), and their invalid values, match the FIT profile. Optional fields decode from old
+files (test present). Filtering keeps each segment's ends and each point's readings. Gate: 229 tests, 3 skipped, no DIAG.
+Fixes:
+- `Statistics.swift`: the doc comment of `ActivityStatistics` had moved onto `SeriesSummary`. Put back.
+- `PrintReport.swift`: the area's base was in metres while the line was in the chosen units (wrong in feet; older bug,
+  touched by C2). The base is now converted too.
+- Recalculate Route now works for a route without a profile (an imported GPX route). It takes the route tool's
+  profile, as BaseCamp recalculates with the current activity. The item is enabled for any selected route with legs.
+  `LibraryStore.markRouteForRecalculation(_:fallbackProfile:)`.
+Not a fix, noted: the Track menu items are not disabled when no track is selected; they do nothing then (as before).
+Decisions:
+- C1 colour: (a), not (b). BaseCamp's `DisplayColor` names are a fixed palette of 16 (Black, DarkRed, DarkGreen,
+  DarkYellow, DarkBlue, DarkMagenta, DarkCyan, LightGray, DarkGray, Red, Green, Yellow, Blue, Magenta, Cyan, White;
+  plus Transparent, read as no colour). Map each name to its exact RGB on read, and write the nearest name. A colour
+  that came from a name gives back the same name, so (b)'s extra field buys nothing. No model change.
+- C1 address and proximity: as recommended. Optional `address` (street, city, state, postal code, country, phone) and
+  optional `proximity` in metres on `Waypoint`, decoded with `decodeIfPresent`. Read and write both
+  (`gpxx:WaypointExtension`, Garmin's published GpxExtensions v3 schema); proximity is written only when set.
+- C1 sample: do the work now against the published schemas (TrackPointExtension v1/v2: `hr`, `cad`, `atemp`; power as
+  `pwr:PowerInWatts`, and also a plain `power` element as other apps write it), with made-up coordinates in the
+  tests. Read by namespace under any prefix, as B5a does. Writing: `gpxtpx` v1 for hr, cad, atemp, and the power
+  extension for power. The user is asked for a real file; add an excerpt test when it comes, shown to the user first.
+  The plan's rule (not invented as the *only* test) is kept by that later test.
+- C4 range: (a), drag across the profile. Swift Charts has `chartXSelection(range:)` on macOS 14, next to the
+  hover selection already used. Draw the band (a `RectangleMark`), and add "Delete Selected Points" to the Profile
+  section and the Track menu, calling `Track.removingPoints(distanceIn:)` in one undo step. The range is in display
+  units: convert back to metres. Elevation series only is fine for now, any series is better. Haiku writes it; Opus
+  checks the drag by mouse, since the sandbox cannot drive it.
+- C4 presets: menu items are fine.
+Next step: Haiku: C1 (with the GPX part of C2), then the C4 range. Opus: G4.
+
 ## C1 — 2026-10-13 — Haiku, for Opus review
 State: blocked. Nothing is written for C1. It needs a sample and two decisions first.
 Commits: none

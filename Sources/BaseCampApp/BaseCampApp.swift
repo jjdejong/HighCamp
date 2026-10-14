@@ -154,10 +154,10 @@ struct BaseCampCommands: Commands {
     let layers: MapLayerSettings
     let garminMaps: GarminMapListStore
 
-    /// True when the selected item is a route with a profile and legs, which is what recalculation needs.
+    /// True when the selected item is a route with legs. A route without a profile takes the route tool's profile.
     private var canRecalculateSelection: Bool {
         guard case .route(let id)? = store.selection, let route = store.route(id) else { return false }
-        return route.profileID != nil && !route.legs.isEmpty
+        return !route.legs.isEmpty
     }
 
     var body: some Commands {
@@ -204,7 +204,7 @@ struct BaseCampCommands: Commands {
             Button("Recalculate Route") {
                 guard case .route(let id)? = store.selection else { return }
                 // Clears the route's earlier failures too, so legs the router refused are asked again.
-                if store.markRouteForRecalculation(id) {
+                if store.markRouteForRecalculation(id, fallbackProfile: planner.selectedProfileID) {
                     recalculator.retry(id, store: store, planner: planner, settings: routing, demFolder: elevation.folder)
                 }
             }

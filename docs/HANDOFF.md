@@ -2,6 +2,17 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Sharper Garmin tiles on 1× screens — 2026-10-14 — Opus
+State: done (this commit). Gate: 338 tests, 3 skipped, no DIAG.
+User report: OFM looks blurry when towns start showing streets, unlike IGN. The user's screen is 1× (5120×1440).
+Cause: at z14 OFM draws thousands of minor streets (v2 type 0x10000, named) as 1-pixel olive lines, and main
+streets as white lines with a 3-pixel olive edge; smoothed, a 1-pixel line off the pixel grid becomes two pale
+pixels. Lines up to 2 pixels (and borders up to 3) are now drawn without anti-aliasing when the tile is drawn at
+1× (`crisp:` in `GarminPainter.draw`); at 2× (Retina) smoothing stays. Compared with --render-tile at --scale 1
+against IGN's tile: clearly sharper. Softer Colours left as it is (off is much heavier). `--render-tile` takes
+`--scale` and `--soft 0`.
+Not done: MapKit still stretches tiles up to about 1.4× between zoom steps, which softens any tile, IGN's too.
+
 ## Map detail moves whole map levels — 2026-10-14 — Opus
 State: done (this commit). Gate: 338 tests in four bundles, 3 skipped, no DIAG.
 The Detail setting (Lowest -2 … Highest +2) was added to the wanted bits, but OFM's levels are two bits apart, so

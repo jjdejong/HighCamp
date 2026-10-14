@@ -98,7 +98,8 @@ enum GarminTileRenderer {
                 context.draw(fallback, in: CGRect(x: 0, y: 0, width: rect.width, height: rect.height))
                 context.restoreGState()
             }
-            GarminPainter.draw(drawings, in: rect, patternOrigin: origin, relief: relief) { coordinate in
+            // On a screen of one pixel per point, thin lines are drawn sharp; on Retina, smooth lines look better.
+            GarminPainter.draw(drawings, in: rect, patternOrigin: origin, relief: relief, crisp: scale < 1.5) { coordinate in
                 let world = WebMercator.unit(coordinate)
                 return NSPoint(x: world.x * worldSize - origin.x, y: world.y * worldSize - origin.y)
             }
@@ -172,7 +173,7 @@ enum GarminPainter {
     /// across tiles. `step` thins long paths for large pictures: every `step`-th point is drawn.
     static func draw(
         _ drawings: [GarminMapDrawing], in rect: NSRect, patternOrigin: NSPoint, step: Int = 1, relief: CGImage? = nil,
-        project: (Coordinate) -> NSPoint
+        crisp: Bool = false, project: (Coordinate) -> NSPoint
     ) {
         let context = NSGraphicsContext.current?.cgContext
         // Soft colours: the full maps are drawn in a layer, then paled with white where they drew something, the
@@ -219,7 +220,7 @@ enum GarminPainter {
                 context?.setAlpha(drawing.opacity)
                 context?.beginTransparencyLayer(auxiliaryInfo: nil)
             }
-            draw(drawing.features, plainAreas: drawing.softColors, step: step, project: project)
+            draw(drawing.features, plainAreas: drawing.softColors, step: step, crisp: crisp, project: project)
             if faded {
                 context?.endTransparencyLayer()
                 context?.setAlpha(1)
@@ -230,7 +231,7 @@ enum GarminPainter {
 
     /// One map's areas in the map's order, then its lines in two passes (see below). With `plainAreas`, patterned
     /// areas (forest drawn as rows of trees, say) are filled plainly, which makes the map much less busy.
-    private static func draw(_ features: MapFeatureSet, plainAreas: Bool, step: Int, project: (Coordinate) -> NSPoint) {
+    private static func draw(_ features: MapFeatureSet, plainAreas: Bool, step: Int, crisp: Bool, project: (Coordinate) -> NSPoint) {
         for group in features.areas {
             let path = NSBezierPath()
             for ring in group.rings {
@@ -255,21 +256,25 @@ enum GarminPainter {
             if group.style.pattern == nil, let border = group.style.border {
                 border.nsColor.setStroke()
                 path.lineWidth = group.style.borderWidth
-                path.stroke()
+                strokeCrisply(path, when: crisp && group.style.borderWidth <= crispWidth + 1)
             } else {
-                stroke(path, style: group.style)
+                stroke(path, style: group.style, crisp: crisp)
             }
         }
         for (group, path) in zip(features.lines, paths) where group.style.pattern == nil && group.style.border != nil {
-            stroke(path, style: group.style)
+            stroke(path, style: group.style, crisp: crisp)
         }
     }
 
-    private static func stroke(_ path: NSBezierPath, style: LineStyle) {
+    /// Lines this thin are drawn without smoothing, so they stay one or two sharp pixels wide, as on a Garmin
+    /// device, instead of a blur over twice as many pale pixels. Thicker lines keep their smooth edges.
+    static let crispWidth: CGFloat = 2
+
+    private static func stroke(_ path: NSBezierPath, style: LineStyle, crisp: Bool) {
         guard let pattern = style.pattern else {
             style.rgb.nsColor.setStroke()
             path.lineWidth = style.width
-            path.stroke()
+            strokeCrisply(path, when: crisp && style.width <= crispWidth)
             return
         }
         // A pattern's rows run along the line, top row on one edge. It is drawn from the outside in, as nested
@@ -278,6 +283,10 @@ enum GarminPainter {
         // pixels as dashes in the foreground colour. Patterns are taken as symmetric, as Garmin's mostly are.
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.beginTransparencyLayer(auxiliaryInfo: nil)
+        if crisp && CGFloat(pattern.rows) <= crispWidth {
+            context.setShouldAntialias(false)
+        }
+        defer { context.setShouldAntialias(true) }
         path.lineCapStyle = .butt
         for ring in 0..<((pattern.rows + 1) / 2) {
             path.lineWidth = CGFloat(pattern.rows - 2 * ring)
@@ -297,6 +306,16 @@ enum GarminPainter {
         }
         path.setLineDash(nil, count: 0, phase: 0)
         context.endTransparencyLayer()
+    }
+
+    private static func strokeCrisply(_ path: NSBezierPath, when thin: Bool) {
+        guard thin, let context = NSGraphicsContext.current?.cgContext else {
+            path.stroke()
+            return
+        }
+        context.setShouldAntialias(false)
+        path.stroke()
+        context.setShouldAntialias(true)
     }
 
     /// Dash lengths for one row of a line pattern: on, off, on, ... Empty for a solid row, nil when no pixel is set.

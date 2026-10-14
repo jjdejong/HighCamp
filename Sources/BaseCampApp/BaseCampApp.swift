@@ -136,8 +136,8 @@ struct BaseCampApp: App {
         return arguments[index + 1]
     }
 
-    /// `--render-tile Z/X/Y OUT.png --maps A.img,B.img [--relief 0.45]` draws one Garmin tile, as the map pane would
-    /// at twice the resolution, saves it and quits without opening a window. For checking the renderer.
+    /// `--render-tile Z/X/Y OUT.png --maps A.img,B.img [--relief 0.45] [--scale 2]` draws one Garmin tile, as the map
+    /// pane would, saves it and quits without opening a window. For checking the renderer.
     static func renderTileAndExitIfAsked() {
         guard let spec = launchValue("--render-tile"), let output = launchValue(spec),
               let maps = launchValue("--maps") else { return }
@@ -147,10 +147,11 @@ struct BaseCampApp: App {
             layers: maps.split(separator: ",").map {
                 GarminMapLayer(url: URL(fileURLWithPath: String($0)), isOverlay: false, minimumZoom: 0, maximumZoom: 30, opacity: 1)
             },
-            detailOffset: 0, softColors: true, relief: Double(launchValue("--relief") ?? "0.45") ?? 0.45
+            detailOffset: 0, softColors: launchValue("--soft") != "0", relief: Double(launchValue("--relief") ?? "0.45") ?? 0.45
         )
+        let scale = CGFloat(Double(launchValue("--scale") ?? "2") ?? 2)
         Task.detached {
-            let data = await GarminTileRenderer.png(z: numbers[0], x: numbers[1], y: numbers[2], scale: 2, configuration: configuration)
+            let data = await GarminTileRenderer.png(z: numbers[0], x: numbers[1], y: numbers[2], scale: scale, configuration: configuration)
             try? data?.write(to: URL(fileURLWithPath: output))
             exit(0)
         }

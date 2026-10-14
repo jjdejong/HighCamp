@@ -4,7 +4,7 @@ Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first with
 
 ## C4 — 2026-10-13 — Haiku, for Opus review
 State: partial. Filtering by time or distance is done. Deleting a range by profile selection has its core function, but no way to select the range yet, because that is a design choice.
-Commits: <work hash>
+Commits: 98ebfbb
 What was checked:
 - Core tests, `Tests/BaseCampCoreTests/PointFilterTests.swift` (8 tests). The tests were written first and failed to compile, then the code was added.
   - `pointDistances` equals the distances the elevation profile plots, point by point, across two segments.

@@ -13,6 +13,9 @@ See `LICENSE`.
     `src/qmapshack/map/CMapIMG.h`.
   - `GarminTyp.swift`: `src/qmapshack/map/garmin/CGarminTyp.cpp`, and the polygon draw order from
     `src/qmapshack/map/CMapIMG.cpp`.
+  - `GarminLabels.swift`: `src/qmapshack/map/garmin/IGarminStrTbl.cpp`, `CGarminStrTbl6.cpp`,
+    `CGarminStrTbl8.cpp`, `CGarminStrTblUtf8.cpp`, and the LBL header from `src/qmapshack/map/CMapIMG.h`.
+  - The point decoding in `GarminRGN.swift`: `src/qmapshack/map/garmin/CGarminPoint.cpp`.
   Each file names its source in the header.
 - The reader of the maps' own heights, `Sources/BaseCampIMG/GarminDEM.swift`, is ported from GPXSee, Copyright (C)
   Martin Tůma, licensed under the GNU General Public License version 3 only: `src/map/IMG/demfile.cpp`,

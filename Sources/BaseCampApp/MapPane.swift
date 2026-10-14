@@ -1,5 +1,6 @@
 import AppKit
 import BaseCampCore
+import BaseCampIMG
 import SwiftUI
 
 /// The map. Everything in the library is drawn, and the selected item is highlighted in red.
@@ -14,6 +15,10 @@ struct MapPane: View {
     @Environment(DisplaySettings.self) private var display
     @Environment(GarminMapListStore.self) private var garminMaps
     @State private var libraryLayer = LibraryLayerCache()
+    /// The visible area and scale, for the place names.
+    @State private var viewport: PlaceQuery?
+    /// The place names of the Garmin maps in view.
+    @State private var places: [MapPlace] = []
 
     var body: some View {
         MapKitView(
@@ -37,7 +42,8 @@ struct MapPane: View {
             onSelect: { item in
                 store.selection = item
             },
-            onViewportChange: { bounds, _ in
+            onViewportChange: { bounds, metersPerPoint in
+                viewport = PlaceQuery(bounds: bounds, metersPerPoint: metersPerPoint)
                 store.viewCenter = Coordinate(
                     latitude: (bounds.north + bounds.south) / 2,
                     longitude: (bounds.east + bounds.west) / 2
@@ -81,6 +87,9 @@ struct MapPane: View {
         .onChange(of: store.mapImageRequest) { _, _ in
             saveImage()
         }
+        .task(id: placeRequest) {
+            await loadPlaces(placeRequest)
+        }
         .task(id: mapSettings.folder) {
             await garminMaps.reload(folder: mapSettings.folder)
             await coverage.reload(folder: mapSettings.folder)
@@ -93,12 +102,57 @@ struct MapPane: View {
         }
     }
 
+    /// What the place names are read for: the view, and the Garmin maps drawn in it. Nil when the base map is not
+    /// the Garmin maps.
+    private var placeRequest: PlaceRequest? {
+        guard layers.base == .garmin, let viewport else { return nil }
+        let garmin = layers.garminConfiguration(garminMaps)
+        let zoom = viewport.zoom
+        let maps = garmin.layers.filter { !$0.isOverlay && $0.isVisible(atZoom: zoom) }.map(\.url)
+        guard !maps.isEmpty else { return nil }
+        return PlaceRequest(viewport: viewport, maps: maps, detailOffset: garmin.detailOffset)
+    }
+
+    private func loadPlaces(_ request: PlaceRequest?) async {
+        guard let request else {
+            places = []
+            return
+        }
+        // Waits for the map to settle, so panning does not read the maps at every step.
+        try? await Task.sleep(for: .milliseconds(250))
+        guard !Task.isCancelled else { return }
+        let b = request.viewport.bounds
+        let margin = (lat: (b.north - b.south) * 0.1, lon: (b.east - b.west) * 0.1)
+        let area = GeoBounds(north: b.north + margin.lat, east: b.east + margin.lon, south: b.south - margin.lat, west: b.west - margin.lon)
+        var found: [MapPlace] = []
+        for map in request.maps {
+            found += await MapFeatureCache.shared.places(
+                in: area, metersPerPoint: request.viewport.metersPerPoint, map: map, detailOffset: request.detailOffset
+            )
+        }
+        guard !Task.isCancelled else { return }
+        places = MapPlace.merged(found)
+    }
+
+    /// The place names, as text-only markers. MapKit keeps the more important of two that would overlap.
+    private var placeLayer: MapLayerContent {
+        var content = MapLayerContent()
+        for place in places {
+            let id = "place-\(place.name)-\(place.coordinate.latitude)-\(place.coordinate.longitude)"
+            content.pins.append(MapPin(
+                id: id, coordinate: place.coordinate, style: .place(rank: place.rank, size: place.size), item: nil, title: place.name
+            ))
+        }
+        return content
+    }
+
     /// The colour of the stretch picked on a profile: a magenta that stands out from the tracks, routes and maps.
     static let pickedStretchColour = MapRGB(red: 0.88, green: 0.10, blue: 0.72)
 
     /// Everything the map draws, built from the library and the planner, one layer at a time.
     private var scene: MapScene {
         var parts: [MapLayerKind: MapLayerContent] = [:]
+        parts[.places] = placeLayer
         parts[.coverage] = coverageLayer
         parts[.library] = libraryLayer.content(
             revision: store.revision, selectedItems: store.selectedItems, selectedStop: store.selectedStop, build: buildLibraryLayer
@@ -404,4 +458,24 @@ final class LibraryLayerCache {
         }
         return cached
     }
+}
+
+
+/// The visible area of the map and its scale.
+struct PlaceQuery: Equatable {
+    let bounds: GeoBounds
+    let metersPerPoint: Double
+
+    /// The Web Mercator zoom this scale is nearest to, as the tiles count it.
+    var zoom: Int {
+        let middle = (bounds.north + bounds.south) / 2 * .pi / 180
+        return Int((log2(40_075_016.686 * cos(middle) / (256 * max(metersPerPoint, 0.01)))).rounded())
+    }
+}
+
+/// The place names to read: the view, and the Garmin maps drawn in it.
+struct PlaceRequest: Equatable {
+    let viewport: PlaceQuery
+    let maps: [URL]
+    let detailOffset: Int
 }

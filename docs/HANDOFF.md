@@ -2,6 +2,29 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## G2 first part: place names; RGN v2 offsets fixed — 2026-10-14 — Opus
+State: done (6ccda55 fix, this commit names). Gate: 329 tests in four bundles (core 267), 3 skipped, no DIAG.
+User report: no text on the OFM maps (Apple's names showed while tiles loaded, then were covered); BaseCamp and
+QMapShack drop town names at some zooms, and the user always wants the main places named.
+- Bug fixed (6ccda55): the RGN header's v2 sections are offset then length at 0x1D/0x21 (areas), 0x39/0x3D
+  (lines), 0x55/0x59 (points). The reader read 0x21/0x25 and 0x3D/0x41, so lengths were zero and every
+  extended-type line and area was skipped: in OFM over 2,000 lines per cell near Grenoble, all styled by its TYP.
+- `GarminLabels` (LBL string table: 6-bit, 8-bit with Windows code pages, UTF-8; POI names via LBL6), points
+  (`GarminIMG.points(of:in:)`: plain, indexed and v2), both ported from QMapShack. NET road names not ported.
+- Place names (`MapPlace` in core; `MapFeatureCache.places`): cities and villages (types 0x01xx-0x11xx with a
+  name), read from every coarser level, the level drawn and two finer ones. Rank = the coarsest level a place is
+  on (the map maker's importance; OFM: Grenoble and suburbs on level 3, villages 2, hamlets 1); ties by type.
+  Same name within 3 km merged. Capital names shown in title case with small French words kept small.
+- Drawn as MapKit annotations in a new bottom layer `.places`: text with a white halo, larger for higher ranks;
+  `collisionMode .rectangle`, `displayPriority` 300 + 150 × rank + tie-break (below `.required`, so waypoints win).
+  MapKit hides the less important of two overlapping names, so the main places always show. Read 250 ms after
+  the map settles; only when the base is the Garmin maps and a map draws at that zoom.
+- Debug hook `--render-tile Z/X/Y OUT.png --maps A.img [--relief S]`: draws one tile without a window.
+- Seen in the debug app around Grenoble at three zooms (window captures; screen locked for most of it).
+Not done: road names along lines (NET), POI icons and names (summits, huts), area names; names in saved pictures.
+Incident: two debug launches took focus from the user's Airmail for a moment (the check that the user was away
+ran but did not stop the script). Check the frontmost app before each launch, and stop when it is not loginwindow.
+
 ## Double-click to show an item on the map — 2026-10-14 — Opus
 State: done (this commit), built; not checked by mouse (the user was using the app). Double-clicking a row of the
 sidebar list or table frames the map on the whole item (`LibraryStore.zoomToSelection`, also View > Zoom to

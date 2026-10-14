@@ -28,6 +28,8 @@ struct MapPin: Equatable {
         case routePoint(selected: Bool)
         /// The middle of a leg of the selected route. Drag it to insert a stop there.
         case insertHandle
+        /// A place name from the Garmin maps, drawn as text only. `rank` and `size` are its importance (see `MapPlace`).
+        case place(rank: Int, size: Int)
     }
 
     let id: String
@@ -103,6 +105,8 @@ struct MapCircleShape: Equatable {
 /// The parts of the map that change on their own. Each is redrawn only when its own content changes, so moving
 /// the profile cursor does not redraw the library or the Garmin map. Listed from bottom to top.
 enum MapLayerKind: Int, CaseIterable {
+    /// Names of cities, towns and villages from the Garmin maps.
+    case places
     /// Coverage outlines of the maps in the map folder, with their names.
     case coverage
     /// Waypoints, routes and tracks, and the draggable points of the selected route.
@@ -463,6 +467,23 @@ struct MapKitView: NSViewRepresentable {
             let view = mapView.dequeueReusableAnnotationView(withIdentifier: "pin")
                 ?? MKAnnotationView(annotation: pin, reuseIdentifier: "pin")
             view.annotation = pin
+            if case .place(let rank, let size) = pin.style {
+                // Text only, centred on the place. MapKit hides the less important of two names that would overlap.
+                view.image = MarkerImage.place(pin.title ?? "", rank: rank)
+                view.centerOffset = .zero
+                view.canShowCallout = false
+                view.isDraggable = false
+                view.isEnabled = false
+                view.collisionMode = .rectangle
+                // Below `.required` (1000), which the library's markers keep, so places never hide a waypoint.
+                let tieBreak = max(0, 0x11 - min(size, 0x11)) * 4
+                view.displayPriority = MKFeatureDisplayPriority(rawValue: Float(min(990, 300 + rank * 150 + tieBreak)))
+                view.zPriority = .min
+                return view
+            }
+            view.isEnabled = true
+            view.displayPriority = .required
+            view.zPriority = .defaultUnselected
             let dot = MarkerImage.image(for: pin.style)
             let image = MarkerImage.image(for: pin.style, label: pin.showsLabel ? pin.title : nil)
             view.image = image
@@ -632,8 +653,43 @@ enum MarkerImage {
                 : dot(diameter: 10, fill: .white, label: nil, ring: .systemBlue)
         case .insertHandle:
             image = dot(diameter: 9, fill: NSColor.white.withAlphaComponent(0.75), label: nil, ring: NSColor.systemBlue.withAlphaComponent(0.6))
+        case .place:
+            image = NSImage(size: NSSize(width: 1, height: 1))
         }
         cache[key] = image
+        return image
+    }
+
+    private static let placeLock = NSLock()
+    nonisolated(unsafe) private static var places: [String: NSImage] = [:]
+
+    /// A place name, dark with a white halo so it reads on any map: larger and bolder for more important places.
+    static func place(_ name: String, rank: Int) -> NSImage {
+        let key = "\(rank)|\(name)"
+        placeLock.lock()
+        defer { placeLock.unlock() }
+        if let cached = places[key] {
+            return cached
+        }
+        let size: CGFloat = rank >= 3 ? 14 : rank == 2 ? 12.5 : rank == 1 ? 11 : 10
+        let weight: NSFont.Weight = rank >= 2 ? .semibold : rank == 1 ? .medium : .regular
+        let font = NSFont.systemFont(ofSize: size, weight: weight)
+        let text = NSColor(calibratedWhite: rank >= 2 ? 0.08 : 0.22, alpha: 1)
+        let fill: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: text]
+        let halo: [NSAttributedString.Key: Any] = [
+            .font: font, .strokeColor: NSColor.white.withAlphaComponent(0.92), .strokeWidth: 5.0,
+        ]
+        let textSize = (name as NSString).size(withAttributes: fill)
+        let image = NSImage(size: NSSize(width: ceil(textSize.width) + 6, height: ceil(textSize.height) + 4), flipped: false) { _ in
+            let origin = NSPoint(x: 3, y: 2)
+            (name as NSString).draw(at: origin, withAttributes: halo)
+            (name as NSString).draw(at: origin, withAttributes: fill)
+            return true
+        }
+        if places.count > 4000 {
+            places.removeAll()
+        }
+        places[key] = image
         return image
     }
 

@@ -66,6 +66,8 @@ actor MapFeatureCache {
         let areaRanks: [Int: Int]
         var levels: [String: [GarminMapLevel]] = [:]
         var subdivisions: [String: [GarminSubdivision]] = [:]
+        /// Each subfile's string table, read when its names are first needed. Nil inside: the subfile has none.
+        var labels: [String: GarminLabels?] = [:]
     }
 
     private struct CellKey: Hashable {
@@ -88,6 +90,76 @@ actor MapFeatureCache {
     private var maps: [String: OpenMap] = [:]
     private var cells: [CellKey: [GarminGeometry]] = [:]
     private var cellOrder: [CellKey] = []
+    /// The named places of decoded cells, kept like `cells`.
+    private var placeCells: [CellKey: [(name: String, coordinate: Coordinate, size: Int)]] = [:]
+    private var placeCellOrder: [CellKey] = []
+
+    /// Places read, at most, for one view, most important first.
+    static let maximumPlaces = 1500
+
+    /// The places of one map to name in `area` at a scale of `metersPerPoint`: those on the level drawn and the two
+    /// finer levels, each ranked by the coarsest level it is on. Nothing where the map draws nothing at this scale.
+    func places(in area: GeoBounds, metersPerPoint: Double, map url: URL, detailOffset: Int) -> [MapPlace] {
+        let drawnBits = MapFeatureReader.detailBits(metersPerPoint: metersPerPoint) + detailOffset
+        var found: [String: MapPlace] = [:]
+        for file in files(in: url.deletingLastPathComponent()) where file.url.lastPathComponent == url.lastPathComponent {
+            guard !Task.isCancelled, let open = openMap(file) else { continue }
+            for subfile in open.image.subfiles {
+                guard !Task.isCancelled else { return [] }
+                guard let bounds = subfile.bounds, subfile.parts.contains("RGN"), MapFeatureReader.intersects(bounds, area),
+                      let levels = levels(for: subfile.name, in: file.url.path, image: open.image),
+                      let drawn = MapFeatureReader.level(levels, forBits: drawnBits),
+                      let subdivisions = subdivisions(for: subfile.name, in: file.url.path, image: open.image),
+                      let labels = labels(for: subfile.name, in: file.url.path, image: open.image) else { continue }
+                // Every coarser level, which says how important each place is, the level drawn, and up to two finer
+                // ones, so villages are named before their streets are drawn.
+                let finer = levels.filter { !$0.inherited && $0.bits >= drawn.bits }.sorted { $0.bits < $1.bits }.prefix(3)
+                let deepest = finer.last?.bits ?? drawn.bits
+                let named = levels.filter { !$0.inherited && $0.bits <= deepest }
+                for level in named {
+                    for (index, cell) in subdivisions.enumerated()
+                    where cell.level == level.level && MapFeatureReader.intersects(cell.bounds, area) {
+                        let key = CellKey(file: file.url.path, subfile: subfile.name, index: index)
+                        for place in places(key, cell: cell, image: open.image, labels: labels) {
+                            let c = place.coordinate
+                            guard c.latitude <= area.north, c.latitude >= area.south, c.longitude >= area.west, c.longitude <= area.east else { continue }
+                            // The same town is on several levels: the key keeps one per level and place.
+                            let nameKey = "\(place.name)|\(level.level)|\(Int((c.latitude * 100).rounded()))|\(Int((c.longitude * 100).rounded()))"
+                            found[nameKey] = MapPlace(name: place.name, coordinate: c, rank: level.level, size: place.size)
+                        }
+                    }
+                }
+            }
+        }
+        return Array(MapPlace.merged(Array(found.values)).prefix(Self.maximumPlaces))
+    }
+
+    private func places(_ key: CellKey, cell: GarminSubdivision, image: GarminIMG, labels: GarminLabels) -> [(name: String, coordinate: Coordinate, size: Int)] {
+        if let cached = placeCells[key] {
+            return cached
+        }
+        let points = (try? image.points(of: key.subfile, in: cell)) ?? []
+        let decoded = points.compactMap { point -> (name: String, coordinate: Coordinate, size: Int)? in
+            guard point.isPlace, point.labelOffset != 0,
+                  let name = labels.name(at: point.labelOffset, poi: point.labelIsPOI) else { return nil }
+            return (MapPlace.displayName(name), point.coordinate, point.type >> 8)
+        }
+        placeCells[key] = decoded
+        placeCellOrder.append(key)
+        if placeCellOrder.count > Self.maximumCachedCells {
+            placeCells[placeCellOrder.removeFirst()] = nil
+        }
+        return decoded
+    }
+
+    private func labels(for name: String, in key: String, image: GarminIMG) -> GarminLabels? {
+        if let cached = maps[key]?.labels[name] {
+            return cached
+        }
+        let labels = try? image.labels(of: name)
+        maps[key]?.labels[name] = .some(labels)
+        return labels
+    }
     private var listing: (folder: URL, read: Date, files: [MapFile])?
 
     /// The features of one map to draw in `area` at a scale of `metersPerPoint`. `detailOffset` moves the level
@@ -193,6 +265,8 @@ actor MapFeatureCache {
         maps[key] = open
         cells = cells.filter { $0.key.file != key }
         cellOrder.removeAll { $0.file == key }
+        placeCells = placeCells.filter { $0.key.file != key }
+        placeCellOrder.removeAll { $0.file == key }
         return open
     }
 

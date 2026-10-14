@@ -6,8 +6,9 @@
 // Ported from QMapShack (src/qmapshack/map/CMapIMG.cpp: readSubfileBasics, loadSubDiv;
 // src/qmapshack/map/garmin/CGarminPolygon.cpp: decode, decode2, bits_per_coord, CShiftReg;
 // src/qmapshack/map/CMapIMG.h: tre_map_level_t, tre_subdiv_t, hdr_rgn_t),
-// Copyright (C) 2008-2014 Oliver Eichler and contributors, GPL-3.0-or-later.
-// Changes: rewritten in Swift without Qt. Labels and points are not decoded yet.
+// Copyright (C) 2008-2014 Oliver Eichler and contributors, GPL-3.0-or-later
+// and src/qmapshack/map/garmin/CGarminPoint.cpp: decode, decode2).
+// Changes: rewritten in Swift without Qt.
 
 import BaseCampCore
 import Foundation
@@ -39,6 +40,22 @@ public struct GarminSubdivision: Equatable, Sendable {
     /// Geometry in the RGN v2 sections, as ranges into the RGN part. Nil when absent.
     let polylines2: Range<Int>?
     let polygons2: Range<Int>?
+    var points2: Range<Int>? = nil
+}
+
+/// A point from a map: a place, a summit, a shop. Its name is in the subfile's string table (`GarminLabels`).
+public struct GarminPoint: Equatable, Sendable {
+    /// The Garmin type, type byte then subtype byte: 0x0100 to 0x1100 are cities and villages, biggest first.
+    /// Version 2 types are 0x10000 + (type << 8) + subtype.
+    public let type: Int
+    public let coordinate: Coordinate
+    /// Where the name is in the string table, or 0 for none.
+    public let labelOffset: Int
+    /// The name is found through the POI table (LBL6).
+    public let labelIsPOI: Bool
+
+    /// A city, town or village, whose name a map shows at every scale it can.
+    public var isPlace: Bool { type >= 0x0100 && type < 0x1200 }
 }
 
 /// A polyline or polygon from a map.
@@ -73,6 +90,8 @@ extension GarminIMG {
         let polygons2Length = GarminIMG.field(rgnHeader, 0x21, 4)
         let polylines2Base = GarminIMG.field(rgnHeader, 0x39, 4)
         let polylines2Length = GarminIMG.field(rgnHeader, 0x3D, 4)
+        let points2Base = GarminIMG.field(rgnHeader, 0x55, 4)
+        let points2Length = GarminIMG.field(rgnHeader, 0x59, 4)
 
         // The first subdivisions of each level but the last use 16-byte records (with a pointer to
         // the lower level); the last level uses 14-byte records.
@@ -103,14 +122,18 @@ extension GarminIMG {
         }
 
         // RGN v2 ranges come from the TRE7 records, one per subdivision.
-        var v2Records: [(polygons: Int, polylines: Int)] = []
+        var v2Records: [(polygons: Int, polylines: Int, points: Int)] = []
+        // Points are only in records of exactly 13 bytes, as QMapShack reads them.
+        var hasPoints2 = false
         if header.length >= 0x9A, header.groupsSize > 0, header.groupsRecordSize >= 13 {
             let groups = try reader.read(tre.offset + UInt64(header.groupsOffset), header.groupsSize)
             let stride = header.groupsRecordSize
+            hasPoints2 = stride == 13 && points2Length > 0
             for index in 0..<(groups.count / stride) {
                 v2Records.append((
                     polygons: GarminIMG.field(groups, index * stride, 4),
-                    polylines: GarminIMG.field(groups, index * stride + 4, 4)
+                    polylines: GarminIMG.field(groups, index * stride + 4, 4),
+                    points: GarminIMG.field(groups, index * stride + 8, 4)
                 ))
             }
         }
@@ -131,6 +154,7 @@ extension GarminIMG {
 
             var polygons2: Range<Int>?
             var polylines2: Range<Int>?
+            var points2: Range<Int>?
             // Version 2 sections are used only when the RGN header declares them. Maps that declare zero length have
             // TRE7 offsets that point at other bytes, and QMapShack's decode2 rejects those too.
             if index < v2Records.count {
@@ -144,6 +168,11 @@ extension GarminIMG {
                     let lineEnd = index + 1 < v2Records.count ? v2Records[index + 1].polylines + polylines2Base : polylines2Base + polylines2Length
                     polylines2 = lineStart < lineEnd ? lineStart..<lineEnd : nil
                 }
+                if hasPoints2 {
+                    let pointStart = v2Records[index].points + points2Base
+                    let pointEnd = index + 1 < v2Records.count ? v2Records[index + 1].points + points2Base : points2Base + points2Length
+                    points2 = pointStart < pointEnd ? pointStart..<pointEnd : nil
+                }
             }
 
             result.append(GarminSubdivision(
@@ -156,7 +185,8 @@ extension GarminIMG {
                 centerLongitude: record.lng,
                 centerLatitude: record.lat,
                 polylines2: polylines2,
-                polygons2: polygons2
+                polygons2: polygons2,
+                points2: points2
             ))
         }
         return result
@@ -231,6 +261,47 @@ extension GarminIMG {
                 shift: subdivision.shift, centerLongitude: subdivision.centerLongitude,
                 centerLatitude: subdivision.centerLatitude, version2: true
             )
+        }
+        return result
+    }
+
+    /// The points stored for one subdivision: plain points, indexed points (POIs) and version 2 points.
+    public func points(of subfile: String, in subdivision: GarminSubdivision) throws -> [GarminPoint] {
+        guard let rgn = directory[subfile]?["RGN"] else {
+            throw GarminIMGError.malformedDirectory
+        }
+        var result: [GarminPoint] = []
+        let elements = subdivision.elements
+        let hasPoints = elements & 0x10 != 0
+        let hasIndexedPoints = elements & 0x20 != 0
+        let hasPolylines = elements & 0x40 != 0
+        let hasPolygons = elements & 0x80 != 0
+        if hasPoints || hasIndexedPoints {
+            let objectCount = [hasPoints, hasIndexedPoints, hasPolylines, hasPolygons].filter { $0 }.count
+            let block = try readRGN(rgn, from: subdivision.rgnStart, to: subdivision.rgnEnd)
+            // The offset table at the start lists where each kind after the first begins.
+            var table = subdivision.rgnStart
+            let first = (objectCount - 1) * 2 + subdivision.rgnStart
+            func nextOffset() -> Int {
+                defer { table += 2 }
+                return block.u16(table) + subdivision.rgnStart
+            }
+            let pointStart = first
+            let indexedStart = hasPoints && hasIndexedPoints ? nextOffset() : first
+            let polylineStart = hasPolylines ? nextOffset() : subdivision.rgnEnd
+            let polygonStart = hasPolygons ? nextOffset() : subdivision.rgnEnd
+            let afterPoints = hasIndexedPoints ? indexedStart : (hasPolylines ? polylineStart : (hasPolygons ? polygonStart : subdivision.rgnEnd))
+            let afterIndexed = hasPolylines ? polylineStart : (hasPolygons ? polygonStart : subdivision.rgnEnd)
+            if hasPoints {
+                result += GarminRGNDecoder.decodePoints(block, from: pointStart, to: afterPoints, subdivision: subdivision)
+            }
+            if hasIndexedPoints {
+                result += GarminRGNDecoder.decodePoints(block, from: indexedStart, to: afterIndexed, subdivision: subdivision)
+            }
+        }
+        if let range = subdivision.points2 {
+            let block = try readRGN(rgn, from: range.lowerBound, to: range.upperBound)
+            result += GarminRGNDecoder.decodePoints2(block, from: range.lowerBound, to: range.upperBound, subdivision: subdivision)
         }
         return result
     }
@@ -627,6 +698,68 @@ enum GarminRGNDecoder {
             count += 1
         }
         return count
+    }
+
+    /// RGN v1 points: a type byte, a 24-bit label field (0x800000: a subtype byte follows; 0x400000: the label is
+    /// in the POI table), then the position as two signed 16-bit offsets from the subdivision's centre.
+    static func decodePoints(_ bytes: RGNBytes, from start: Int, to end: Int, subdivision: GarminSubdivision) -> [GarminPoint] {
+        var result: [GarminPoint] = []
+        var position = start
+        while position + 8 <= end {
+            var type = bytes.byte(position) << 8
+            let label = bytes.u24(position + 1)
+            let longitude = RGNBytes.signed16(bytes.u16(position + 4))
+            let latitude = RGNBytes.signed16(bytes.u16(position + 6))
+            position += 8
+            if label & 0x80_0000 != 0 {
+                type |= bytes.byte(position)
+                position += 1
+            }
+            result.append(GarminPoint(
+                type: type,
+                coordinate: point(longitude, latitude, subdivision),
+                labelOffset: label & 0x3F_FFFF,
+                labelIsPOI: label & 0x40_0000 != 0
+            ))
+        }
+        return result
+    }
+
+    /// RGN v2 points: type and subtype bytes, the position, then a 24-bit label field when the subtype has 0x20;
+    /// a subtype with 0x80 has one more byte, not used here.
+    static func decodePoints2(_ bytes: RGNBytes, from start: Int, to end: Int, subdivision: GarminSubdivision) -> [GarminPoint] {
+        var result: [GarminPoint] = []
+        var position = start
+        while position + 6 <= end {
+            let base = bytes.byte(position) << 8
+            let subtype = bytes.byte(position + 1)
+            let longitude = RGNBytes.signed16(bytes.u16(position + 2))
+            let latitude = RGNBytes.signed16(bytes.u16(position + 4))
+            var size = 6
+            var label = 0
+            if subtype & 0x20 != 0 {
+                label = bytes.u24(position + 6)
+                size += 3
+            }
+            if subtype & 0x80 != 0 {
+                size += 1
+            }
+            result.append(GarminPoint(
+                type: 0x10000 + base + (subtype & 0x1F),
+                coordinate: point(longitude, latitude, subdivision),
+                labelOffset: label & 0x3F_FFFF,
+                labelIsPOI: label & 0x40_0000 != 0
+            ))
+            position += size
+        }
+        return result
+    }
+
+    private static func point(_ longitude: Int, _ latitude: Int, _ subdivision: GarminSubdivision) -> Coordinate {
+        Coordinate(
+            latitude: degrees((latitude << subdivision.shift) + subdivision.centerLatitude),
+            longitude: degrees((longitude << subdivision.shift) + subdivision.centerLongitude)
+        )
     }
 
     private static func coordinateList(

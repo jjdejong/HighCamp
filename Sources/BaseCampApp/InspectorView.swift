@@ -225,7 +225,7 @@ struct InspectorView: View {
         routePointList(route)
         colourSection(.route(route.id), color: route.color, defaultColour: MapLineColor.blue)
         editSection(canSplit: false)
-        statisticsSections(route.statistics, profile: { route.profile(of: $0) })
+        statisticsSections(route.statistics, pickable: false, profile: { route.profile(of: $0) })
     }
 
     @ViewBuilder
@@ -236,7 +236,7 @@ struct InspectorView: View {
         }
         colourSection(.track(track.id), color: track.color, defaultColour: MapLineColor.orange)
         editSection(canSplit: true)
-        statisticsSections(track.statistics, profile: { track.profile(of: $0) })
+        statisticsSections(track.statistics, pickable: true, profile: { track.profile(of: $0) })
     }
 
     /// The colour the item is drawn in on the map, and a way back to the default.
@@ -503,7 +503,11 @@ struct InspectorView: View {
     }
 
     @ViewBuilder
-    private func statisticsSections(_ stats: ActivityStatistics, profile: (ProfileSeries) -> [ElevationProfilePoint]) -> some View {
+    private func statisticsSections(
+        _ stats: ActivityStatistics,
+        pickable: Bool,
+        profile: (ProfileSeries) -> [ElevationProfilePoint]
+    ) -> some View {
         Section("Statistics") {
             LabeledContent("Distance", value: UnitFormat.distance(stats.distanceMeters, display.units))
             if let total = stats.totalTime, let text = Format.seconds(total) {
@@ -548,7 +552,14 @@ struct InspectorView: View {
                         }
                     }
                 }
-                ElevationChart(profile: points, series: shown)
+                ElevationChart(profile: points, series: shown, pickable: pickable)
+                if pickable {
+                    Button("Delete Selected Points") {
+                        store.deleteProfileRange()
+                    }
+                    .disabled(store.profileRange == nil)
+                    .help("Drag across the profile to pick points, then delete them")
+                }
             }
         }
     }

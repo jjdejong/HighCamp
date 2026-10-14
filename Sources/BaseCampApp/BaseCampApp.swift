@@ -40,6 +40,10 @@ struct BaseCampApp: App {
                             store.selectItem(named: String(name), addingToSelection: true)
                         }
                     }
+                    // `--profile-range FROM TO` picks that stretch of the selected track's profile, in kilometres, for testing.
+                    if let range = Self.launchProfileRange() {
+                        store.profileRange = range
+                    }
                     // `--sidebar table` shows the items as a table instead of a list, for testing.
                     if Self.launchValue("--sidebar") == "table" {
                         store.sidebarStyle = .table
@@ -128,6 +132,14 @@ struct BaseCampApp: App {
 
     /// Set by `--map-image`, so the map view is saved there without asking.
     @MainActor static var testMapImagePath: URL?
+
+    /// `--profile-range FROM TO` picks the stretch from FROM to TO kilometres at launch, for testing.
+    private static func launchProfileRange() -> ClosedRange<Double>? {
+        let arguments = CommandLine.arguments
+        guard let index = arguments.firstIndex(of: "--profile-range"), index + 2 < arguments.count,
+              let from = Double(arguments[index + 1]), let to = Double(arguments[index + 2]), from <= to else { return nil }
+        return from * 1000...to * 1000
+    }
 
     /// `--select NAME` selects the library item with that name at launch, for testing.
     private static func launchSelection() -> String? {
@@ -238,6 +250,10 @@ struct BaseCampCommands: Commands {
             Button("Split at Profile Position") {
                 store.splitSelectedTrackAtCursor()
             }
+            Button("Delete Selected Points") {
+                store.deleteProfileRange()
+            }
+            .disabled(store.profileRange == nil)
             Button("Convert to Route or Track") {
                 store.convertSelection()
             }

@@ -30,7 +30,10 @@ final class LibraryStore {
     /// Whether the sidebar lists the items or shows them in a table. Not saved.
     var sidebarStyle = SidebarStyle.list
     /// Everything selected in the sidebar. The inspector shows the item when exactly one is selected.
-    var selectedItems: Set<LibraryItem> = []
+    var selectedItems: Set<LibraryItem> = [] {
+        // A picked stretch of a profile belongs to the item it was picked on.
+        didSet { if selectedItems != oldValue { profileRange = nil } }
+    }
     /// The single selected item, or nil when nothing or several items are selected.
     var selection: LibraryItem? {
         get { selectedItems.count == 1 ? selectedItems.first : nil }
@@ -40,6 +43,8 @@ final class LibraryStore {
     var selectedStop: UUID?
     /// The point under the cursor of an elevation profile, marked on the map. Not saved.
     var profileCoordinate: Coordinate?
+    /// The stretch of the selected track picked by dragging across its profile, in metres from the start. Not saved.
+    var profileRange: ClosedRange<Double>?
     /// Bumped each time the map should frame `fitCoordinates`.
     var fitRequest = 0
     /// Read only when the map is refitted (see `fitRequest`), so changing it does not redraw the views that read the library.
@@ -813,6 +818,17 @@ final class LibraryStore {
         edit("Split Track") { $0.splitTrack(id, into: pieces) }
         selection = .track(pieces.0.id)
         return true
+    }
+
+    /// Deletes the points of the selected track that lie in the picked stretch of its profile, in one undo step.
+    func deleteProfileRange() {
+        guard case .track(let id)? = selection, let range = profileRange else { return }
+        edit("Delete Points") { library in
+            guard let index = library.tracks.firstIndex(where: { $0.id == id }),
+                  let trimmed = library.tracks[index].removingPoints(distanceIn: range) else { return }
+            library.tracks[index] = trimmed
+        }
+        profileRange = nil
     }
 
     /// Turns the selected track into a route, or a route into a track. The item keeps its name and points.

@@ -23,6 +23,10 @@ public struct Waypoint: Identifiable, Equatable, Codable, Sendable {
     public var time: Date?
     public var comment: String?
     public var symbol: String?
+    /// The proximity alarm distance in metres, as Garmin's GPX extension gives it. Nil when none is set.
+    public var proximity: Double?
+    /// The place's address and phone number. Nil when none is set. Files from before these fields have none.
+    public var address: WaypointAddress?
 
     public init(
         id: UUID = UUID(),
@@ -31,7 +35,9 @@ public struct Waypoint: Identifiable, Equatable, Codable, Sendable {
         elevation: Double? = nil,
         time: Date? = nil,
         comment: String? = nil,
-        symbol: String? = nil
+        symbol: String? = nil,
+        proximity: Double? = nil,
+        address: WaypointAddress? = nil
     ) {
         self.id = id
         self.name = name
@@ -40,6 +46,34 @@ public struct Waypoint: Identifiable, Equatable, Codable, Sendable {
         self.time = time
         self.comment = comment
         self.symbol = symbol
+        self.proximity = proximity
+        self.address = address
+    }
+}
+
+/// A waypoint's address and phone number, as Garmin's GPX waypoint extension holds them. Each part is optional.
+public struct WaypointAddress: Equatable, Codable, Sendable {
+    public var street: String?
+    public var city: String?
+    public var state: String?
+    public var postalCode: String?
+    public var country: String?
+    public var phone: String?
+
+    public init(
+        street: String? = nil,
+        city: String? = nil,
+        state: String? = nil,
+        postalCode: String? = nil,
+        country: String? = nil,
+        phone: String? = nil
+    ) {
+        self.street = street
+        self.city = city
+        self.state = state
+        self.postalCode = postalCode
+        self.country = country
+        self.phone = phone
     }
 }
 

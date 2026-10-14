@@ -135,6 +135,20 @@ private final class GPXReader: NSObject, XMLParserDelegate {
             }
         case ("sym", "wpt"):
             waypoint?.symbol = value.nonEmpty
+        case ("Proximity", "WaypointExtension") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
+            waypoint?.proximity = Double(value)
+        case ("StreetAddress", "Address") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
+            setAddress { $0.street = value.nonEmpty }
+        case ("City", "Address") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
+            setAddress { $0.city = value.nonEmpty }
+        case ("State", "Address") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
+            setAddress { $0.state = value.nonEmpty }
+        case ("PostalCode", "Address") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
+            setAddress { $0.postalCode = value.nonEmpty }
+        case ("Country", "Address") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
+            setAddress { $0.country = value.nonEmpty }
+        case ("PhoneNumber", "WaypointExtension") where namespaceURI?.hasPrefix(GarminNamespace.gpxExtensions) == true:
+            setAddress { $0.phone = value.nonEmpty }
         case ("wpt", _):
             if let waypoint { library.waypoints.append(waypoint) }
             waypoint = nil
@@ -180,6 +194,13 @@ private final class GPXReader: NSObject, XMLParserDelegate {
         default:
             break
         }
+    }
+
+    /// Changes the waypoint's address, making one when it has none yet.
+    private func setAddress(_ change: (inout WaypointAddress) -> Void) {
+        var address = waypoint?.address ?? WaypointAddress()
+        change(&address)
+        waypoint?.address = address
     }
 
     /// The route from its points. A route with no shape points is read as a plain list of points, as before, keeping
@@ -245,6 +266,7 @@ private enum GPXWriter {
             xml += element("name", waypoint.name, indent: "    ")
             xml += element("cmt", waypoint.comment, indent: "    ")
             xml += element("sym", waypoint.symbol, indent: "    ")
+            xml += waypointExtensions(waypoint, indent: "    ")
             xml += "  </wpt>\n"
         }
 
@@ -302,6 +324,29 @@ private enum GPXWriter {
 
     private static func number(_ value: Double) -> String {
         String(format: "%.7f", value)
+    }
+
+    /// The Garmin waypoint extension: proximity, address and phone number. Nothing when the waypoint has none of them.
+    private static func waypointExtensions(_ waypoint: Waypoint, indent: String) -> String {
+        let inner = indent + "  "
+        let address = waypoint.address
+        let parts = [
+            ("gpxx:StreetAddress", address?.street), ("gpxx:City", address?.city), ("gpxx:State", address?.state),
+            ("gpxx:PostalCode", address?.postalCode), ("gpxx:Country", address?.country),
+        ]
+        let addressXML = parts.map { element($0.0, $0.1, indent: inner + "    ") }.joined()
+        var body = ""
+        if let proximity = waypoint.proximity {
+            body += "\(inner)<gpxx:Proximity>\(number(proximity))</gpxx:Proximity>\n"
+        }
+        if !addressXML.isEmpty {
+            body += "\(inner)<gpxx:Address>\n" + addressXML + "\(inner)</gpxx:Address>\n"
+        }
+        body += element("gpxx:PhoneNumber", address?.phone, indent: inner)
+        guard !body.isEmpty else { return "" }
+        return "\(indent)<extensions>\n\(indent)  <gpxx:WaypointExtension>\n"
+            + body
+            + "\(indent)  </gpxx:WaypointExtension>\n\(indent)</extensions>\n"
     }
 
     /// `<extensions>` holding the item's colour name, or nothing when the item has no colour.

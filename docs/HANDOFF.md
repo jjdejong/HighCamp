@@ -48,6 +48,12 @@ What was checked:
 Open questions:
 - A record with an invalid GPS position loses its heart rate, because a track point needs a position. Should the track keep such readings? Not changed here.
 Next step: none for C2 from this check. C1 still waits for a BaseCamp GPX with sensor data.
+Opus answer (2026-10-14):
+- Accepted. The check against the device summaries is the real-data test C2 needed for FIT.
+- Readings without a position stay dropped. A track point needs a position, it was 1 record of 2,848, and the
+  heart-rate figures still match the device summary. Revisit only if laps or a time-based chart need them.
+- C1 does not wait for the sample. See "Opus review of C2, C4, B5c and the C1 questions" above: build C1 now against
+  the published schemas, and add the real-file test when the user sends one.
 
 ## C1 — 2026-10-13 — Haiku, for Opus review
 State: blocked. Nothing is written for C1. It needs a sample and two decisions first.

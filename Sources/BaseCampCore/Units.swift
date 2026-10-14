@@ -77,6 +77,15 @@ public enum UnitFormat {
         }
     }
 
+    /// The distance in metres for a value in the chosen distance unit: the inverse of `distanceValue`.
+    public static func distanceMeters(fromValue value: Double, _ system: UnitSystem) -> Double {
+        switch system {
+        case .metric: value * 1000
+        case .statute: value * 1609.344
+        case .nautical: value * 1852
+        }
+    }
+
     public static func distanceUnitName(_ system: UnitSystem) -> String {
         switch system {
         case .metric: "km"

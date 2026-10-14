@@ -54,4 +54,13 @@ final class UnitsTests: XCTestCase {
         XCTAssertEqual(UnitFormat.elevation(100, .metric), "100 m")
         XCTAssertEqual(UnitFormat.elevation(100, .statute), "328 ft")
     }
+
+    func testDistanceValuesConvertBackToMetres() {
+        for system in [UnitSystem.metric, .statute, .nautical] {
+            XCTAssertEqual(UnitFormat.distanceMeters(fromValue: UnitFormat.distanceValue(2_500, system), system), 2_500, accuracy: 1e-6)
+        }
+        XCTAssertEqual(UnitFormat.distanceMeters(fromValue: 2, .metric), 2_000, accuracy: 1e-9)
+        XCTAssertEqual(UnitFormat.distanceMeters(fromValue: 1, .statute), 1_609.344, accuracy: 1e-9)
+        XCTAssertEqual(UnitFormat.distanceMeters(fromValue: 1, .nautical), 1_852, accuracy: 1e-9)
+    }
 }

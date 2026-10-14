@@ -26,6 +26,22 @@ public struct GarminMapLevel: Equatable, Sendable {
     public var inherited = false
 }
 
+public extension Array where Element == GarminMapLevel {
+    /// The level to draw for a wanted detail of `bits`, moved `steps` levels: the most detailed level with geometry
+    /// of its own that does not exceed the wanted bits, then that many levels finer (positive) or coarser
+    /// (negative), within the levels the map has. Zoomed out past the coarsest level, nothing is drawn, unless the
+    /// steps reach it: one step finer than "nothing" is the coarsest level. Nil when nothing is to be drawn.
+    func drawnLevel(forBits bits: Int, steps: Int = 0) -> GarminMapLevel? {
+        let usable = filter { !$0.inherited }.sorted { $0.bits < $1.bits }
+        guard !usable.isEmpty else { return nil }
+        // -1 stands for "coarser than every level": nothing drawn.
+        let base = usable.lastIndex { $0.bits <= bits } ?? -1
+        let index = base + steps
+        guard index >= 0 else { return nil }
+        return usable[Swift.min(index, usable.count - 1)]
+    }
+}
+
 /// One rectangular cell of a map level and the geometry records stored for it.
 public struct GarminSubdivision: Equatable, Sendable {
     public let level: Int

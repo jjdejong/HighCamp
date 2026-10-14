@@ -2,6 +2,14 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Map detail moves whole map levels — 2026-10-14 — Opus
+State: done (this commit). Gate: 338 tests in four bundles, 3 skipped, no DIAG.
+The Detail setting (Lowest -2 … Highest +2) was added to the wanted bits, but OFM's levels are two bits apart, so
+one step changed the map at some zooms only. `[GarminMapLevel].drawnLevel(forBits:steps:)` (BaseCampIMG, tested)
+takes the level the zoom calls for and moves it by whole levels, within the map's levels; past the coarsest level
+nothing is drawn unless the steps reach it. Used by the drawing, the place names and the street names; overlays
+still use their finest level.
+
 ## Street names; Apple's map no longer shows while Garmin tiles load — 2026-10-14 — Opus
 State: done (3135695, d4aeecf, this commit). Gate: 335 tests in four bundles (core 273), 3 skipped, no DIAG.
 - The Garmin overlay now replaces Apple's map (`canReplaceMapContent`), so Apple's map no longer flashes through

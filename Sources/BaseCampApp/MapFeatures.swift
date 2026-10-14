@@ -101,7 +101,7 @@ actor MapFeatureCache {
     /// The streets, roads and rivers of one map in `area` with their names, from the level drawn at this scale.
     /// Railways, routes, boundaries and contour heights are left out.
     func namedLines(in area: GeoBounds, metersPerPoint: Double, map url: URL, detailOffset: Int) -> [NamedLine] {
-        let drawnBits = MapFeatureReader.detailBits(metersPerPoint: metersPerPoint) + detailOffset
+        let bits = MapFeatureReader.detailBits(metersPerPoint: metersPerPoint)
         var result: [NamedLine] = []
         for file in files(in: url.deletingLastPathComponent()) where file.url.lastPathComponent == url.lastPathComponent {
             guard !Task.isCancelled, let open = openMap(file) else { continue }
@@ -109,7 +109,7 @@ actor MapFeatureCache {
                 guard !Task.isCancelled else { return [] }
                 guard let bounds = subfile.bounds, subfile.parts.contains("RGN"), MapFeatureReader.intersects(bounds, area),
                       let levels = levels(for: subfile.name, in: file.url.path, image: open.image),
-                      let level = MapFeatureReader.level(levels, forBits: drawnBits),
+                      let level = levels.drawnLevel(forBits: bits, steps: detailOffset),
                       let subdivisions = subdivisions(for: subfile.name, in: file.url.path, image: open.image),
                       let labels = labels(for: subfile.name, in: file.url.path, image: open.image) else { continue }
                 for (index, cell) in subdivisions.enumerated()
@@ -146,7 +146,7 @@ actor MapFeatureCache {
     /// The places of one map to name in `area` at a scale of `metersPerPoint`: those on the level drawn and the two
     /// finer levels, each ranked by the coarsest level it is on. Nothing where the map draws nothing at this scale.
     func places(in area: GeoBounds, metersPerPoint: Double, map url: URL, detailOffset: Int) -> [MapPlace] {
-        let drawnBits = MapFeatureReader.detailBits(metersPerPoint: metersPerPoint) + detailOffset
+        let bits = MapFeatureReader.detailBits(metersPerPoint: metersPerPoint)
         var found: [String: MapPlace] = [:]
         for file in files(in: url.deletingLastPathComponent()) where file.url.lastPathComponent == url.lastPathComponent {
             guard !Task.isCancelled, let open = openMap(file) else { continue }
@@ -154,7 +154,7 @@ actor MapFeatureCache {
                 guard !Task.isCancelled else { return [] }
                 guard let bounds = subfile.bounds, subfile.parts.contains("RGN"), MapFeatureReader.intersects(bounds, area),
                       let levels = levels(for: subfile.name, in: file.url.path, image: open.image),
-                      let drawn = MapFeatureReader.level(levels, forBits: drawnBits),
+                      let drawn = levels.drawnLevel(forBits: bits, steps: detailOffset),
                       let subdivisions = subdivisions(for: subfile.name, in: file.url.path, image: open.image),
                       let labels = labels(for: subfile.name, in: file.url.path, image: open.image) else { continue }
                 // Every coarser level, which says how important each place is, the level drawn, and up to two finer
@@ -209,10 +209,11 @@ actor MapFeatureCache {
     private var listing: (folder: URL, read: Date, files: [MapFile])?
 
     /// The features of one map to draw in `area` at a scale of `metersPerPoint`. `detailOffset` moves the level
-    /// used: above 0 for more detail than the scale calls for, below 0 for less. With `finestLevel`, the map's finest
+    /// used by that many map levels: above 0 for more detail than the scale calls for, below 0 for less. With `finestLevel`, the map's finest
     /// level is used whatever the scale, as for overlays whose coarse levels are too rough to show.
     func features(in area: GeoBounds, metersPerPoint: Double, map url: URL, finestLevel: Bool, detailOffset: Int) -> MapFeatureSet {
-        let wantedBits = finestLevel ? 32 : MapFeatureReader.detailBits(metersPerPoint: metersPerPoint) + detailOffset
+        let wantedBits = finestLevel ? 32 : MapFeatureReader.detailBits(metersPerPoint: metersPerPoint)
+        let steps = finestLevel ? 0 : detailOffset
         var lineGroups: [LineKey: LineGroup] = [:]
         var areaGroups: [AreaKey: (rank: Int, group: AreaGroup)] = [:]
         var coverage: [GeoBounds] = []
@@ -228,7 +229,7 @@ actor MapFeatureCache {
                 // A map tile shows nothing when zoomed out past its coarsest level, so its cells are not even read,
                 // and its area is left to whatever is under the map.
                 guard let levels = levels(for: subfile.name, in: file.url.path, image: open.image),
-                      let level = MapFeatureReader.level(levels, forBits: wantedBits),
+                      let level = levels.drawnLevel(forBits: wantedBits, steps: steps),
                       let subdivisions = subdivisions(for: subfile.name, in: file.url.path, image: open.image) else { continue }
                 coverage.append(bounds)
 
@@ -351,11 +352,6 @@ enum MapFeatureReader {
         return thresholds.first { metersPerPoint >= $0.metres }?.bits ?? 24
     }
 
-    /// The level to draw: the most detailed level with geometry of its own that does not exceed the wanted bits.
-    /// Nil when the wanted detail is coarser than every such level, as when zoomed far out: the map shows nothing.
-    static func level(_ levels: [GarminMapLevel], forBits bits: Int) -> GarminMapLevel? {
-        levels.filter { !$0.inherited && $0.bits <= bits }.max { $0.bits < $1.bits }
-    }
 
     /// Whether a line of this type has its name written along it, and how important the name is: big roads most,
     /// then streets and tracks, then water. Nil for railways, tram and bus lines, cycle and hiking route networks,

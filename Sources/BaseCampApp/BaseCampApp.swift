@@ -16,6 +16,12 @@ struct BaseCampApp: App {
     @State private var garminMaps = GarminMapListStore()
     @State private var recalculator = RouteRecalculator()
 
+    init() {
+        #if DEBUG
+        Self.renderTileAndExitIfAsked()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup("BaseCamp Clone") {
             ContentView()
@@ -128,6 +134,29 @@ struct BaseCampApp: App {
         let arguments = CommandLine.arguments
         guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
         return arguments[index + 1]
+    }
+
+    /// `--render-tile Z/X/Y OUT.png --maps A.img,B.img [--relief 0.45]` draws one Garmin tile, as the map pane would
+    /// at twice the resolution, saves it and quits without opening a window. For checking the renderer.
+    static func renderTileAndExitIfAsked() {
+        guard let spec = launchValue("--render-tile"), let output = launchValue(spec),
+              let maps = launchValue("--maps") else { return }
+        let numbers = spec.split(separator: "/").compactMap { Int($0) }
+        guard numbers.count == 3 else { exit(2) }
+        let configuration = GarminMapConfiguration(
+            layers: maps.split(separator: ",").map {
+                GarminMapLayer(url: URL(fileURLWithPath: String($0)), isOverlay: false, minimumZoom: 0, maximumZoom: 30, opacity: 1)
+            },
+            detailOffset: 0, softColors: true, relief: Double(launchValue("--relief") ?? "0.45") ?? 0.45
+        )
+        let done = DispatchSemaphore(value: 0)
+        Task.detached {
+            let data = await GarminTileRenderer.png(z: numbers[0], x: numbers[1], y: numbers[2], scale: 2, configuration: configuration)
+            try? data?.write(to: URL(fileURLWithPath: output))
+            done.signal()
+        }
+        done.wait()
+        exit(0)
     }
 
     /// Set by `--map-image`, so the map view is saved there without asking.

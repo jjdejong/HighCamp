@@ -68,10 +68,11 @@ extension GarminIMG {
         let rgnHeader = try reader.read(rgn.offset, min(0x61, Int(rgn.size)))
         let rgnBase = GarminIMG.field(rgnHeader, 0x15, 4)
         let rgnLength = GarminIMG.field(rgnHeader, 0x19, 4)
-        let polygons2Base = GarminIMG.field(rgnHeader, 0x21, 4)
-        let polygons2Length = GarminIMG.field(rgnHeader, 0x25, 4)
-        let polylines2Base = GarminIMG.field(rgnHeader, 0x3D, 4)
-        let polylines2Length = GarminIMG.field(rgnHeader, 0x41, 4)
+        // Each RGN v2 section is an offset then a length, as in QMapShack's hdr_rgn_t.
+        let polygons2Base = GarminIMG.field(rgnHeader, 0x1D, 4)
+        let polygons2Length = GarminIMG.field(rgnHeader, 0x21, 4)
+        let polylines2Base = GarminIMG.field(rgnHeader, 0x39, 4)
+        let polylines2Length = GarminIMG.field(rgnHeader, 0x3D, 4)
 
         // The first subdivisions of each level but the last use 16-byte records (with a pointer to
         // the lower level); the last level uses 14-byte records.

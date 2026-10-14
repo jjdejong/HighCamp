@@ -30,6 +30,8 @@ public enum GPX {
 private enum GarminNamespace {
     static let gpxExtensions = "http://www.garmin.com/xmlschemas/GpxExtensions/"
     static let tripExtensions = "http://www.garmin.com/xmlschemas/TripExtensions/"
+    static let trackPointExtensions = "http://www.garmin.com/xmlschemas/TrackPointExtension/"
+    static let powerExtensions = "http://www.garmin.com/xmlschemas/PowerExtension/"
 }
 
 /// A route point as read: its position, whether it is a shaping point, and the shape points after it.
@@ -181,6 +183,16 @@ private final class GPXReader: NSObject, XMLParserDelegate {
             trackPoint?.elevation = Double(value)
         case ("time", "trkpt"):
             trackPoint?.time = GPXDate.parse(value)
+        case ("hr", "TrackPointExtension") where namespaceURI?.hasPrefix(GarminNamespace.trackPointExtensions) == true:
+            trackPoint?.heartRate = Double(value)
+        case ("cad", "TrackPointExtension") where namespaceURI?.hasPrefix(GarminNamespace.trackPointExtensions) == true:
+            trackPoint?.cadence = Double(value)
+        case ("atemp", "TrackPointExtension") where namespaceURI?.hasPrefix(GarminNamespace.trackPointExtensions) == true:
+            trackPoint?.temperature = Double(value)
+        case ("PowerInWatts", _) where namespaceURI?.hasPrefix(GarminNamespace.powerExtensions) == true:
+            trackPoint?.power = Double(value)
+        case ("power", "extensions"):
+            trackPoint?.power = Double(value)
         case ("trkpt", _):
             if let trackPoint { segment?.append(trackPoint) }
             trackPoint = nil
@@ -257,7 +269,9 @@ private enum GPXWriter {
         var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         xml += "<gpx version=\"1.1\" creator=\"BaseCamp Clone\" xmlns=\"http://www.topografix.com/GPX/1/1\""
         xml += " xmlns:gpxx=\"http://www.garmin.com/xmlschemas/GpxExtensions/v3\""
-        xml += " xmlns:trp=\"http://www.garmin.com/xmlschemas/TripExtensions/v1\">\n"
+        xml += " xmlns:trp=\"http://www.garmin.com/xmlschemas/TripExtensions/v1\""
+        xml += " xmlns:gpxtpx=\"http://www.garmin.com/xmlschemas/TrackPointExtension/v1\""
+        xml += " xmlns:power=\"http://www.garmin.com/xmlschemas/PowerExtension/v1\">\n"
 
         for waypoint in library.waypoints {
             xml += "  <wpt\(attributes(waypoint.coordinate))>\n"
@@ -307,6 +321,7 @@ private enum GPXWriter {
                     xml += "      <trkpt\(attributes(point.coordinate))>\n"
                     xml += element("ele", point.elevation.map(number), indent: "        ")
                     xml += element("time", point.time.map(GPXDate.string), indent: "        ")
+                    xml += sensorExtensions(point, indent: "        ")
                     xml += "      </trkpt>\n"
                 }
                 xml += "    </trkseg>\n"
@@ -324,6 +339,22 @@ private enum GPXWriter {
 
     private static func number(_ value: Double) -> String {
         String(format: "%.7f", value)
+    }
+
+    /// The sensor readings of a track point, in Garmin's track point extension and power extension. Nothing when the
+    /// point has none of them.
+    private static func sensorExtensions(_ point: TrackPoint, indent: String) -> String {
+        let inner = indent + "  "
+        var body = ""
+        let readings = element("gpxtpx:atemp", point.temperature.map { String(format: "%.1f", $0) }, indent: inner + "  ")
+            + element("gpxtpx:hr", point.heartRate.map { String(format: "%.0f", $0) }, indent: inner + "  ")
+            + element("gpxtpx:cad", point.cadence.map { String(format: "%.0f", $0) }, indent: inner + "  ")
+        if !readings.isEmpty {
+            body += "\(inner)<gpxtpx:TrackPointExtension>\n" + readings + "\(inner)</gpxtpx:TrackPointExtension>\n"
+        }
+        body += element("power:PowerInWatts", point.power.map { String(format: "%.0f", $0) }, indent: inner)
+        guard !body.isEmpty else { return "" }
+        return "\(indent)<extensions>\n" + body + "\(indent)</extensions>\n"
     }
 
     /// The Garmin waypoint extension: proximity, address and phone number. Nothing when the waypoint has none of them.

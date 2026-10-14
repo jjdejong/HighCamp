@@ -2,6 +2,23 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## B5c — 2026-10-13 — Haiku
+State: done
+Commits: <work hash>
+What was checked:
+- Core, `Tests/BaseCampCoreTests/RouteRecalculateTests.swift` (3 tests). Marking every leg keeps every shape, so the old line stays until the router answers. A route without a profile, and a route without legs, changes nothing and returns false.
+- App, on a scratch copy of the library (route "Loop": 5 stops, a Mountain bike profile, 4 legs, one leg waiting), with the debug build:
+  - The Route menu is between Collection and Track. "Recalculate Route" is enabled with the route selected.
+  - Clicking it marked and recalculated all four legs. Each leg's shape changed (127, 121, 143 and 94 points). Each method is now "calculated", and the stops are unchanged. The window capture shows every leg as "Calculated (Mountain bike, max 15%)".
+- Gate: 229 tests, 3 skipped, 0 failures, no DIAG.
+- The release bundle was rebuilt with `Tools/make-app-bundle.sh release`.
+Notes:
+- The menu item is disabled unless the selected item is a route with a profile and legs.
+- Recalculate also clears the route's earlier failures (`RouteRecalculator.retry`), so legs the router refused are asked again.
+- While legs wait, their old shape stays on the map, dashed, as the existing waiting logic draws them.
+Open questions: none.
+Next step: none for B5c.
+
 ## C4 — 2026-10-13 — Haiku, for Opus review
 State: partial. Filtering by time or distance is done. Deleting a range by profile selection has its core function, but no way to select the range yet, because that is a design choice.
 Commits: 98ebfbb

@@ -91,7 +91,10 @@ struct BaseCampApp: App {
         }
         .defaultSize(width: 1280, height: 820)
         .commands {
-            BaseCampCommands(store: store, planner: planner, elevation: elevation, display: display, layers: mapLayers, garminMaps: garminMaps)
+            BaseCampCommands(
+                store: store, planner: planner, recalculator: recalculator, routing: routing,
+                elevation: elevation, display: display, layers: mapLayers, garminMaps: garminMaps
+            )
         }
 
         Settings {
@@ -144,10 +147,18 @@ struct BaseCampApp: App {
 struct BaseCampCommands: Commands {
     let store: LibraryStore
     let planner: RoutePlanner
+    let recalculator: RouteRecalculator
+    let routing: RoutingSettings
     let elevation: ElevationSettings
     let display: DisplaySettings
     let layers: MapLayerSettings
     let garminMaps: GarminMapListStore
+
+    /// True when the selected item is a route with a profile and legs, which is what recalculation needs.
+    private var canRecalculateSelection: Bool {
+        guard case .route(let id)? = store.selection, let route = store.route(id) else { return false }
+        return route.profileID != nil && !route.legs.isEmpty
+    }
 
     var body: some Commands {
         CommandGroup(replacing: .printItem) {
@@ -187,6 +198,17 @@ struct BaseCampCommands: Commands {
                 }
             }
             .disabled(store.activeCollectionID == nil)
+        }
+
+        CommandMenu("Route") {
+            Button("Recalculate Route") {
+                guard case .route(let id)? = store.selection else { return }
+                // Clears the route's earlier failures too, so legs the router refused are asked again.
+                if store.markRouteForRecalculation(id) {
+                    recalculator.retry(id, store: store, planner: planner, settings: routing, demFolder: elevation.folder)
+                }
+            }
+            .disabled(!canRecalculateSelection)
         }
 
         CommandMenu("Track") {

@@ -759,6 +759,18 @@ final class LibraryStore {
         }
     }
 
+    /// Marks every leg of the route to be calculated again (see `Route.markAllLegsForRecalculation`). Returns false
+    /// when the route has no profile or no legs, so nothing would be calculated.
+    @discardableResult
+    func markRouteForRecalculation(_ id: UUID) -> Bool {
+        var marked = false
+        edit("Recalculate Route") { library in
+            guard let index = library.routes.firstIndex(where: { $0.id == id }) else { return }
+            marked = library.routes[index].markAllLegsForRecalculation()
+        }
+        return marked
+    }
+
     /// Joins another track onto the selected track, in order. The result takes the selected track's place and name.
     func combineSelection(withTrack other: UUID) {
         guard case .track(let id)? = selection, id != other,

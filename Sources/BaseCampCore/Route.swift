@@ -221,6 +221,17 @@ public struct Route: Identifiable, Equatable, Sendable {
         return true
     }
 
+    /// Marks every leg to be calculated again with the route's profile. The lines stay as they are until the router
+    /// answers. Returns false when the route has no profile or no legs, so nothing would be calculated.
+    @discardableResult
+    public mutating func markAllLegsForRecalculation() -> Bool {
+        guard profileID != nil, !legs.isEmpty else { return false }
+        for index in legs.indices {
+            legs[index].needsRecalculation = true
+        }
+        return true
+    }
+
     /// The same route with each point of `points` replaced by the point at the same place in `updated`, which must
     /// have as many points. Used to put in heights read for the whole line.
     public func replacingPoints(_ updated: [RoutePoint]) -> Route? {

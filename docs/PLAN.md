@@ -296,7 +296,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | C3c | Haiku | reviewed | ea02d0b | selected items keep their colour, with a white halo under the line |
 | C1 | Haiku → Opus | done, for Opus review | bf6b16a, f891991 | colours, waypoint address and proximity, sensor fields read and written. The real-file test waits for a BaseCamp GPX with sensor data |
 | C2 | Haiku → Opus | reviewed | 8a542f8, d8b0aa8 | reviewed and accepted; GPX sensor reading is done with C1 |
-| C4 | Haiku → Opus | partial | 98ebfbb | filter reviewed and accepted; range: drag across the profile (decided, see HANDOFF), todo |
+| C4 | Haiku → Opus | done, for Opus review | 98ebfbb, 28227d6, 5298213 | filter reviewed and accepted; range: drag across the profile and delete, done for Opus review. Opus checks the drag by mouse |
 | C6 | — | moved | | to G2 |
 
 Suggested order for Haiku now: C1 (with C2's GPX part), then the C4 range. Phase A is done. Phase G is Opus only; Haiku does not touch the map renderer or the IMG decoder.

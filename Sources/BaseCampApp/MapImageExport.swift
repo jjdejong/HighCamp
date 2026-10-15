@@ -65,6 +65,7 @@ enum MapImageExport {
             ? FetchedTiles()
             : await fetchTiles(columns: columns, rows: rows) { base.tileURL(z: zoom, x: $0, y: $1) }
         let garmin = base == .garmin ? await garminFeatures(projection: projection, base: picture) : nil
+        let relief = if let garmin { await reliefImage(projection: projection, base: picture, drawings: garmin.features) } else { CGImage?.none }
         let request = base == .garmin ? garminNameRequest(projection: projection, base: picture) : nil
         let names = if let request { await MapPane.names(for: request) } else { MapNames?.none }
         let contourTiles = contours
@@ -88,7 +89,9 @@ enum MapImageExport {
             NSColor.white.setFill()
             rect.fill()
             if let garmin {
-                GarminPainter.draw(garmin.features, in: rect, patternOrigin: .zero, step: garmin.step) { projection.point($0) }
+                GarminPainter.draw(garmin.features, in: rect, patternOrigin: .zero, step: garmin.step, relief: relief) {
+                    projection.point($0)
+                }
                 if let request {
                     // Thinned at the zoom the names were chosen at, so every name has its icon.
                     let points = GarminTileRenderer.shownPoints(
@@ -134,6 +137,42 @@ enum MapImageExport {
                 + drawing.features.areas.reduce(0) { $0 + $1.rings.reduce(0) { $0 + $1.count } }
         }
         return (drawings, max(1, points / maximumFeaturePoints))
+    }
+
+    /// The relief shading over the whole picture, put together from the shadows of the map tiles it covers, at the
+    /// zoom the map would draw them, so it looks as on screen. Nil when the shading is off or no full map draws.
+    private static func reliefImage(projection: ImageProjection, base: PictureBase, drawings: [GarminMapDrawing]) async -> CGImage? {
+        let configuration = base.garmin
+        let zoom = projection.zoom(maximum: 21)
+        guard configuration.relief > 0, zoom >= GarminReliefRenderer.minimumZoom,
+              drawings.contains(where: { !$0.isOverlay && !($0.features.lines.isEmpty && $0.features.areas.isEmpty) })
+        else { return nil }
+        let worldSize = 256 * pow(2, Double(zoom))
+        let origin = projection.topLeftWorld(worldSize: worldSize)
+        let scale = projection.size.width / projection.widthWorld(worldSize: worldSize)
+        let width = Int(projection.size.width.rounded()), height = Int(projection.size.height.rounded())
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.interpolationQuality = .high
+        let maps = configuration.layers.filter { $0.isVisible(atZoom: zoom) }.map(\.url)
+        let tileSize = 256 * scale
+        let columns = Int((origin.x / 256).rounded(.down))...Int(((origin.x + projection.size.width / scale - 0.001) / 256).rounded(.down))
+        let rows = Int((origin.y / 256).rounded(.down))...Int(((origin.y + projection.size.height / scale - 0.001) / 256).rounded(.down))
+        var found = false
+        for column in columns {
+            for row in rows {
+                guard let shadows = await GarminReliefRenderer.image(
+                    z: zoom, x: column, y: row, strength: configuration.relief, maps: maps
+                ) else { continue }
+                // The bitmap's origin is at the bottom left; the tile's top left is at (x, y) from the top.
+                let x = (Double(column) * 256 - origin.x) * scale, y = (Double(row) * 256 - origin.y) * scale
+                context.draw(shadows, in: CGRect(x: x, y: Double(height) - y - tileSize, width: tileSize, height: tileSize))
+                found = true
+            }
+        }
+        return found ? context.makeImage() : nil
     }
 
     /// The names to read for the picture, as the map pane reads them for its view: the full maps drawn at the

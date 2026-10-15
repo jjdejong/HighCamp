@@ -2,6 +2,16 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Thinner lines when zoomed out — 2026-10-15 — Opus
+State: done (this commit). Gate: core 307, 3 skipped.
+User report (screenshot of Sassenage at about z13): roads still too wide zoomed out. A style's widths are
+pixels at every zoom, so zoomed out a road covers a hundred metres, and with Detail at High every street (a white
+line with a border on both sides, 3 px) merged into an olive mass.
+- `GarminPainter.LineScaling.forZoom`: lines of 3 px or more at 0.75 of the style's width from z16, 15% less
+  per zoom out (z13: 0.46, so the 7-px road is about 3 px), never under 2 px. Below z15 thin bordered streets
+  are one 1-px line in a colour between their own and their border's. Saved pictures keep 0.75 (no zoom there).
+- Checked: z13 tile before and after; release app at Sassenage-Fontaine around z12.5 and z13.5.
+
 ## Narrower, sharper roads — 2026-10-15 — Opus
 State: done (this commit). Gate: core 307, 3 skipped.
 User report: the large yellow roads look mushy and too wide (1x screen).

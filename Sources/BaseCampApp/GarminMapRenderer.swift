@@ -103,7 +103,9 @@ enum GarminTileRenderer {
                 let world = WebMercator.unit(coordinate)
                 return NSPoint(x: world.x * worldSize - origin.x, y: world.y * worldSize - origin.y)
             }
-            GarminPainter.draw(drawings, in: rect, patternOrigin: origin, relief: relief, crisp: scale < 1.5, project: project)
+            GarminPainter.draw(
+                drawings, in: rect, patternOrigin: origin, relief: relief, crisp: scale < 1.5, lines: .forZoom(z), project: project
+            )
             GarminPainter.drawPoints(Self.shownPoints(drawings, zoom: z, hidden: configuration.hiddenPointTypes), project: project)
         }
     }
@@ -196,7 +198,7 @@ enum GarminPainter {
     /// across tiles. `step` thins long paths for large pictures: every `step`-th point is drawn.
     static func draw(
         _ drawings: [GarminMapDrawing], in rect: NSRect, patternOrigin: NSPoint, step: Int = 1, relief: CGImage? = nil,
-        crisp: Bool = false, project: (Coordinate) -> NSPoint
+        crisp: Bool = false, lines: LineScaling = LineScaling(), project: (Coordinate) -> NSPoint
     ) {
         let context = NSGraphicsContext.current?.cgContext
         // Soft colours: the full maps are drawn in a layer, then paled with white where they drew something, the
@@ -243,7 +245,7 @@ enum GarminPainter {
                 context?.setAlpha(drawing.opacity)
                 context?.beginTransparencyLayer(auxiliaryInfo: nil)
             }
-            draw(drawing.features, plainAreas: drawing.softColors, step: step, crisp: crisp, project: project)
+            draw(drawing.features, plainAreas: drawing.softColors, step: step, crisp: crisp, lines: lines, project: project)
             if faded {
                 context?.endTransparencyLayer()
                 context?.setAlpha(1)
@@ -254,17 +256,33 @@ enum GarminPainter {
 
     /// One map's areas in the map's order, then its lines in two passes (see below). With `plainAreas`, patterned
     /// areas (forest drawn as rows of trees, say) are filled plainly, which makes the map much less busy.
-    /// Lines this wide or wider are drawn at `wideLineScale` of the style's width. MapKit shows a tile up to 1.41
-    /// times its size between two zoom levels, so a style's 7-pixel road came out as a 10-pixel band.
-    static let wideLine: CGFloat = 3
-    static let wideLineScale: CGFloat = 0.75
+    /// How lines are drawn at a zoom. A style's widths are pixels, the same at every zoom, so zoomed out a 7-pixel
+    /// road covers a hundred metres and a town's streets, each a white line with a border on both sides, merge into
+    /// one olive mass. Devices draw them thinner when zoomed out; so does this.
+    struct LineScaling: Sendable {
+        /// Lines `wideLine` pixels or wider are drawn at this fraction of the style's width, never under 2 pixels.
+        var scale: CGFloat = 0.75
+        /// Thin bordered lines (streets) are drawn as one thin line in a colour between their own and their
+        /// border's, without the border.
+        var plainThinStreets = false
 
-    /// A style width as drawn: wide lines narrower by `wideLineScale`.
-    static func drawnWidth(_ width: CGFloat) -> CGFloat {
-        width >= wideLine ? width * wideLineScale : width
+        static let wideLine: CGFloat = 3
+
+        /// Three quarters from zoom 16 (MapKit shows a tile up to 1.41 times its size between zoom levels, so a
+        /// 7-pixel road came out as a 10-pixel band), 15% less at each zoom out; streets without borders below 15.
+        static func forZoom(_ zoom: Int) -> LineScaling {
+            LineScaling(scale: 0.75 * pow(0.85, CGFloat(max(0, 16 - zoom))), plainThinStreets: zoom < 15)
+        }
+
+        /// A style width as drawn.
+        func width(_ width: CGFloat) -> CGFloat {
+            width >= Self.wideLine ? max(2, width * scale) : width
+        }
     }
 
-    private static func draw(_ features: MapFeatureSet, plainAreas: Bool, step: Int, crisp: Bool, project: (Coordinate) -> NSPoint) {
+    private static func draw(
+        _ features: MapFeatureSet, plainAreas: Bool, step: Int, crisp: Bool, lines: LineScaling, project: (Coordinate) -> NSPoint
+    ) {
         for group in features.areas {
             let path = NSBezierPath()
             for ring in group.rings {
@@ -286,21 +304,27 @@ enum GarminPainter {
         // As QMapShack draws them: first, type by type, each patterned line, or the border of a bordered line, or
         // a plain line; then the inside of every bordered line, so roads sit on top and join cleanly.
         for (group, path) in zip(features.lines, paths) {
-            if group.style.pattern == nil, let border = group.style.border {
+            if group.style.pattern == nil, let border = group.style.border,
+               lines.plainThinStreets, group.style.width <= crispWidth {
+                (group.style.rgb.nsColor.blended(withFraction: 0.5, of: border.nsColor) ?? border.nsColor).setStroke()
+                path.lineWidth = 1
+                strokeCrisply(path, when: crisp)
+            } else if group.style.pattern == nil, let border = group.style.border {
                 border.nsColor.setStroke()
                 // The border keeps at least a pixel on each side when the line is drawn narrower.
-                let inner = drawnWidth(group.style.width)
+                let inner = lines.width(group.style.width)
                 let side = max(1, (group.style.borderWidth - group.style.width) / 2 * (inner / max(1, group.style.width)))
                 path.lineWidth = inner + 2 * side
                 // Roads are drawn unsmoothed on a screen of one pixel per point, as BaseCamp draws them, so their
                 // one-pixel edges stay sharp instead of blurring into the road's colour.
                 strokeCrisply(path, when: crisp)
             } else {
-                stroke(path, style: group.style, crisp: crisp)
+                stroke(path, style: group.style, crisp: crisp, lines: lines)
             }
         }
         for (group, path) in zip(features.lines, paths) where group.style.pattern == nil && group.style.border != nil {
-            stroke(path, style: group.style, crisp: crisp)
+            if lines.plainThinStreets && group.style.width <= crispWidth { continue }
+            stroke(path, style: group.style, crisp: crisp, lines: lines)
         }
     }
 
@@ -339,10 +363,10 @@ enum GarminPainter {
     /// device, instead of a blur over twice as many pale pixels. Thicker lines keep their smooth edges.
     static let crispWidth: CGFloat = 2
 
-    private static func stroke(_ path: NSBezierPath, style: LineStyle, crisp: Bool) {
+    private static func stroke(_ path: NSBezierPath, style: LineStyle, crisp: Bool, lines: LineScaling) {
         guard let pattern = style.pattern else {
             style.rgb.nsColor.setStroke()
-            path.lineWidth = drawnWidth(style.width)
+            path.lineWidth = lines.width(style.width)
             strokeCrisply(path, when: crisp && (style.border != nil || style.width <= crispWidth))
             return
         }
@@ -359,7 +383,7 @@ enum GarminPainter {
         }
         defer { context.setShouldAntialias(true) }
         path.lineCapStyle = .butt
-        let row = drawnWidth(CGFloat(pattern.rows)) / CGFloat(pattern.rows)
+        let row = lines.width(CGFloat(pattern.rows)) / CGFloat(pattern.rows)
         for ring in 0..<((pattern.rows + 1) / 2) {
             path.lineWidth = CGFloat(pattern.rows - 2 * ring) * row
             path.setLineDash(nil, count: 0, phase: 0)

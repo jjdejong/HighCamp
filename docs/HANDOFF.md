@@ -2,6 +2,21 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Course ascent on the Edge — 2026-10-15 — Opus
+State: done (this commit). Gate: core 280 tests, 3 skipped, no DIAG.
+User report: Test Route 1 sent to the Edge showed the right distance but 30,746 m of ascent instead of 885.
+Cause: stops placed, inserted or moved by hand have no height (`moveStop` clears it, `setLeg` keeps only the
+router's points between the stops), so the course had a "no value" altitude (0xFFFF) at every stop between
+heights on the legs. The Edge counts those as real heights, so every stop was a spike.
+- `FITCourse.encode` now gives every record a height when any point has one: interpolated along the distance
+  between the nearest heights, the nearest one at the ends. No heights at all are still written as no value.
+- The lap carries total ascent and descent (fields 21 and 22), counted as the app counts them, so the Edge can
+  show the app's figure. Same encoder for File > Export FIT course.
+- Tests: a hand-edited route (stops without heights, calculated legs with them), no heights, lap ascent.
+Not done: the stops themselves still have no height in the library (the inspector and GPX export show none).
+Giving a stop the height of the router's line at it would change the stop, which `setLeg` uses to spot stale
+answers, so it needs care. Not checked on the device by Claude (never written to it): the user re-sends.
+
 ## Track DEMs: high-resolution profiles from a folder of tiles — 2026-10-14 — Opus
 State: done (e809ca8 core and DEM, this commit app). Gate: 345 tests in four bundles (core 277), 3 skipped, no
 DIAG. Not seen on screen (the user was at the machine); the pipeline was timed on the user's whole DEM folder.

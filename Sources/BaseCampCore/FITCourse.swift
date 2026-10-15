@@ -51,6 +51,8 @@ public enum FITCourse {
         let nameBytes = Array(truncatedName(name).utf8)
         let cumulative = cumulativeDistances(points)
         let offsets = timeOffsets(cumulative, speedKilometresPerHour: assumedSpeedKilometresPerHour)
+        let heights = filledElevations(points.map(\.elevation), at: cumulative)
+        let climb = ActivityStatistics.climb(heights.compactMap { $0 }, threshold: ActivityStatistics.elevationNoise)
         let end = start &+ offsets[offsets.count - 1]
         let duration = UInt32(clamping: UInt64(offsets[offsets.count - 1]) * 1000)
 
@@ -90,6 +92,8 @@ public enum FITCourse {
             Field(number: 7, size: 4, baseType: .uint32),
             Field(number: 8, size: 4, baseType: .uint32),
             Field(number: 9, size: 4, baseType: .uint32),
+            Field(number: 21, size: 2, baseType: .uint16),
+            Field(number: 22, size: 2, baseType: .uint16),
             Field(number: 25, size: 1, baseType: .enumeration),
         ])
         body.byte(2)
@@ -104,6 +108,9 @@ public enum FITCourse {
         body.uint32(duration)
         body.uint32(duration)
         body.uint32(centimetres(cumulative[cumulative.count - 1]))
+        // Total ascent and descent in whole metres, as the app counts them; 0xFFFF when there are no heights.
+        body.uint16(climb.map { UInt16(clamping: Int($0.ascent.rounded())) } ?? 0xFFFF)
+        body.uint16(climb.map { UInt16(clamping: Int($0.descent.rounded())) } ?? 0xFFFF)
         body.byte(sportCycling)
 
         body.define(local: 3, global: messageRecord, fields: [
@@ -119,7 +126,7 @@ public enum FITCourse {
             body.int32(semicircles(point.coordinate.latitude))
             body.int32(semicircles(point.coordinate.longitude))
             body.uint32(centimetres(cumulative[index]))
-            body.uint16(altitude(point.elevation))
+            body.uint16(altitude(heights[index]))
         }
 
         var file = Writer()
@@ -172,6 +179,31 @@ public enum FITCourse {
         guard let elevation else { return 0xFFFF }
         let scaled = ((elevation + 500) * 5).rounded()
         return UInt16(clamping: Int(max(0, min(scaled, 65_534))))
+    }
+
+    /// Every point gets a height when any point has one: a missing height is interpolated along the distance
+    /// between the nearest heights on either side, or takes the nearest one at the ends. Edge devices read a
+    /// record's "no value" altitude as a height, so each missing height would be a spike in the profile and the
+    /// course's ascent. Routes drawn by hand have no height at their stops, only on the router's legs between.
+    static func filledElevations(_ elevations: [Double?], at distances: [Double]) -> [Double?] {
+        let known = elevations.indices.filter { elevations[$0] != nil }
+        guard let first = known.first, let last = known.last else { return elevations }
+        var result = elevations
+        for index in 0..<first {
+            result[index] = elevations[first]
+        }
+        for index in (last + 1)..<elevations.count {
+            result[index] = elevations[last]
+        }
+        for (start, end) in zip(known, known.dropFirst()) where end > start + 1 {
+            let low = elevations[start]!, high = elevations[end]!
+            let span = distances[end] - distances[start]
+            for index in (start + 1)..<end {
+                let fraction = span > 0 ? (distances[index] - distances[start]) / span : 0
+                result[index] = low + (high - low) * fraction
+            }
+        }
+        return result
     }
 
     /// Whole seconds from the start to each point, at a constant speed.

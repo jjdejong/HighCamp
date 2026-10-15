@@ -132,6 +132,94 @@ final class FITCourseTests: XCTestCase {
         XCTAssertEqual(track.coursePoints[0].elevation, 100)
     }
 
+    // MARK: Heights
+
+    /// A route edited by hand: its stops have no height, the router's legs between them do. The device reads a
+    /// "no height" record as a real altitude, so every stop was a spike (an 885 m route showed 30,746 m of ascent).
+    func testStopsWithoutHeightTakeTheirNeighboursHeights() throws {
+        let route = Route(name: "Edited", stops: [
+            RouteStop(coordinate: Coordinate(latitude: 45.000, longitude: 5)),
+            RouteStop(coordinate: Coordinate(latitude: 45.004, longitude: 5)),
+            RouteStop(coordinate: Coordinate(latitude: 45.008, longitude: 5)),
+        ], legs: [
+            RouteLeg(shape: [
+                RoutePoint(coordinate: Coordinate(latitude: 45.001, longitude: 5), elevation: 500),
+                RoutePoint(coordinate: Coordinate(latitude: 45.003, longitude: 5), elevation: 540),
+            ], method: .calculated),
+            RouteLeg(shape: [
+                RoutePoint(coordinate: Coordinate(latitude: 45.005, longitude: 5), elevation: 560),
+                RoutePoint(coordinate: Coordinate(latitude: 45.007, longitude: 5), elevation: 600),
+            ], method: .calculated),
+        ])
+
+        let data = try FITCourse.encode(name: "Edited", points: route.coursePoints)
+        let heights = try FITActivity.read(data, name: "Edited").segments[0].map(\.elevation)
+
+        XCTAssertEqual(heights.count, 7)
+        let expected: [Double] = [500, 500, 540, 550, 560, 600, 600]
+        for (height, wanted) in zip(heights, expected) {
+            XCTAssertEqual(try XCTUnwrap(height), wanted, accuracy: 0.2)
+        }
+    }
+
+    func testNoHeightsStayUnset() throws {
+        let points = (0..<4).map { CoursePoint(coordinate: Coordinate(latitude: 45 + Double($0) * 0.001, longitude: 5)) }
+
+        let data = try FITCourse.encode(name: "Flat", points: points)
+
+        XCTAssertTrue(try FITActivity.read(data, name: "Flat").segments[0].allSatisfy { $0.elevation == nil })
+        let lap = try XCTUnwrap(messages(data).first { $0.global == 19 })
+        XCTAssertEqual(lap.fields[21], [0xFF, 0xFF], "no total ascent without heights")
+    }
+
+    func testLapCarriesTheAscentAndDescent() throws {
+        let heights: [Double?] = [300, 350, nil, 420, 380, 400]
+        let points = heights.enumerated().map { index, height in
+            CoursePoint(coordinate: Coordinate(latitude: 45 + Double(index) * 0.001, longitude: 5), elevation: height)
+        }
+
+        let data = try FITCourse.encode(name: "Climb", points: points)
+        let lap = try XCTUnwrap(messages(data).first { $0.global == 19 })
+
+        // 300 → 420 is 120 up, 420 → 380 is 40 down, 380 → 400 is 20 up.
+        XCTAssertEqual(lap.fields[21].map(littleEndian), 140)
+        XCTAssertEqual(lap.fields[22].map(littleEndian), 40)
+    }
+
+    /// The data messages of a FIT file, by global message number, with each field's bytes.
+    private func messages(_ data: Data) -> [(global: UInt16, fields: [UInt8: [UInt8]])] {
+        let bytes = [UInt8](data)
+        var definitions: [UInt8: (global: UInt16, fields: [(number: UInt8, size: Int)])] = [:]
+        var result: [(global: UInt16, fields: [UInt8: [UInt8]])] = []
+        var offset = Int(bytes[0])
+        while offset < bytes.count - 2 {
+            let header = bytes[offset]
+            let local = header & 0x0F
+            offset += 1
+            if header & 0x40 != 0 {
+                let global = UInt16(bytes[offset + 2]) | UInt16(bytes[offset + 3]) << 8
+                let count = Int(bytes[offset + 4])
+                let fields = (0..<count).map { (number: bytes[offset + 5 + 3 * $0], size: Int(bytes[offset + 6 + 3 * $0])) }
+                definitions[local] = (global, fields)
+                offset += 5 + 3 * count
+            } else if let definition = definitions[local] {
+                var fields: [UInt8: [UInt8]] = [:]
+                for field in definition.fields {
+                    fields[field.number] = Array(bytes[offset..<(offset + field.size)])
+                    offset += field.size
+                }
+                result.append((definition.global, fields))
+            } else {
+                break
+            }
+        }
+        return result
+    }
+
+    private func littleEndian(_ bytes: [UInt8]) -> Int {
+        bytes.reversed().reduce(0) { $0 << 8 | Int($1) }
+    }
+
     /// Writes a sample course for checking with Garmin's decoder.
     /// Runs only when FIT_DUMP_PATH is set, for example:
     ///   FIT_DUMP_PATH=/tmp/sample.fit swift test --filter FITCourseTests

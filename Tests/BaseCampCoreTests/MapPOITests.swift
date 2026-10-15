@@ -13,6 +13,12 @@ final class MapPOITests: XCTestCase {
         XCTAssertEqual(MapPOI.priority(named: false, labelled: true), MapPOI.priority(named: false, labelled: false))
     }
 
+    func testPassesAndSummitsAreLandmarks() {
+        XCTAssertTrue(poi(0x6401, 45, 5, priority: 3).isLandmark)
+        XCTAssertTrue(poi(0x6616, 45, 5, priority: 3).isLandmark)
+        XCTAssertFalse(poi(0x2A0E, 45, 5, priority: 3).isLandmark)
+    }
+
     func testTheMostImportantPointOfACrowdedSpotIsShown() {
         let bench = poi(0x5001, 45.18801, 5.72401, priority: 0)
         let pass = poi(0x6401, 45.18802, 5.72402, priority: 3, name: "Col")

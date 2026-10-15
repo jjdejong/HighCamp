@@ -16,6 +16,11 @@ public struct MapPOI: Equatable, Sendable {
         self.priority = priority
     }
 
+    /// Passes, summits, glaciers and national parks: their names are written above street names.
+    public var isLandmark: Bool {
+        [0x6401, 0x6616, 0x650A, 0x640E].contains(type)
+    }
+
     /// A point whose style writes its name and that has one comes first (a pass, a summit, a café), then other named
     /// points (a shop, a bus stop), then the unnamed ones (a bench, a bollard).
     public static func priority(named: Bool, labelled: Bool) -> Int {

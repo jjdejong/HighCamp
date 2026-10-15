@@ -2,6 +2,28 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## G2: point icons and names — 2026-10-15 — Opus
+State: icons and names done (941b0c3 TYP points, a647437 icons, this commit names). Gate: core 295, 3 skipped.
+- TYP points (QMapShack's parsePoint): day icon, label size and colour, type name. OFM: 125 types, mostly
+  16-25 px; shop-like types are marked unlabelled.
+- Icons: points of the level drawn, over every map, pixel for point; places left out (their names are drawn);
+  no style icon: a small dot; a style icon that is fully transparent: not drawn. OFM's finest level has about
+  13,000 points in 3 x 4 km of Grenoble (2,900 benches), so `MapPOI.shown` keeps the most important point per
+  24-point square of the world at the zoom (labelled and named first). Squares depend only on position, so tiles
+  agree, and a coarser zoom's square holds four of the next one's.
+- Names: named points whose style labels them, among those shown at the view's zoom rounded down (so each name
+  has its icon whichever whole zoom MapKit draws). Text right of the icon, in the style's size and colour;
+  passes, summits, glaciers, national parks above street names (280), the rest under them (80); at most 400.
+- `MapPlace.displayName` keeps words without a vowel in capitals (LCL, BNP Paribas).
+- Checked: --render-tile at scale 1 (Grenoble z15-17; Chartreuse passes and Le Grand Som); new debug hook
+  `--point-names Z/X/Y --maps A.img` prints the names the pane would write (Grand Som tile: "Le Grand Som
+  (2026M)", "Col des Aures (1631M)"; Grenoble: cafés, bakeries, banks, a hotel).
+Not seen on screen: the names as annotations (the user was at the machine).
+Incident: a command chain ran the debug binary after a failed build, so the old binary, without the new hook,
+opened the app window for about 10 minutes (killed). The library file was last written before it (10:53), so
+it was not changed. Run hooks only after `swift build ... | tail -1 | grep -q 'Build complete'`, with
+`--library` set to a scratch file and a time limit (`perl -e 'alarm 60; exec @ARGV' ...`).
+
 ## Route stops take heights from their legs — 2026-10-15 — Opus
 State: done (this commit). Gate: core 287 tests, 3 skipped, no DIAG.
 Follow-up to the course ascent fix. Read back from the Edge (`EdgeProbe fetch-course`), Test Route 1 had no

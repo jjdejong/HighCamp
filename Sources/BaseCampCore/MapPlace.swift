@@ -33,7 +33,8 @@ public struct MapPlace: Equatable, Sendable {
 
     /// Map names are often in capitals (OFM writes "SAINT-ÉGRÈVE"). Such names are shown in title case, with the
     /// small words of French and other place names kept small: "Saint-Égrève", "Notre-Dame-de-l'Osier". Names
-    /// already in mixed case are kept as they are.
+    /// already in mixed case are kept as they are. Words without a vowel are acronyms and stay in capitals: "LCL",
+    /// "BNP Paribas".
     public static func displayName(_ name: String) -> String {
         guard name == name.uppercased(), name != name.lowercased() else { return name }
         let small: Set<String> = [
@@ -49,7 +50,12 @@ public struct MapPlace: Equatable, Sendable {
             guard !word.isEmpty else { return }
             let lower = word.lowercased()
             let elided = elisions.contains(lower) && (next == "'" || next == "’")
-            result += !first && (small.contains(lower) || elided) ? lower : lower.prefix(1).uppercased() + lower.dropFirst()
+            let vowels = lower.folding(options: .diacriticInsensitive, locale: nil).contains { "aeiouy".contains($0) }
+            if word.count > 1, !vowels {
+                result += word
+            } else {
+                result += !first && (small.contains(lower) || elided) ? lower : lower.prefix(1).uppercased() + lower.dropFirst()
+            }
             first = false
             word = ""
         }

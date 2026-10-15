@@ -32,6 +32,9 @@ struct MapPin: Equatable {
         case place(rank: Int, size: Int)
         /// A street or river name, turned to follow its line. `angle` in degrees, counterclockwise from east.
         case street(angle: Int, importance: Int, water: Bool)
+        /// The name of a point of interest, written to the right of its icon (drawn in the map tiles), `iconWidth`
+        /// points wide. `size` is the style's label size (`GarminTypStyle.LabelSize`), `rgb` its colour if any.
+        case pointName(landmark: Bool, iconWidth: Int, size: Int, rgb: MapRGB?)
     }
 
     let id: String
@@ -483,6 +486,20 @@ struct MapKitView: NSViewRepresentable {
                 view.zPriority = .min
                 return view
             }
+            if case .pointName(let landmark, let iconWidth, let size, let rgb) = pin.style {
+                let image = MarkerImage.pointName(pin.title ?? "", size: size, rgb: rgb, landmark: landmark)
+                view.image = image
+                // The text's left edge just right of the icon; the image has 3 points of halo room on each side.
+                view.centerOffset = CGPoint(x: image.size.width / 2 + CGFloat(iconWidth) / 2 - 2, y: 0)
+                view.canShowCallout = false
+                view.isDraggable = false
+                view.isEnabled = false
+                view.collisionMode = .rectangle
+                // Passes and summits above street names; other points under them, and under every place name.
+                view.displayPriority = MKFeatureDisplayPriority(rawValue: landmark ? 280 : 80)
+                view.zPriority = .min
+                return view
+            }
             if case .street(let angle, let importance, let water) = pin.style {
                 view.image = MarkerImage.street(pin.title ?? "", angle: angle, water: water)
                 view.centerOffset = .zero
@@ -667,7 +684,7 @@ enum MarkerImage {
                 : dot(diameter: 10, fill: .white, label: nil, ring: .systemBlue)
         case .insertHandle:
             image = dot(diameter: 9, fill: NSColor.white.withAlphaComponent(0.75), label: nil, ring: NSColor.systemBlue.withAlphaComponent(0.6))
-        case .place, .street:
+        case .place, .street, .pointName:
             image = NSImage(size: NSSize(width: 1, height: 1))
         }
         cache[key] = image
@@ -704,6 +721,40 @@ enum MarkerImage {
             places.removeAll()
         }
         places[key] = image
+        return image
+    }
+
+    nonisolated(unsafe) private static var pointNames: [String: NSImage] = [:]
+
+    /// A point's name, in the style's size and colour (dark grey by default), with a white halo. Landmarks (passes,
+    /// summits) are a little bolder.
+    static func pointName(_ name: String, size: Int, rgb: MapRGB?, landmark: Bool) -> NSImage {
+        let key = "\(size)|\(rgb.map { "\($0.sortKey)" } ?? "-")|\(landmark)|\(name)"
+        placeLock.lock()
+        defer { placeLock.unlock() }
+        if let cached = pointNames[key] {
+            return cached
+        }
+        let points: CGFloat = switch GarminTypStyle.LabelSize(rawValue: size) {
+        case .small: 9.5
+        case .large: 12.5
+        default: 10.5
+        }
+        let font = NSFont.systemFont(ofSize: points, weight: landmark ? .semibold : .regular)
+        let colour = rgb?.nsColor ?? NSColor(calibratedWhite: 0.2, alpha: 1)
+        let fill: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: colour]
+        let halo: [NSAttributedString.Key: Any] = [.font: font, .strokeColor: NSColor.white.withAlphaComponent(0.9), .strokeWidth: 5.0]
+        let textSize = (name as NSString).size(withAttributes: fill)
+        let image = NSImage(size: NSSize(width: ceil(textSize.width) + 6, height: ceil(textSize.height) + 4), flipped: false) { _ in
+            let origin = NSPoint(x: 3, y: 2)
+            (name as NSString).draw(at: origin, withAttributes: halo)
+            (name as NSString).draw(at: origin, withAttributes: fill)
+            return true
+        }
+        if pointNames.count > 4000 {
+            pointNames.removeAll()
+        }
+        pointNames[key] = image
         return image
     }
 

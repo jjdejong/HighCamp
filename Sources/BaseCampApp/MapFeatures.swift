@@ -73,6 +73,17 @@ struct DrawnPOI: Sendable {
     let icon: POIIcon?
 }
 
+/// A point of interest whose name may be written, with how the map's style writes it.
+struct POIName: Sendable {
+    let poi: MapPOI
+    /// The style writes the name of this type (QMapShack's label types other than none).
+    let labelled: Bool
+    /// The icon's width in points, so the name starts beside it. 5 for the plain dot.
+    let iconWidth: Int
+    let size: GarminTypStyle.LabelSize
+    let colour: MapRGB?
+}
+
 /// The Garmin features read for one area, in drawing order, and where the maps have data.
 struct MapFeatureSet: Sendable {
     var lines: [LineGroup] = []
@@ -322,6 +333,37 @@ actor MapFeatureCache {
             ($0.key.type, $0.key.style.rgb.sortKey, $0.key.style.width) < ($1.key.type, $1.key.style.rgb.sortKey, $1.key.style.width)
         }
         return MapFeatureSet(lines: lines.map(\.value), areas: areas.map(\.value.group), points: points, coverage: coverage)
+    }
+
+    /// The points of interest of one map in `area`, on the level drawn at `metersPerPoint`, as the tiles read them,
+    /// with how the style writes their names. Not thinned (see `MapPOI.shown`).
+    func pointNames(in area: GeoBounds, metersPerPoint: Double, map url: URL, detailOffset: Int) -> [POIName] {
+        let bits = MapFeatureReader.detailBits(metersPerPoint: metersPerPoint)
+        var result: [POIName] = []
+        for file in files(in: url.deletingLastPathComponent()) where file.url.lastPathComponent == url.lastPathComponent {
+            guard !Task.isCancelled, let open = openMap(file) else { continue }
+            for subfile in open.image.subfiles {
+                guard !Task.isCancelled else { return [] }
+                guard let bounds = subfile.bounds, subfile.parts.contains("RGN"), MapFeatureReader.intersects(bounds, area),
+                      let levels = levels(for: subfile.name, in: file.url.path, image: open.image),
+                      let level = levels.drawnLevel(forBits: bits, steps: detailOffset),
+                      let subdivisions = subdivisions(for: subfile.name, in: file.url.path, image: open.image) else { continue }
+                for (index, cell) in subdivisions.enumerated()
+                where cell.level == level.level && MapFeatureReader.intersects(cell.bounds, area) {
+                    let key = CellKey(file: file.url.path, subfile: subfile.name, index: index)
+                    for poi in pointsOfInterest(key, cell: cell, open: open) where MapFeatureReader.contains(area, poi.coordinate) {
+                        let style = open.style?.points[poi.type]
+                        let icon = open.icons[poi.type]
+                        if icon == nil, style != nil { continue }
+                        result.append(POIName(
+                            poi: poi, labelled: style?.labelSize != GarminTypStyle.LabelSize.none, iconWidth: icon?.width ?? 5,
+                            size: style?.labelSize ?? .standard, colour: style?.labelColour.map(MapRGB.init)
+                        ))
+                    }
+                }
+            }
+        }
+        return result
     }
 
     /// The points of interest of one cell, with their names and priorities, from the cache when decoded recently.

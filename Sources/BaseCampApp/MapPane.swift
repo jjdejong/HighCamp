@@ -21,6 +21,8 @@ struct MapPane: View {
     @State private var places: [MapPlace] = []
     /// The street and river names in view, when zoomed in far enough for them.
     @State private var streets: [StreetLabel] = []
+    /// The names of the points of interest whose icons are drawn in view.
+    @State private var pointNames: [POIName] = []
 
     var body: some View {
         MapKitView(
@@ -119,6 +121,7 @@ struct MapPane: View {
         guard let request else {
             places = []
             streets = []
+            pointNames = []
             return
         }
         // Waits for the map to settle, so panning does not read the maps at every step.
@@ -135,6 +138,7 @@ struct MapPane: View {
         }
         guard !Task.isCancelled else { return }
         places = MapPlace.merged(found)
+        pointNames = await Self.pointNames(in: area, request: request)
 
         // Street names from about zoom 15, where there is room for them between the streets.
         guard request.viewport.metersPerPoint <= Self.streetNameScale else {
@@ -155,6 +159,34 @@ struct MapPane: View {
     /// Street names are written from this scale in, in metres per point (about zoom 15).
     static let streetNameScale = 4.5
 
+    /// Point names written, at most, in one view.
+    static let maximumPointNames = 400
+
+    /// The named points the tiles draw icons for, whose style writes their name. The tiles are drawn at a whole
+    /// zoom near the view's; points are thinned for the whole zoom below it, which are drawn at either (a coarser
+    /// zoom's squares each hold four of the next one's), so every name has its icon.
+    static func pointNames(in area: GeoBounds, request: PlaceRequest) async -> [POIName] {
+        let zoom = Int(request.viewport.zoomLevel.rounded(.down))
+        let middle = (area.north + area.south) / 2 * .pi / 180
+        let metersPerPoint = 40_075_016.686 * cos(middle) / (256 * pow(2, Double(zoom)))
+        var all: [POIName] = []
+        for map in request.maps {
+            all += await MapFeatureCache.shared.pointNames(
+                in: area, metersPerPoint: metersPerPoint, map: map, detailOffset: request.detailOffset
+            )
+        }
+        var byPoint: [String: POIName] = [:]
+        for name in all {
+            byPoint["\(name.poi.type)|\(name.poi.coordinate.latitude)|\(name.poi.coordinate.longitude)"] = name
+        }
+        let named = MapPOI.shown(all.map(\.poi), zoom: zoom).compactMap { poi -> POIName? in
+            guard poi.name != nil, let name = byPoint["\(poi.type)|\(poi.coordinate.latitude)|\(poi.coordinate.longitude)"],
+                  name.labelled else { return nil }
+            return name
+        }
+        return Array(named.sorted { ($0.poi.isLandmark ? 1 : 0) > ($1.poi.isLandmark ? 1 : 0) }.prefix(maximumPointNames))
+    }
+
     /// The place names, as text-only markers. MapKit keeps the more important of two that would overlap.
     private var placeLayer: MapLayerContent {
         var content = MapLayerContent()
@@ -162,6 +194,17 @@ struct MapPane: View {
             let id = "place-\(place.name)-\(place.coordinate.latitude)-\(place.coordinate.longitude)"
             content.pins.append(MapPin(
                 id: id, coordinate: place.coordinate, style: .place(rank: place.rank, size: place.size), item: nil, title: place.name
+            ))
+        }
+        for point in pointNames {
+            guard let name = point.poi.name else { continue }
+            content.pins.append(MapPin(
+                id: "poi-\(point.poi.type)-\(point.poi.coordinate.latitude)-\(point.poi.coordinate.longitude)",
+                coordinate: point.poi.coordinate,
+                style: .pointName(
+                    landmark: point.poi.isLandmark, iconWidth: point.iconWidth, size: point.size.rawValue, rgb: point.colour
+                ),
+                item: nil, title: name
             ))
         }
         for street in streets {
@@ -498,8 +541,13 @@ struct PlaceQuery: Equatable {
 
     /// The Web Mercator zoom this scale is nearest to, as the tiles count it.
     var zoom: Int {
+        Int(zoomLevel.rounded())
+    }
+
+    /// The Web Mercator zoom of this scale, with its fraction.
+    var zoomLevel: Double {
         let middle = (bounds.north + bounds.south) / 2 * .pi / 180
-        return Int((log2(40_075_016.686 * cos(middle) / (256 * max(metersPerPoint, 0.01)))).rounded())
+        return log2(40_075_016.686 * cos(middle) / (256 * max(metersPerPoint, 0.01)))
     }
 }
 

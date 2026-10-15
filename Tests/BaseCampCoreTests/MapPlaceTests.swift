@@ -15,6 +15,13 @@ final class MapPlaceTests: XCTestCase {
         XCTAssertEqual(MapPlace.displayName("LIGNE DE LYON À MARSEILLE"), "Ligne de Lyon à Marseille")
     }
 
+    func testAcronymsStayInCapitals() {
+        XCTAssertEqual(MapPlace.displayName("BNP PARIBAS"), "BNP Paribas")
+        XCTAssertEqual(MapPlace.displayName("LCL"), "LCL")
+        XCTAssertEqual(MapPlace.displayName("LE GRAND SOM (2026M)"), "Le Grand Som (2026M)")
+        XCTAssertEqual(MapPlace.displayName("HÔTEL D'ANGLETERRE"), "Hôtel d'Angleterre")
+    }
+
     func testMergingKeepsTheMostImportantOfTheSameNameNearby() {
         let grenoble = Coordinate(latitude: 45.188, longitude: 5.736)
         let nearby = Coordinate(latitude: 45.19, longitude: 5.72)

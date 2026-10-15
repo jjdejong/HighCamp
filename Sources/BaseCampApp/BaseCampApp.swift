@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import BaseCampIMG
 
 @main
 struct BaseCampApp: App {
@@ -20,6 +21,7 @@ struct BaseCampApp: App {
     init() {
         #if DEBUG
         Self.renderTileAndExitIfAsked()
+        Self.printPointNamesAndExitIfAsked()
         #endif
     }
 
@@ -137,6 +139,34 @@ struct BaseCampApp: App {
         let arguments = CommandLine.arguments
         guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
         return arguments[index + 1]
+    }
+
+    /// `--point-names Z/X/Y --maps A.img,B.img` prints the point names the map pane would write over that tile's area,
+    /// viewed at that zoom, and quits without opening a window. For checking the names.
+    static func printPointNamesAndExitIfAsked() {
+        guard let spec = launchValue("--point-names"), let maps = launchValue("--maps") else { return }
+        let numbers = spec.split(separator: "/").compactMap { Int($0) }
+        guard numbers.count == 3 else { exit(2) }
+        let tiles = pow(2, Double(numbers[0]))
+        func latitude(_ y: Double) -> Double { atan(sinh(.pi * (1 - 2 * y / tiles))) * 180 / .pi }
+        let bounds = GeoBounds(
+            north: latitude(Double(numbers[2])), east: Double(numbers[1] + 1) / tiles * 360 - 180,
+            south: latitude(Double(numbers[2] + 1)), west: Double(numbers[1]) / tiles * 360 - 180
+        )
+        let middle: Double = (bounds.north + bounds.south) / 2 * .pi / 180
+        // A shade finer than the zoom's own scale, so the view's zoom rounds down to it.
+        let metersPerPoint: Double = 40_075_016.686 * cos(middle) / (256 * tiles) * 0.99
+        let urls = maps.split(separator: ",").map { URL(fileURLWithPath: String($0)) }
+        let request = PlaceRequest(viewport: PlaceQuery(bounds: bounds, metersPerPoint: metersPerPoint), maps: urls, detailOffset: 0)
+        Task.detached {
+            for name in await MapPane.pointNames(in: bounds, request: request) {
+                print(String(format: "%06X", name.poi.type), name.poi.name ?? "", name.poi.isLandmark ? "(landmark)" : "", "\(name.size)")
+            }
+            exit(0)
+        }
+        while true {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        }
     }
 
     /// `--render-tile Z/X/Y OUT.png --maps A.img,B.img [--relief 0.45] [--scale 2]` draws one Garmin tile, as the map

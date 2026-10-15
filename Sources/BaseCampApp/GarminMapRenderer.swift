@@ -262,8 +262,8 @@ enum GarminPainter {
     struct LineScaling: Sendable {
         /// Lines `wideLine` pixels or wider are drawn at this fraction of the style's width, never under 2 pixels.
         var scale: CGFloat = 0.75
-        /// Thin bordered lines (streets) are drawn as one thin line in a colour between their own and their
-        /// border's, without the border.
+        /// Thin white lines with a border (streets) are drawn as one thin line in their border's colour. Coloured
+        /// thin roads keep their border: Utagawa draws its main roads as thin yellow lines with a grey border.
         var plainThinStreets = false
 
         static let wideLine: CGFloat = 3
@@ -272,6 +272,12 @@ enum GarminPainter {
         /// 7-pixel road came out as a 10-pixel band), 15% less at each zoom out; streets without borders below 15.
         static func forZoom(_ zoom: Int) -> LineScaling {
             LineScaling(scale: 0.75 * pow(0.85, CGFloat(max(0, 16 - zoom))), plainThinStreets: zoom < 15)
+        }
+
+        /// Whether this line is drawn as a plain thin street (see `plainThinStreets`).
+        func plainThin(_ style: LineStyle) -> Bool {
+            plainThinStreets && style.border != nil && style.pattern == nil && style.width <= GarminPainter.crispWidth
+                && min(style.rgb.red, style.rgb.green, style.rgb.blue) >= 0.85
         }
 
         /// A style width as drawn.
@@ -304,9 +310,8 @@ enum GarminPainter {
         // As QMapShack draws them: first, type by type, each patterned line, or the border of a bordered line, or
         // a plain line; then the inside of every bordered line, so roads sit on top and join cleanly.
         for (group, path) in zip(features.lines, paths) {
-            if group.style.pattern == nil, let border = group.style.border,
-               lines.plainThinStreets, group.style.width <= crispWidth {
-                (group.style.rgb.nsColor.blended(withFraction: 0.5, of: border.nsColor) ?? border.nsColor).setStroke()
+            if group.style.pattern == nil, let border = group.style.border, lines.plainThin(group.style) {
+                border.nsColor.setStroke()
                 path.lineWidth = 1
                 strokeCrisply(path, when: crisp)
             } else if group.style.pattern == nil, let border = group.style.border {
@@ -323,7 +328,7 @@ enum GarminPainter {
             }
         }
         for (group, path) in zip(features.lines, paths) where group.style.pattern == nil && group.style.border != nil {
-            if lines.plainThinStreets && group.style.width <= crispWidth { continue }
+            if lines.plainThin(group.style) { continue }
             stroke(path, style: group.style, crisp: crisp, lines: lines)
         }
     }

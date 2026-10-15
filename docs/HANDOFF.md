@@ -2,6 +2,18 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Utagawa checked against the OFM line changes — 2026-10-15 — Opus
+State: done (this commit). Gate: core 307, 3 skipped.
+User asked whether the OFM fixes hurt other maps. Rendered Utagawa France tiles (Grenoble and Chartreuse, z13 and
+z15) with d555220 (before the line changes) and with HEAD.
+- Regression found and fixed: below z15 every thin bordered line lost its border, drawn in a blend of its
+  colours. Utagawa draws its main roads as thin yellow lines with a grey border, and its country roads as thin
+  white ones, so its yellow roads turned pale grey and its mountain roads faded. Now only near-white thin lines
+  (streets) drop the border, drawn in the border's colour; coloured roads keep theirs.
+- After: Utagawa's yellow roads kept and sharp, its streets lighter; OFM as before.
+Still general, by design: wide lines thinner when zoomed out; roads unsmoothed at 1x; POIs below z15 only
+landmarks (a hiking map's huts and springs are hidden below z15 too).
+
 ## Thinner lines when zoomed out — 2026-10-15 — Opus
 State: done (this commit). Gate: core 307, 3 skipped.
 User report (screenshot of Sassenage at about z13): roads still too wide zoomed out. A style's widths are

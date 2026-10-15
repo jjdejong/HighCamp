@@ -60,6 +60,26 @@ if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "delete-custom"
     exit(0)
 }
 
+// `EdgeProbe delete-course NAME` deletes one course from Garmin/Courses, matched by exact file name.
+if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "delete-course" {
+    let name = CommandLine.arguments[2]
+    do {
+        let device = try MTPConnection.openFirstDevice()
+        let storageID = try device.storages().first?.id ?? 0
+        let files = try device.entries(in: ["Garmin", "Courses"], storageID: storageID).filter { !$0.isFolder }
+        guard let course = files.first(where: { $0.name == name }) else {
+            print("Not found: \(name)")
+            exit(1)
+        }
+        try device.delete(entryID: course.id, named: course.name, in: ["Garmin", "Courses"], storageID: storageID)
+        print("Deleted \(name)")
+    } catch {
+        print("Could not delete: \(error)")
+        exit(1)
+    }
+    exit(0)
+}
+
 // `EdgeProbe fetch-smallest OUTPUT.fit` copies the smallest activity from Garmin/Activities to OUTPUT.
 // It reads from the device and writes only the local copy.
 if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "fetch-smallest" {

@@ -67,6 +67,16 @@ final class POIIcon: @unchecked Sendable {
     }
 }
 
+/// A point type a map's style defines, as listed in the Points of Interest window.
+struct POIType: Sendable, Identifiable {
+    let type: Int
+    /// The style's name for it, such as "bench" or "Restaurant".
+    let name: String?
+    let icon: POIIcon
+
+    var id: Int { type }
+}
+
 /// A point to draw, with its icon.
 struct DrawnPOI: Sendable {
     let poi: MapPOI
@@ -364,6 +374,22 @@ actor MapFeatureCache {
             }
         }
         return result
+    }
+
+    /// The point types the maps' styles define, with each type's name and icon, for choosing which to show. Types
+    /// whose icon is transparent are left out, since they are never drawn; so are places.
+    func pointTypes(maps urls: [URL]) -> [POIType] {
+        var result: [Int: POIType] = [:]
+        for url in urls {
+            for file in files(in: url.deletingLastPathComponent()) where file.url.lastPathComponent == url.lastPathComponent {
+                guard let open = openMap(file), let style = open.style else { continue }
+                for (type, point) in style.points where result[type] == nil && !(0x0100...0x1100).contains(type) {
+                    guard let icon = open.icons[type] else { continue }
+                    result[type] = POIType(type: type, name: point.name, icon: icon)
+                }
+            }
+        }
+        return result.values.sorted { $0.type < $1.type }
     }
 
     /// The points of interest of one cell, with their names and priorities, from the cache when decoded recently.

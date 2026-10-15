@@ -2,6 +2,20 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Choosing which points of interest to show — 2026-10-15 — Opus
+State: done (this commit). Gate: core 298, 3 skipped. User request: hide the POI types they do not care about.
+- Map menu > Garmin maps > Points of Interest…: the types the enabled maps' styles define, with their icons and
+  the style's names, grouped by Garmin family (`POICategory`, core, tested); a tick box per type and per group,
+  a filter field, Show All, Hide All. Kept in `map.hiddenPointTypes` (array of ints), carried in
+  `GarminMapConfiguration.hiddenPointTypes`, so changing it redraws the tiles. Hidden types are dropped before
+  thinning (their room goes to other types) and lose their names too.
+- Types 0x1101-0x1108 are OFM's stations and bollards, not towns: `GarminPoint.isPlace` is now 0x0100-0x1100,
+  so stations get their icons and the "GRENOBLE" train station is no longer named like a town.
+- Checked in the release app: hiding fast food (0x2A07) in central Grenoble at z16 removed the orange marks
+  (45,709 pixels changed) and cafés and bars took their places; hiding bus stops and benches changed 808
+  pixels there (the thinning had mostly chosen other types). The window seen with `--show pointtypes` (debug).
+  The user's settings were restored after each test.
+
 ## G2: fewer points when zoomed out; map opens where left — 2026-10-15 — Opus
 State: done (previous commit for the map's opening view, this commit for the points). Gate: core 297, 3 skipped.
 Seen in the release app (the user allowed it; window captures with `screencapture -l`): with Detail at High, the

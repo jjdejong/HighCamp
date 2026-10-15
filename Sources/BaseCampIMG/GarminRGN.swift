@@ -70,8 +70,9 @@ public struct GarminPoint: Equatable, Sendable {
     /// The name is found through the POI table (LBL6).
     public let labelIsPOI: Bool
 
-    /// A city, town or village, whose name a map shows at every scale it can.
-    public var isPlace: Bool { type >= 0x0100 && type < 0x1200 }
+    /// A city, town or village (0x0100 to 0x1100), whose name a map shows at every scale it can. Maps such as OFM
+    /// use the other 0x11 subtypes for stations and bollards, which are points of interest.
+    public var isPlace: Bool { type >= 0x0100 && type <= 0x1100 }
 }
 
 /// A polyline or polygon from a map.

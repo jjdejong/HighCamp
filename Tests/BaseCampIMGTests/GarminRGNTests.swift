@@ -3,6 +3,16 @@ import XCTest
 @testable import BaseCampIMG
 
 final class GarminRGNTests: XCTestCase {
+    func testStationsAreNotPlaces() {
+        func point(_ type: Int) -> GarminPoint {
+            GarminPoint(type: type, coordinate: Coordinate(latitude: 45, longitude: 5), labelOffset: 0, labelIsPOI: false)
+        }
+        XCTAssertTrue(point(0x0400).isPlace)
+        XCTAssertTrue(point(0x1100).isPlace)
+        XCTAssertFalse(point(0x1102).isPlace, "OFM's train station")
+        XCTAssertFalse(point(0x2A00).isPlace)
+    }
+
     func testDegreesUseTheTwosComplementRange() {
         XCTAssertEqual(GarminRGNDecoder.degrees(0), 0, accuracy: 1e-9)
         XCTAssertEqual(GarminRGNDecoder.degrees(0x400000), 90, accuracy: 1e-9)

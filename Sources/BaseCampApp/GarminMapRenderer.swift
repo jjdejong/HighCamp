@@ -104,13 +104,14 @@ enum GarminTileRenderer {
                 return NSPoint(x: world.x * worldSize - origin.x, y: world.y * worldSize - origin.y)
             }
             GarminPainter.draw(drawings, in: rect, patternOrigin: origin, relief: relief, crisp: scale < 1.5, project: project)
-            GarminPainter.drawPoints(Self.shownPoints(drawings, zoom: z), project: project)
+            GarminPainter.drawPoints(Self.shownPoints(drawings, zoom: z, hidden: configuration.hiddenPointTypes), project: project)
         }
     }
 
     /// The points of every map drawn, thinned for the zoom over all of them, so two maps' icons do not overlap.
-    static func shownPoints(_ drawings: [GarminMapDrawing], zoom: Int) -> [DrawnPOI] {
-        let all = drawings.flatMap(\.features.points)
+    /// Hidden types are left out first, so the room they leave goes to the others.
+    static func shownPoints(_ drawings: [GarminMapDrawing], zoom: Int, hidden: Set<Int>) -> [DrawnPOI] {
+        let all = drawings.flatMap(\.features.points).filter { !hidden.contains($0.poi.type) }
         var icons: [MapPOIKey: POIIcon] = [:]
         for point in all where icons[MapPOIKey(point.poi)] == nil {
             icons[MapPOIKey(point.poi)] = point.icon

@@ -114,7 +114,7 @@ struct MapPane: View {
         let zoom = viewport.zoom
         let maps = garmin.layers.filter { !$0.isOverlay && $0.isVisible(atZoom: zoom) }.map(\.url)
         guard !maps.isEmpty else { return nil }
-        return PlaceRequest(viewport: viewport, maps: maps, detailOffset: garmin.detailOffset)
+        return PlaceRequest(viewport: viewport, maps: maps, detailOffset: garmin.detailOffset, hiddenPointTypes: garmin.hiddenPointTypes)
     }
 
     private func loadPlaces(_ request: PlaceRequest?) async {
@@ -175,6 +175,7 @@ struct MapPane: View {
                 in: area, metersPerPoint: metersPerPoint, map: map, detailOffset: request.detailOffset
             )
         }
+        all.removeAll { request.hiddenPointTypes.contains($0.poi.type) }
         var byPoint: [String: POIName] = [:]
         for name in all {
             byPoint["\(name.poi.type)|\(name.poi.coordinate.latitude)|\(name.poi.coordinate.longitude)"] = name
@@ -556,4 +557,5 @@ struct PlaceRequest: Equatable {
     let viewport: PlaceQuery
     let maps: [URL]
     let detailOffset: Int
+    var hiddenPointTypes: Set<Int> = []
 }

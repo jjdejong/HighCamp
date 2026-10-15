@@ -63,3 +63,55 @@ public struct MapPOI: Equatable, Sendable {
         return coordinate.longitude < other.coordinate.longitude
     }
 }
+
+/// The families of Garmin point types, for choosing which points the map shows. Garmin groups its point types by
+/// their first byte; maps such as OFM follow that grouping for most of their types.
+public enum POICategory: Int, CaseIterable, Identifiable, Sendable {
+    case food, lodging, attractions, entertainment, shopping, services, transport, emergency
+    case amenities, barriers, manMade, water, land, other
+
+    public var id: Int { rawValue }
+
+    public var title: String {
+        switch self {
+        case .food: "Food and Drink"
+        case .lodging: "Lodging"
+        case .attractions: "Attractions and Culture"
+        case .entertainment: "Entertainment and Sport"
+        case .shopping: "Shopping"
+        case .services: "Services"
+        case .transport: "Transport and Parking"
+        case .emergency: "Health, Emergency and Government"
+        case .amenities: "Amenities and Facilities"
+        case .barriers: "Barriers and Road Hazards"
+        case .manMade: "Buildings and Structures"
+        case .water: "Water"
+        case .land: "Landmarks and Nature"
+        case .other: "Other"
+        }
+    }
+
+    /// The family of a point type (type byte then subtype byte; version 2 types go to `other`).
+    public static func of(_ type: Int) -> POICategory {
+        guard type < 0x10000 else { return .other }
+        let family = type >> 8
+        switch family {
+        case 0x2A: return .food
+        case 0x2B: return .lodging
+        case 0x2C: return .attractions
+        case 0x2D: return .entertainment
+        case 0x2E: return .shopping
+        case 0x2F:
+            // Fuel, ferries, bus stops and parking are transport; banks, post offices and the like are services.
+            return [0x2F01, 0x2F08, 0x2F09, 0x2F0A, 0x2F0B, 0x2F11, 0x2F12, 0x2F16, 0x2F17].contains(type) ? .transport : .services
+        case 0x11: return type == 0x1108 ? .barriers : .transport
+        case 0x30: return .emergency
+        case 0x32: return .barriers
+        case 0x43...0x5F: return .amenities
+        case 0x64: return .manMade
+        case 0x65: return .water
+        case 0x66: return .land
+        default: return .other
+        }
+    }
+}

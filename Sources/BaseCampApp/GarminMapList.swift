@@ -96,9 +96,11 @@ final class GarminMapListStore {
     }
 
     /// What the renderer needs: the maps that are on, bottom first, with their files.
-    func configuration(detail: GarminDetail, softColors: Bool, relief: Double = 0) -> GarminMapConfiguration {
+    func configuration(detail: GarminDetail, softColors: Bool, relief: Double = 0, hiddenPointTypes: Set<Int> = []) -> GarminMapConfiguration {
         guard let folder else {
-            return GarminMapConfiguration(layers: [], detailOffset: detail.offset, softColors: softColors, relief: relief)
+            return GarminMapConfiguration(
+                layers: [], detailOffset: detail.offset, softColors: softColors, relief: relief, hiddenPointTypes: hiddenPointTypes
+            )
         }
         return GarminMapConfiguration(
             layers: entries.filter(\.isEnabled).map { entry in
@@ -109,7 +111,8 @@ final class GarminMapListStore {
             },
             detailOffset: detail.offset,
             softColors: softColors,
-            relief: relief
+            relief: relief,
+            hiddenPointTypes: hiddenPointTypes
         )
     }
 
@@ -150,4 +153,6 @@ struct GarminMapConfiguration: Equatable, Sendable {
     var softColors = false
     /// The strength of the relief shading drawn from the maps' own heights, 0 for none.
     var relief = 0.0
+    /// Point types the user chose not to see: neither their icons nor their names are drawn.
+    var hiddenPointTypes: Set<Int> = []
 }

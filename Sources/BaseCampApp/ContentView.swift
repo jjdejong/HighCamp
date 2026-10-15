@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var isDropTargeted = false
     @AppStorage("display.profileHeight") private var profileHeight = 260.0
     @State private var showMapList = false
+    @State private var showPointTypes = false
 
     /// The profile pane is shown for a selected track or route, unless the user hid it.
     private var showsProfilePane: Bool {
@@ -121,6 +122,7 @@ struct ContentView: View {
                                     ))
                                 }
                                 Button("Map List: Order, Zoom Range, Opacity…") { showMapList = true }
+                                Button("Points of Interest…") { showPointTypes = true }
                                 Picker("Detail", selection: $mapLayers.garminDetail) {
                                     ForEach(GarminDetail.allCases) { detail in
                                         Text(detail.label).tag(detail)
@@ -185,6 +187,12 @@ struct ContentView: View {
         } message: {
             Text(store.errorMessage ?? "")
         }
+        .sheet(isPresented: $showPointTypes) {
+            POITypesSheet()
+                .environment(mapLayers)
+                .environment(garminMaps)
+                .task { await garminMaps.reload(folder: mapSettings.folder) }
+        }
         .sheet(isPresented: $showMapList) {
             GarminMapListSheet()
                 .environment(garminMaps)
@@ -232,6 +240,10 @@ struct ContentView: View {
             // `--show maplist` opens the Garmin map list, for testing.
             if BaseCampApp.launchValue("--show") == "maplist" {
                 showMapList = true
+            }
+            // `--show pointtypes` opens the Points of Interest window, for testing.
+            if BaseCampApp.launchValue("--show") == "pointtypes" {
+                showPointTypes = true
             }
             #endif
         }

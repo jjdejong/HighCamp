@@ -92,3 +92,22 @@ final class MapPOITests: XCTestCase {
         XCTAssertEqual(Set(fromEast.map(\.coordinate)), Set(fromAll.map(\.coordinate)))
     }
 }
+
+final class POICategoryTests: XCTestCase {
+    func testTypesFallIntoTheirFamilies() {
+        XCTAssertEqual(POICategory.of(0x2A00), .food) // restaurant
+        XCTAssertEqual(POICategory.of(0x2B01), .lodging) // hotel
+        XCTAssertEqual(POICategory.of(0x2E02), .shopping) // supermarket
+        XCTAssertEqual(POICategory.of(0x2F06), .services) // bank
+        XCTAssertEqual(POICategory.of(0x2F08), .transport) // bus stop
+        XCTAssertEqual(POICategory.of(0x2F0A), .transport) // parking
+        XCTAssertEqual(POICategory.of(0x1102), .transport) // train station (OFM)
+        XCTAssertEqual(POICategory.of(0x1108), .barriers) // bollard (OFM)
+        XCTAssertEqual(POICategory.of(0x3200), .barriers) // gate
+        XCTAssertEqual(POICategory.of(0x5001), .amenities) // bench (OFM)
+        XCTAssertEqual(POICategory.of(0x6401), .manMade) // pass, as Garmin files it
+        XCTAssertEqual(POICategory.of(0x6511), .water) // spring
+        XCTAssertEqual(POICategory.of(0x6616), .land) // summit
+        XCTAssertEqual(POICategory.of(0x10301), .other)
+    }
+}

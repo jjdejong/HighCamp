@@ -180,6 +180,10 @@ final class MapLayerSettings {
     var reliefStrength: Double {
         didSet { UserDefaults.standard.set(reliefStrength, forKey: "map.reliefStrength") }
     }
+    /// Point types of the Garmin maps not drawn, chosen in the Points of Interest window.
+    var hiddenPointTypes: Set<Int> {
+        didSet { UserDefaults.standard.set(hiddenPointTypes.sorted(), forKey: "map.hiddenPointTypes") }
+    }
     /// Dashed outlines and names for the area each map in the map folder covers.
     var showCoverage: Bool {
         didSet { UserDefaults.standard.set(showCoverage, forKey: "map.showCoverage") }
@@ -196,6 +200,7 @@ final class MapLayerSettings {
         garminDetail = GarminDetail(rawValue: defaults.string(forKey: "map.garminDetailLevel") ?? "") ?? .normal
         garminSoftColors = defaults.object(forKey: "map.garminSoftColors") as? Bool ?? true
         reliefStrength = defaults.object(forKey: "map.reliefStrength") as? Double ?? Self.mediumRelief
+        hiddenPointTypes = Set(defaults.array(forKey: "map.hiddenPointTypes") as? [Int] ?? [])
     }
 
     static let lightRelief = 0.3
@@ -204,7 +209,7 @@ final class MapLayerSettings {
 
     /// The Garmin maps as the map pane draws them.
     func garminConfiguration(_ maps: GarminMapListStore) -> GarminMapConfiguration {
-        maps.configuration(detail: garminDetail, softColors: garminSoftColors, relief: reliefStrength)
+        maps.configuration(detail: garminDetail, softColors: garminSoftColors, relief: reliefStrength, hiddenPointTypes: hiddenPointTypes)
     }
 
     /// The base map for a picture of what the screen shows.

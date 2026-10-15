@@ -2,6 +2,18 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Route stops take heights from their legs — 2026-10-15 — Opus
+State: done (this commit). Gate: core 287 tests, 3 skipped, no DIAG.
+Follow-up to the course ascent fix. Read back from the Edge (`EdgeProbe fetch-course`), Test Route 1 had no
+altitude at 9 of 1,072 records: the start, the end and 7 stops.
+- A stop without a height takes one from the nearest shape point with a height on each side, interpolated by
+  distance (`Route.fillHeight(ofStop:)`). Done when a route is made or read (so existing routes get heights
+  when the library loads; written on the next save) and when a recalculated leg is put in. Not across straight
+  legs. A stop's own height is kept, including one filled in from the first leg back.
+- `setLeg` and the recalculator's `Request` compare stops by `isSamePlace(as:)` (id and coordinate), so a
+  height filled in, a rename or a via/shaping change no longer makes a pending answer stale.
+Not seen on screen (the user was at the machine): the inspector should now show heights at the stops.
+
 ## Course ascent on the Edge — 2026-10-15 — Opus
 State: done (this commit). Gate: core 280 tests, 3 skipped, no DIAG.
 User report: Test Route 1 sent to the Edge showed the right distance but 30,746 m of ascent instead of 885.

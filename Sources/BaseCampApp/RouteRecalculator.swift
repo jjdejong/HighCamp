@@ -24,6 +24,12 @@ final class RouteRecalculator {
             hasher.combine(end.coordinate)
             hasher.combine(profileID)
         }
+
+        /// Only where the stops are counts: a stop that took a height from the other leg asks for the same line.
+        static func == (lhs: Request, rhs: Request) -> Bool {
+            lhs.route == rhs.route && lhs.leg == rhs.leg && lhs.start.isSamePlace(as: rhs.start)
+                && lhs.end.isSamePlace(as: rhs.end) && lhs.profileID == rhs.profileID
+        }
     }
 
     /// The leg being calculated now.

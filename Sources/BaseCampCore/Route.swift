@@ -44,6 +44,12 @@ public struct RouteStop: Identifiable, Equatable, Codable, Sendable {
     var point: RoutePoint {
         RoutePoint(name: name, coordinate: coordinate, elevation: elevation)
     }
+
+    /// The same stop in the same place. A leg the router calculated between two stops still fits them when only
+    /// their names, kinds or heights changed since it was asked for.
+    public func isSamePlace(as other: RouteStop) -> Bool {
+        id == other.id && coordinate == other.coordinate
+    }
 }
 
 /// The line from one stop to the next.
@@ -111,6 +117,9 @@ public struct Route: Identifiable, Equatable, Sendable {
         }
         self.profileID = profileID
         self.color = color
+        for index in self.stops.indices {
+            fillHeight(ofStop: index)
+        }
     }
 
     /// A route from a plain list of points, as in a GPX file without shape points or an older library. Up to
@@ -216,8 +225,12 @@ public struct Route: Identifiable, Equatable, Sendable {
     /// they were when it was asked for, so the result is stale.
     @discardableResult
     public mutating func setLeg(at index: Int, from start: RouteStop, to end: RouteStop, _ leg: RouteLeg) -> Bool {
-        guard legs.indices.contains(index), stops[index] == start, stops[index + 1] == end else { return false }
+        guard legs.indices.contains(index), stops[index].isSamePlace(as: start), stops[index + 1].isSamePlace(as: end) else {
+            return false
+        }
         legs[index] = leg
+        fillHeight(ofStop: index)
+        fillHeight(ofStop: index + 1)
         return true
     }
 
@@ -278,6 +291,27 @@ public struct Route: Identifiable, Equatable, Sendable {
 
     private static func stop(_ point: RoutePoint) -> RouteStop {
         RouteStop(name: point.name, coordinate: point.coordinate, elevation: point.elevation)
+    }
+
+    /// Gives a stop without a height one from the legs beside it: the nearest shape point with a height on each
+    /// side, interpolated by distance when there is one on both sides. Straight legs have no shape, so a stop
+    /// between two straight legs keeps no height. Stops placed by hand have none; the router's legs do.
+    private mutating func fillHeight(ofStop index: Int) {
+        guard stops.indices.contains(index), stops[index].elevation == nil else { return }
+        let here = stops[index].coordinate
+        let before = index > 0 ? legs[index - 1].shape.last { $0.elevation != nil } : nil
+        let after = index < legs.count ? legs[index].shape.first { $0.elevation != nil } : nil
+        switch (before, after) {
+        case let (before?, after?):
+            let toBefore = Geodesy.distance(from: before.coordinate, to: here)
+            let toAfter = Geodesy.distance(from: here, to: after.coordinate)
+            let fraction = toBefore + toAfter > 0 ? toBefore / (toBefore + toAfter) : 0.5
+            stops[index].elevation = before.elevation! + (after.elevation! - before.elevation!) * fraction
+        case let (only?, nil), let (nil, only?):
+            stops[index].elevation = only.elevation
+        case (nil, nil):
+            break
+        }
     }
 
     private func changedLeg() -> RouteLeg {

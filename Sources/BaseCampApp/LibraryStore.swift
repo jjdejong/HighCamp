@@ -553,6 +553,38 @@ final class LibraryStore {
         device.groups.first { $0.items.contains(item) }
     }
 
+    /// Files waiting for the user to confirm they are deleted from the device. Set by `deleteSelection` and
+    /// "Delete from Device"; the main view asks.
+    var pendingDeviceDeletion: [DeviceFileRef]?
+
+    /// The device files the items were read from, each once, in the device's order.
+    func deviceFiles(of items: Set<LibraryItem>) -> [DeviceFileRef] {
+        var found: [DeviceFileRef] = []
+        for group in device.groups {
+            for item in group.items where items.contains(item) {
+                if let name = group.files[item] {
+                    let file = DeviceFileRef(kind: group.kind, name: name)
+                    if !found.contains(file) { found.append(file) }
+                }
+            }
+        }
+        return found
+    }
+
+    /// The items read from a device file: what deleting it takes away.
+    func deviceItems(in file: DeviceFileRef) -> [LibraryItem] {
+        guard let group = device.groups.first(where: { $0.kind == file.kind }) else { return [] }
+        return group.items.filter { group.files[$0] == file.name }
+    }
+
+    /// Asks to delete the files of the selected device items from the device.
+    func requestDeviceDeletion(_ items: Set<LibraryItem>) {
+        let files = deviceFiles(of: items)
+        if !files.isEmpty {
+            pendingDeviceDeletion = files
+        }
+    }
+
     /// Copies items from the device into the library, as new items, and selects the copies.
     func copyToLibrary(_ items: Set<LibraryItem>) {
         var copies: Set<LibraryItem> = []
@@ -620,8 +652,11 @@ final class LibraryStore {
         }
     }
 
+    /// Deletes the selected library items. Selected device items are not deleted here: their files are deleted
+    /// from the device once the user confirms (see `pendingDeviceDeletion`).
     func deleteSelection() {
-        let items = selectedItems
+        requestDeviceDeletion(selectedItems.filter(isOnDevice))
+        let items = selectedItems.filter { !isOnDevice($0) }
         guard !items.isEmpty else { return }
         edit(items.count == 1 ? "Delete" : "Delete \(items.count) Items") { library in
             for item in items {
@@ -633,7 +668,7 @@ final class LibraryStore {
             }
             library.pruneCollections()
         }
-        selectedItems = []
+        selectedItems.subtract(items)
     }
 
     /// The selected tracks, in the order they appear in the library.

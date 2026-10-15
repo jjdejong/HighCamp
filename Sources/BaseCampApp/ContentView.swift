@@ -226,6 +226,24 @@ struct ContentView: View {
         } message: { course in
             Text("Garmin/Courses already has \(course.fileName). The new course is copied and checked before the old one is deleted.")
         }
+        .alert(
+            deletionTitle,
+            isPresented: deviceDeletionIsPresented,
+            presenting: store.pendingDeviceDeletion
+        ) { files in
+            Button("Delete", role: .destructive) {
+                Task {
+                    do {
+                        try await device.deleteFiles(files)
+                    } catch {
+                        store.errorMessage = "Could not delete from \(store.device.deviceName). \(error.localizedDescription)"
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { files in
+            Text(deletionMessage(files))
+        }
         .onChange(of: elevation.sources(maps: garminMaps), initial: true) { _, sources in
             store.heightSources = sources
         }
@@ -257,6 +275,30 @@ struct ContentView: View {
             }
             #endif
         }
+    }
+
+    private var deviceDeletionIsPresented: Binding<Bool> {
+        Binding(
+            get: { store.pendingDeviceDeletion != nil },
+            set: { if !$0 { store.pendingDeviceDeletion = nil } }
+        )
+    }
+
+    private var deletionTitle: String {
+        let count = store.pendingDeviceDeletion?.count ?? 0
+        return "Delete \(count == 1 ? "this file" : "\(count) files") from \(store.device.deviceName)?"
+    }
+
+    /// Which files go, and what else goes with them: a GPX file holds all the items read from it.
+    private func deletionMessage(_ files: [DeviceFileRef]) -> String {
+        let lines = files.prefix(12).map { file -> String in
+            let items = store.deviceItems(in: file)
+            let name = items.first.map { store.name(of: $0) } ?? file.name
+            let others = items.count > 1 ? ", with \(items.count - 1) other item\(items.count == 2 ? "" : "s") in the same file" : ""
+            return "\(name) (Garmin/\(file.kind.folder.last ?? "")/\(file.name)\(others))"
+        }
+        let more = files.count > 12 ? ["and \(files.count - 12) more"] : []
+        return (lines + more).joined(separator: "\n") + "\n\nThis cannot be undone. Copy an item to the library first to keep it."
     }
 
     private var errorIsPresented: Binding<Bool> {

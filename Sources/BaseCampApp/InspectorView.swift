@@ -53,6 +53,9 @@ struct InspectorView: View {
                         store.copyToLibrary(store.selectedItems)
                     }
                     .help("Adds copies of the selected items on the device to the library")
+                    Button("Delete from Device…", role: .destructive) {
+                        store.requestDeviceDeletion(store.selectedItems)
+                    }
                 }
                 collectionMenu
                 if store.activeCollectionID != nil {
@@ -146,6 +149,10 @@ struct InspectorView: View {
                 store.copyToLibrary([item])
             }
             .help("Adds a copy to the library, where it can be renamed, edited and sent back")
+            Button("Delete from Device…", role: .destructive) {
+                store.requestDeviceDeletion([item])
+            }
+            .disabled(!device.isConnected)
         }
         switch item {
         case .waypoint(let id):

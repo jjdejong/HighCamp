@@ -227,6 +227,7 @@ struct SidebarView: View {
         }
         if items.contains(where: store.isOnDevice) {
             Button("Copy to Library") { store.copyToLibrary(items) }
+            Button("Delete from Device…", role: .destructive) { store.requestDeviceDeletion(items) }
         }
     }
 

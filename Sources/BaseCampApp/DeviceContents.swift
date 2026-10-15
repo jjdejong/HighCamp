@@ -27,6 +27,14 @@ struct DeviceContents: Equatable {
     }
 }
 
+/// A file on the device: its folder and name.
+struct DeviceFileRef: Hashable, Identifiable {
+    let kind: DeviceGroup.Kind
+    let name: String
+
+    var id: String { "\(kind.rawValue)/\(name)" }
+}
+
 /// One folder of the device and the items read from it.
 struct DeviceGroup: Identifiable, Equatable {
     enum Kind: String, CaseIterable {
@@ -62,6 +70,8 @@ struct DeviceGroup: Identifiable, Equatable {
 
     let kind: Kind
     var library = Library()
+    /// The file on the device each item was read from. A GPX file can hold several items.
+    var files: [LibraryItem: String] = [:]
 
     var id: String { kind.rawValue }
 

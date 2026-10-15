@@ -230,6 +230,9 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
   or changed files read (123 files in about 15 s the first time). Items get ids from their file (`UUID(stableFrom:)`)
   so a selection survives a reload. Courses take the name in the file. Sidebar: a section per folder, collapsible,
   with an eye to show it on the map (activities off by default; a selected item is always drawn, in teal).
+- Deleting from the device, asked for by the user: Delete, or "Delete from Device…" in the sidebar menu and the
+  inspector, asks first, naming each file (a GPX file goes with all its items), then deletes the files with
+  `MTPTransfers.delete`, which checks each is gone, and reads the device again.
 
 ## Phase C: features (Haiku after Opus has set the shape)
 

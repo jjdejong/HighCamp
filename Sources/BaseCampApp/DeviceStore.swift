@@ -142,6 +142,9 @@ final class DeviceStore {
                     groups[index].library.waypoints += items.waypoints
                     groups[index].library.routes += items.routes
                     groups[index].library.tracks += items.tracks
+                    for item in DeviceGroup(kind: kind, library: items).items {
+                        groups[index].files[item] = file.name
+                    }
                     done += 1
                     // Published every few files, so the sidebar fills in without redrawing for each one.
                     if done % 8 == 0 || done == total {
@@ -161,6 +164,21 @@ final class DeviceStore {
                 }
             }
             contents = DeviceContents(deviceName: deviceName, groups: groups, progress: nil)
+        }
+    }
+
+    /// Deletes files from the device, checking each is gone, then reads the device's contents again. Stops at the
+    /// first file that cannot be deleted; those before it stay deleted.
+    func deleteFiles(_ files: [DeviceFileRef]) async throws {
+        guard isConnected, mapTransfer == nil, !files.isEmpty else { return }
+        defer { refresh() }
+        let device = device
+        try await device.perform { link, storage in
+            for file in files {
+                let entries = try link.entries(in: file.kind.folder, storageID: storage.id)
+                guard let entry = entries.first(where: { !$0.isFolder && $0.name == file.name }) else { continue }
+                try MTPTransfers.delete(link, entryID: entry.id, named: entry.name, in: file.kind.folder, storageID: storage.id)
+            }
         }
     }
 

@@ -205,6 +205,10 @@ struct MapKitView: NSViewRepresentable {
             ),
             animated: false
         )
+        map.openingRegion = saved
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak map] in
+            map?.openingRegion = nil
+        }
         context.coordinator.lastLocateRequest = locateRequest
         if saved == nil {
             DispatchQueue.main.async { [weak map, coordinator = context.coordinator] in
@@ -396,6 +400,7 @@ struct MapKitView: NSViewRepresentable {
         }
 
         func fit(_ coordinates: [Coordinate], on map: MKMapView) {
+            (map as? ScrollZoomMapView)?.openingRegion = nil
             guard let area = MapFraming.area(enclosing: coordinates) else { return }
             let corner = MKMapPoint(area.southWest.clLocation)
             let opposite = MKMapPoint(area.northEast.clLocation)
@@ -572,7 +577,30 @@ struct MapKitView: NSViewRepresentable {
 /// A map that zooms with the scroll wheel or two-finger scrolling, around the pointer, and moves by dragging, as
 /// BaseCamp and QMapShack do. Pinching still zooms.
 final class ScrollZoomMapView: MKMapView {
+    /// The view to open on. The map is laid out small first and then grows with the window, and MapKit keeps the
+    /// scale when it grows, so the view is set again at each size until the user moves the map (or two seconds
+    /// pass). Set only once, the map opened about four times farther out than it was left, at every launch.
+    var openingRegion: MKCoordinateRegion?
+
+    override func layout() {
+        super.layout()
+        if let region = openingRegion, bounds.width > 0, bounds.height > 0 {
+            setRegion(region, animated: false)
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        openingRegion = nil
+        super.mouseDown(with: event)
+    }
+
+    override func magnify(with event: NSEvent) {
+        openingRegion = nil
+        super.magnify(with: event)
+    }
+
     override func scrollWheel(with event: NSEvent) {
+        openingRegion = nil
         let delta = event.scrollingDeltaY
         guard delta != 0 else { return }
         // Trackpads report points, mouse wheels report lines; one wheel notch zooms by about a quarter.

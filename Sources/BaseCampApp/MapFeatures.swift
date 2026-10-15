@@ -1,5 +1,6 @@
 import BaseCampCore
 import BaseCampIMG
+import CoreGraphics
 import Foundation
 
 /// How a group of Garmin lines is drawn, from the map's style.
@@ -36,10 +37,49 @@ struct AreaGroup: Sendable {
     var rings: [[Coordinate]]
 }
 
+/// A point's icon from the map's style, ready to draw. Nil icons are drawn as a plain dot.
+final class POIIcon: @unchecked Sendable {
+    /// Immutable once made.
+    let image: CGImage
+    let width: Int
+    let height: Int
+
+    init?(_ point: GarminTypStyle.Point) {
+        // A fully transparent icon draws nothing; the point is left out.
+        guard point.rgba.enumerated().contains(where: { $0.offset % 4 == 3 && $0.element > 0 }) else { return nil }
+        // CoreGraphics wants premultiplied colours.
+        var pixels = point.rgba
+        for index in Swift.stride(from: 0, to: pixels.count, by: 4) {
+            let alpha = UInt16(pixels[index + 3])
+            for channel in 0..<3 {
+                pixels[index + channel] = UInt8(UInt16(pixels[index + channel]) * alpha / 255)
+            }
+        }
+        guard let provider = CGDataProvider(data: Data(pixels) as CFData),
+              let image = CGImage(
+                width: point.width, height: point.height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: point.width * 4,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent
+              ) else { return nil }
+        self.image = image
+        width = point.width
+        height = point.height
+    }
+}
+
+/// A point to draw, with its icon.
+struct DrawnPOI: Sendable {
+    let poi: MapPOI
+    let icon: POIIcon?
+}
+
 /// The Garmin features read for one area, in drawing order, and where the maps have data.
 struct MapFeatureSet: Sendable {
     var lines: [LineGroup] = []
     var areas: [AreaGroup] = []
+    /// The points of interest on the level drawn, not yet thinned (see `MapPOI.shown`). Places are left out: their
+    /// names are drawn instead.
+    var points: [DrawnPOI] = []
     /// The bounds of each map tile with data in the area. Outside them the maps have nothing to show.
     var coverage: [GeoBounds] = []
 }
@@ -64,6 +104,8 @@ actor MapFeatureCache {
         let style: GarminTypStyle?
         /// The drawing position of each polygon type, bottom first. Types missing here are not drawn.
         let areaRanks: [Int: Int]
+        /// The style's point icons by type. A type the style has with a transparent icon is not drawn at all.
+        let icons: [Int: POIIcon]
         var levels: [String: [GarminMapLevel]] = [:]
         var subdivisions: [String: [GarminSubdivision]] = [:]
         /// Each subfile's string table, read when its names are first needed. Nil inside: the subfile has none.
@@ -93,6 +135,13 @@ actor MapFeatureCache {
     /// The named places of decoded cells, kept like `cells`.
     private var placeCells: [CellKey: [(name: String, coordinate: Coordinate, size: Int)]] = [:]
     private var placeCellOrder: [CellKey] = []
+
+    /// The points of interest of decoded cells, kept like `cells`.
+    private var poiCells: [CellKey: [MapPOI]] = [:]
+    private var poiCellOrder: [CellKey] = []
+
+    /// Points read, at most, for one area.
+    static let maximumPoints = 20_000
 
     /// The named lines of decoded cells, kept like `cells`.
     private var lineNameCells: [CellKey: [NamedLine]] = [:]
@@ -217,6 +266,7 @@ actor MapFeatureCache {
         var lineGroups: [LineKey: LineGroup] = [:]
         var areaGroups: [AreaKey: (rank: Int, group: AreaGroup)] = [:]
         var coverage: [GeoBounds] = []
+        var points: [DrawnPOI] = []
         var linePaths = 0
         var areaRings = 0
 
@@ -252,6 +302,13 @@ actor MapFeatureCache {
                             linePaths += 1
                         }
                     }
+                    guard points.count < Self.maximumPoints else { continue }
+                    for poi in pointsOfInterest(key, cell: cell, open: open) where MapFeatureReader.contains(area, poi.coordinate) {
+                        let icon = open.icons[poi.type]
+                        // The style has the type but draws nothing for it.
+                        if icon == nil, open.style?.points[poi.type] != nil { continue }
+                        points.append(DrawnPOI(poi: poi, icon: icon))
+                    }
                 }
             }
         }
@@ -264,7 +321,32 @@ actor MapFeatureCache {
         let lines = lineGroups.sorted {
             ($0.key.type, $0.key.style.rgb.sortKey, $0.key.style.width) < ($1.key.type, $1.key.style.rgb.sortKey, $1.key.style.width)
         }
-        return MapFeatureSet(lines: lines.map(\.value), areas: areas.map(\.value.group), coverage: coverage)
+        return MapFeatureSet(lines: lines.map(\.value), areas: areas.map(\.value.group), points: points, coverage: coverage)
+    }
+
+    /// The points of interest of one cell, with their names and priorities, from the cache when decoded recently.
+    private func pointsOfInterest(_ key: CellKey, cell: GarminSubdivision, open: OpenMap) -> [MapPOI] {
+        if let cached = poiCells[key] {
+            return cached
+        }
+        let labels = labels(for: key.subfile, in: key.file, image: open.image)
+        let points = (try? open.image.points(of: key.subfile, in: cell)) ?? []
+        let decoded = points.compactMap { point -> MapPOI? in
+            guard !point.isPlace else { return nil }
+            let name = point.labelOffset == 0 ? nil : labels?.name(at: point.labelOffset, poi: point.labelIsPOI)
+                .flatMap { $0.contains(where: \.isLetter) ? MapPlace.displayName($0) : nil }
+            let labelled = open.style?.points[point.type]?.labelSize != GarminTypStyle.LabelSize.none
+            return MapPOI(
+                type: point.type, coordinate: point.coordinate, name: name,
+                priority: MapPOI.priority(named: name != nil, labelled: labelled)
+            )
+        }
+        poiCells[key] = decoded
+        poiCellOrder.append(key)
+        if poiCellOrder.count > Self.maximumCachedCells {
+            poiCells[poiCellOrder.removeFirst()] = nil
+        }
+        return decoded
     }
 
     /// The maps in the folder. The listing is kept for a few seconds, since every tile asks for it.
@@ -308,7 +390,8 @@ actor MapFeatureCache {
         let style = try? image.typStyle()
         let order = GarminTypStyle.polygonDrawOrder(style)
         let ranks = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
-        let open = OpenMap(size: file.size, modified: file.modified, image: image, style: style, areaRanks: ranks)
+        let icons = (style?.points ?? [:]).compactMapValues(POIIcon.init)
+        let open = OpenMap(size: file.size, modified: file.modified, image: image, style: style, areaRanks: ranks, icons: icons)
         maps[key] = open
         cells = cells.filter { $0.key.file != key }
         cellOrder.removeAll { $0.file == key }
@@ -316,6 +399,8 @@ actor MapFeatureCache {
         placeCellOrder.removeAll { $0.file == key }
         lineNameCells = lineNameCells.filter { $0.key.file != key }
         lineNameOrder.removeAll { $0.file == key }
+        poiCells = poiCells.filter { $0.key.file != key }
+        poiCellOrder.removeAll { $0.file == key }
         return open
     }
 
@@ -379,6 +464,10 @@ enum MapFeatureReader {
         case 0x18, 0x1F: return (8, true)
         default: return nil
         }
+    }
+
+    static func contains(_ area: GeoBounds, _ c: Coordinate) -> Bool {
+        c.latitude <= area.north && c.latitude >= area.south && c.longitude >= area.west && c.longitude <= area.east
     }
 
     static func intersects(_ a: GeoBounds, _ b: GeoBounds) -> Bool {

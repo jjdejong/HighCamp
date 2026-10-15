@@ -99,10 +99,32 @@ enum GarminTileRenderer {
                 context.restoreGState()
             }
             // On a screen of one pixel per point, thin lines are drawn sharp; on Retina, smooth lines look better.
-            GarminPainter.draw(drawings, in: rect, patternOrigin: origin, relief: relief, crisp: scale < 1.5) { coordinate in
+            let project = { (coordinate: Coordinate) -> NSPoint in
                 let world = WebMercator.unit(coordinate)
                 return NSPoint(x: world.x * worldSize - origin.x, y: world.y * worldSize - origin.y)
             }
+            GarminPainter.draw(drawings, in: rect, patternOrigin: origin, relief: relief, crisp: scale < 1.5, project: project)
+            GarminPainter.drawPoints(Self.shownPoints(drawings, zoom: z), project: project)
+        }
+    }
+
+    /// The points of every map drawn, thinned for the zoom over all of them, so two maps' icons do not overlap.
+    static func shownPoints(_ drawings: [GarminMapDrawing], zoom: Int) -> [DrawnPOI] {
+        let all = drawings.flatMap(\.features.points)
+        var icons: [MapPOIKey: POIIcon] = [:]
+        for point in all where icons[MapPOIKey(point.poi)] == nil {
+            icons[MapPOIKey(point.poi)] = point.icon
+        }
+        return MapPOI.shown(all.map(\.poi), zoom: zoom).map { DrawnPOI(poi: $0, icon: icons[MapPOIKey($0)]) }
+    }
+
+    /// A point's identity, to find its icon again after thinning.
+    private struct MapPOIKey: Hashable {
+        let type: Int
+        let coordinate: Coordinate
+        init(_ poi: MapPOI) {
+            type = poi.type
+            coordinate = poi.coordinate
         }
     }
 
@@ -264,6 +286,37 @@ enum GarminPainter {
         for (group, path) in zip(features.lines, paths) where group.style.pattern == nil && group.style.border != nil {
             stroke(path, style: group.style, crisp: crisp)
         }
+    }
+
+    /// Points of interest: each style icon centred on its point, pixel for point and unsmoothed, as on a device;
+    /// points without one as a small dark dot with a white rim.
+    static func drawPoints(_ points: [DrawnPOI], project: (Coordinate) -> NSPoint) {
+        guard let context = NSGraphicsContext.current?.cgContext, !points.isEmpty else { return }
+        context.saveGState()
+        context.interpolationQuality = .none
+        for point in points {
+            let at = project(point.poi.coordinate)
+            if let icon = point.icon {
+                let rect = CGRect(
+                    x: (at.x - CGFloat(icon.width) / 2).rounded(), y: (at.y - CGFloat(icon.height) / 2).rounded(),
+                    width: CGFloat(icon.width), height: CGFloat(icon.height)
+                )
+                // The context is flipped; the icon is drawn upright into it.
+                context.saveGState()
+                context.translateBy(x: rect.minX, y: rect.maxY)
+                context.scaleBy(x: 1, y: -1)
+                context.draw(icon.image, in: CGRect(origin: .zero, size: rect.size))
+                context.restoreGState()
+            } else {
+                let dot = NSBezierPath(ovalIn: NSRect(x: at.x - 2.5, y: at.y - 2.5, width: 5, height: 5))
+                NSColor.white.setStroke()
+                dot.lineWidth = 1.5
+                dot.stroke()
+                NSColor(calibratedWhite: 0.25, alpha: 1).setFill()
+                dot.fill()
+            }
+        }
+        context.restoreGState()
     }
 
     /// Lines this thin are drawn without smoothing, so they stay one or two sharp pixels wide, as on a Garmin

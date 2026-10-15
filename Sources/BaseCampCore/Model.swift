@@ -144,32 +144,41 @@ public struct Library: Equatable, Codable, Sendable {
     public var routes: [Route]
     public var tracks: [Track]
     public var collections: [LibraryCollection]
+    /// List folders, which hold lists and other folders, never items (see `ListFolder`).
+    public var folders: [ListFolder]
 
-    public init(waypoints: [Waypoint] = [], routes: [Route] = [], tracks: [Track] = [], collections: [LibraryCollection] = []) {
+    public init(
+        waypoints: [Waypoint] = [], routes: [Route] = [], tracks: [Track] = [], collections: [LibraryCollection] = [],
+        folders: [ListFolder] = []
+    ) {
         self.waypoints = waypoints
         self.routes = routes
         self.tracks = tracks
         self.collections = collections
+        self.folders = folders
     }
 
-    /// Files saved before collections existed have none.
+    /// Files saved before collections, or before list folders, existed have none.
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         waypoints = try values.decodeIfPresent([Waypoint].self, forKey: .waypoints) ?? []
         routes = try values.decodeIfPresent([Route].self, forKey: .routes) ?? []
         tracks = try values.decodeIfPresent([Track].self, forKey: .tracks) ?? []
         collections = try values.decodeIfPresent([LibraryCollection].self, forKey: .collections) ?? []
+        folders = try values.decodeIfPresent([ListFolder].self, forKey: .folders) ?? []
     }
 
     public var isEmpty: Bool {
         waypoints.isEmpty && routes.isEmpty && tracks.isEmpty
     }
 
-    /// Renames a collection. Returns false when there is no such collection or the name is blank.
+    /// Renames a list. Returns false when there is no such list, the name is blank, or another list in the same
+    /// folder has it.
     @discardableResult
     public mutating func renameCollection(_ id: UUID, to name: String) -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let index = collections.firstIndex(where: { $0.id == id }) else { return false }
+        guard !trimmed.isEmpty, let index = collections.firstIndex(where: { $0.id == id }),
+              !nameIsTaken(trimmed, in: collections[index].folderID, folder: false, except: id) else { return false }
         collections[index].name = trimmed
         return true
     }

@@ -2,6 +2,21 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## G2: area names — 2026-10-15 — Opus
+State: done (this commit). Gate: core 307, 3 skipped.
+- Named polygons of the level drawn: lakes and rivers, parks, forests, reserves and regional parks, wetlands,
+  glaciers, cemeteries, airports, schools, hospitals, industrial zones, sports grounds. Not built-up areas (towns
+  are named), buildings (15,900 named in Grenoble), parking, the map outline, version 2 types.
+- `AreaLabels.place` (core, tested): each piece clipped to the view; pieces of one name within 1.5 km are one
+  area; the name at the point of the largest piece furthest from its edges and from the place names' boxes
+  (a lake's middle often holds a hamlet's name, which would hide it); written only when the area is 6 points
+  deep there and wide enough for the name (4.5 points per character, long names on two lines).
+- Kind from the style's fill colour (a pattern's foreground), else Garmin's type: water blue italics, nature
+  dark green, others grey; larger areas rank higher (priority 60-285, under places).
+- Seen in the app: Lac d'Annecy in the lake, Parc Naturel Régional du Massif des Bauges; Grenoble z15 Parc Paul
+  Mistral, Jardin Hoche, Lycée Champollion. `--point-names` also prints the area names.
+Not done: the Chartreuse regional park's name did not show at z13.5 (MapKit hid it; probably another name).
+
 ## Choosing which points of interest to show — 2026-10-15 — Opus
 State: done (this commit). Gate: core 298, 3 skipped. User request: hide the POI types they do not care about.
 - Map menu > Garmin maps > Points of Interest…: the types the enabled maps' styles define, with their icons and

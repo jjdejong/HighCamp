@@ -23,6 +23,8 @@ struct MapPane: View {
     @State private var streets: [StreetLabel] = []
     /// The names of the points of interest whose icons are drawn in view.
     @State private var pointNames: [POIName] = []
+    /// The names of lakes, forests, parks and other areas in view.
+    @State private var areaNames: [AreaLabel] = []
 
     var body: some View {
         MapKitView(
@@ -122,6 +124,7 @@ struct MapPane: View {
             places = []
             streets = []
             pointNames = []
+            areaNames = []
             return
         }
         // Waits for the map to settle, so panning does not read the maps at every step.
@@ -139,6 +142,7 @@ struct MapPane: View {
         guard !Task.isCancelled else { return }
         places = MapPlace.merged(found)
         pointNames = await Self.pointNames(in: area, request: request)
+        areaNames = await Self.areaNames(in: area, request: request, places: places)
 
         // Street names from about zoom 15, where there is room for them between the streets.
         guard request.viewport.metersPerPoint <= Self.streetNameScale else {
@@ -158,6 +162,29 @@ struct MapPane: View {
 
     /// Street names are written from this scale in, in metres per point (about zoom 15).
     static let streetNameScale = 4.5
+
+    /// Area names written, at most, in one view.
+    static let maximumAreaNames = 150
+
+    /// The names of the areas in the view, each in the part of its area that shows, largest first, clear of the
+    /// place names (which would hide them: a lake's middle often has a hamlet's name).
+    static func areaNames(in area: GeoBounds, request: PlaceRequest, places: [MapPlace] = []) async -> [AreaLabel] {
+        var areas: [NamedArea] = []
+        for map in request.maps {
+            areas += await MapFeatureCache.shared.namedAreas(
+                in: area, metersPerPoint: request.viewport.metersPerPoint, map: map, detailOffset: request.detailOffset
+            )
+        }
+        let b = request.viewport.bounds
+        let view = (southWest: Coordinate(latitude: b.south, longitude: b.west), northEast: Coordinate(latitude: b.north, longitude: b.east))
+        // The place names' boxes, from their font sizes (see `MarkerImage.place`).
+        let boxes = places.map { place -> LabelBox in
+            let size: Double = place.rank >= 3 ? 14 : place.rank == 2 ? 12.5 : place.rank == 1 ? 11 : 10
+            return LabelBox(center: place.coordinate, width: Double(place.name.count) * size * 0.6 + 6, height: size * 1.3 + 4)
+        }
+        let placed = AreaLabels.place(areas, in: view, metersPerPoint: request.viewport.metersPerPoint, avoiding: boxes)
+        return Array(placed.prefix(maximumAreaNames))
+    }
 
     /// Point names written, at most, in one view.
     static let maximumPointNames = 400
@@ -195,6 +222,14 @@ struct MapPane: View {
             let id = "place-\(place.name)-\(place.coordinate.latitude)-\(place.coordinate.longitude)"
             content.pins.append(MapPin(
                 id: id, coordinate: place.coordinate, style: .place(rank: place.rank, size: place.size), item: nil, title: place.name
+            ))
+        }
+        for label in areaNames {
+            content.pins.append(MapPin(
+                id: "area-\(label.name)-\(label.coordinate.latitude)-\(label.coordinate.longitude)",
+                coordinate: label.coordinate,
+                style: .areaName(kind: label.kind, importance: label.importance),
+                item: nil, title: label.name
             ))
         }
         for point in pointNames {

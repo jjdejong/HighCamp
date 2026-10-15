@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import BaseCampCore
 import BaseCampIMG
 
 @main
@@ -141,7 +142,7 @@ struct BaseCampApp: App {
         return arguments[index + 1]
     }
 
-    /// `--point-names Z/X/Y --maps A.img,B.img` prints the point names the map pane would write over that tile's area,
+    /// `--point-names Z/X/Y --maps A.img,B.img` prints the point and area names the map pane would write over that tile's area,
     /// viewed at that zoom, and quits without opening a window. For checking the names.
     static func printPointNamesAndExitIfAsked() {
         guard let spec = launchValue("--point-names"), let maps = launchValue("--maps") else { return }
@@ -161,6 +162,13 @@ struct BaseCampApp: App {
         Task.detached {
             for name in await MapPane.pointNames(in: bounds, request: request) {
                 print(String(format: "%06X", name.poi.type), name.poi.name ?? "", name.poi.isLandmark ? "(landmark)" : "", "\(name.size)")
+            }
+            var places: [MapPlace] = []
+            for map in urls {
+                places += await MapFeatureCache.shared.places(in: bounds, metersPerPoint: metersPerPoint, map: map, detailOffset: 0)
+            }
+            for area in await MapPane.areaNames(in: bounds, request: request, places: MapPlace.merged(places)) {
+                print("area", area.name, "\(area.kind)", String(format: "%.1f", area.importance))
             }
             exit(0)
         }

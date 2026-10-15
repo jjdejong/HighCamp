@@ -157,6 +157,10 @@ actor MapFeatureCache {
     private var placeCells: [CellKey: [(name: String, coordinate: Coordinate, size: Int)]] = [:]
     private var placeCellOrder: [CellKey] = []
 
+    /// The named areas of decoded cells, kept like `cells`.
+    private var areaNameCells: [CellKey: [(name: String, type: Int, ring: [Coordinate])]] = [:]
+    private var areaNameOrder: [CellKey] = []
+
     /// The points of interest of decoded cells, kept like `cells`.
     private var poiCells: [CellKey: [MapPOI]] = [:]
     private var poiCellOrder: [CellKey] = []
@@ -208,6 +212,62 @@ actor MapFeatureCache {
             }
         }
         return result
+    }
+
+    /// The named areas of one map in `area` (lakes, forests, parks, schools...), on the level drawn at this scale,
+    /// the pieces of each name together. Built-up areas, buildings and parking are left out; so are types the
+    /// map's style does not fill, since they are not drawn. With a style, its fill colour (a pattern's foreground)
+    /// says whether an area is water or nature.
+    func namedAreas(in area: GeoBounds, metersPerPoint: Double, map url: URL, detailOffset: Int) -> [NamedArea] {
+        let bits = MapFeatureReader.detailBits(metersPerPoint: metersPerPoint)
+        var pieces: [String: (kind: NamedArea.Kind, rings: [[Coordinate]])] = [:]
+        for file in files(in: url.deletingLastPathComponent()) where file.url.lastPathComponent == url.lastPathComponent {
+            guard !Task.isCancelled, let open = openMap(file) else { continue }
+            for subfile in open.image.subfiles {
+                guard !Task.isCancelled else { return [] }
+                guard let bounds = subfile.bounds, subfile.parts.contains("RGN"), MapFeatureReader.intersects(bounds, area),
+                      let levels = levels(for: subfile.name, in: file.url.path, image: open.image),
+                      let level = levels.drawnLevel(forBits: bits, steps: detailOffset),
+                      let subdivisions = subdivisions(for: subfile.name, in: file.url.path, image: open.image),
+                      let labels = labels(for: subfile.name, in: file.url.path, image: open.image) else { continue }
+                for (index, cell) in subdivisions.enumerated()
+                where cell.level == level.level && MapFeatureReader.intersects(cell.bounds, area) {
+                    let key = CellKey(file: file.url.path, subfile: subfile.name, index: index)
+                    let named: [(name: String, type: Int, ring: [Coordinate])]
+                    if let cached = areaNameCells[key] {
+                        named = cached
+                    } else {
+                        named = geometries(key, cell: cell, image: open.image).compactMap { geometry in
+                            guard geometry.isPolygon, geometry.labelOffset != 0, geometry.coordinates.count >= 3,
+                                  AreaLabels.kind(of: geometry.type) != nil,
+                                  let name = labels.name(at: geometry.labelOffset), name.contains(where: \.isLetter) else { return nil }
+                            return (MapPlace.displayName(name), geometry.type, geometry.coordinates)
+                        }
+                        areaNameCells[key] = named
+                        areaNameOrder.append(key)
+                        if areaNameOrder.count > Self.maximumCachedCells {
+                            areaNameCells[areaNameOrder.removeFirst()] = nil
+                        }
+                    }
+                    for piece in named {
+                        let kind: NamedArea.Kind
+                        if let style = open.style {
+                            // The plain colour, or a pattern's foreground: OFM draws forests as green trees on a
+                            // grey-green background, and rocks as grey marks on a lake type.
+                            guard let fill = style.fillStyles[piece.type]?.colour else { continue }
+                            kind = AreaLabels.kind(red: Int(fill.red), green: Int(fill.green), blue: Int(fill.blue))
+                        } else {
+                            kind = AreaLabels.kind(of: piece.type) ?? .other
+                        }
+                        let key = "\(piece.name)|\(kind)"
+                        pieces[key, default: (kind, [])].rings.append(piece.ring)
+                    }
+                }
+            }
+        }
+        return pieces.map { key, value in
+            NamedArea(name: String(key.prefix { $0 != "|" }), kind: value.kind, rings: value.rings)
+        }
     }
 
     /// Places read, at most, for one view, most important first.
@@ -469,6 +529,8 @@ actor MapFeatureCache {
         lineNameOrder.removeAll { $0.file == key }
         poiCells = poiCells.filter { $0.key.file != key }
         poiCellOrder.removeAll { $0.file == key }
+        areaNameCells = areaNameCells.filter { $0.key.file != key }
+        areaNameOrder.removeAll { $0.file == key }
         return open
     }
 

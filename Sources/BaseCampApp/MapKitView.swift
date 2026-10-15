@@ -32,6 +32,8 @@ struct MapPin: Equatable {
         case place(rank: Int, size: Int)
         /// A street or river name, turned to follow its line. `angle` in degrees, counterclockwise from east.
         case street(angle: Int, importance: Int, water: Bool)
+        /// The name of a lake, forest, park or other area, inside it. `importance` is log10 of its square metres.
+        case areaName(kind: NamedArea.Kind, importance: Double)
         /// The name of a point of interest, written to the right of its icon (drawn in the map tiles), `iconWidth`
         /// points wide. `size` is the style's label size (`GarminTypStyle.LabelSize`), `rgb` its colour if any.
         case pointName(landmark: Bool, iconWidth: Int, size: Int, rgb: MapRGB?)
@@ -491,6 +493,19 @@ struct MapKitView: NSViewRepresentable {
                 view.zPriority = .min
                 return view
             }
+            if case .areaName(let kind, let importance) = pin.style {
+                view.image = MarkerImage.areaName(pin.title ?? "", kind: kind, importance: importance)
+                view.centerOffset = .zero
+                view.canShowCallout = false
+                view.isDraggable = false
+                view.isEnabled = false
+                view.collisionMode = .rectangle
+                // Under every place name; a lake of 10 km² over most street names, a tennis court under them all.
+                let rank = max(0, min(5, importance - 3))
+                view.displayPriority = MKFeatureDisplayPriority(rawValue: Float(60 + rank * 45))
+                view.zPriority = .min
+                return view
+            }
             if case .pointName(let landmark, let iconWidth, let size, let rgb) = pin.style {
                 let image = MarkerImage.pointName(pin.title ?? "", size: size, rgb: rgb, landmark: landmark)
                 view.image = image
@@ -712,7 +727,7 @@ enum MarkerImage {
                 : dot(diameter: 10, fill: .white, label: nil, ring: .systemBlue)
         case .insertHandle:
             image = dot(diameter: 9, fill: NSColor.white.withAlphaComponent(0.75), label: nil, ring: NSColor.systemBlue.withAlphaComponent(0.6))
-        case .place, .street, .pointName:
+        case .place, .street, .pointName, .areaName:
             image = NSImage(size: NSSize(width: 1, height: 1))
         }
         cache[key] = image
@@ -750,6 +765,59 @@ enum MarkerImage {
         }
         places[key] = image
         return image
+    }
+
+    nonisolated(unsafe) private static var areaNames: [String: NSImage] = [:]
+
+    /// An area's name, centred, on two lines when long: water in blue italics, nature in dark green, others in
+    /// grey, with a white halo; larger for larger areas.
+    static func areaName(_ name: String, kind: NamedArea.Kind, importance: Double) -> NSImage {
+        let size: CGFloat = importance >= 7 ? 12.5 : importance >= 5.5 ? 11 : 10
+        let key = "\(kind)|\(size)|\(name)"
+        placeLock.lock()
+        defer { placeLock.unlock() }
+        if let cached = areaNames[key] {
+            return cached
+        }
+        var font = NSFont.systemFont(ofSize: size, weight: kind == .other ? .regular : .medium)
+        if kind == .water {
+            font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+        }
+        let colour = switch kind {
+        case .water: NSColor(calibratedRed: 0.15, green: 0.35, blue: 0.70, alpha: 1)
+        case .nature: NSColor(calibratedRed: 0.16, green: 0.40, blue: 0.16, alpha: 1)
+        case .other: NSColor(calibratedWhite: 0.35, alpha: 1)
+        }
+        let text = Self.wrapped(name)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let fill: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: colour, .paragraphStyle: paragraph]
+        let halo: [NSAttributedString.Key: Any] = [
+            .font: font, .strokeColor: NSColor.white.withAlphaComponent(0.9), .strokeWidth: 5.0, .paragraphStyle: paragraph,
+        ]
+        let box = (text as NSString).boundingRect(with: NSSize(width: 400, height: 100), options: .usesLineFragmentOrigin, attributes: fill)
+        let image = NSImage(size: NSSize(width: ceil(box.width) + 6, height: ceil(box.height) + 4), flipped: false) { rect in
+            let inner = rect.insetBy(dx: 3, dy: 2)
+            (text as NSString).draw(with: inner, options: .usesLineFragmentOrigin, attributes: halo)
+            (text as NSString).draw(with: inner, options: .usesLineFragmentOrigin, attributes: fill)
+            return true
+        }
+        if areaNames.count > 4000 {
+            areaNames.removeAll()
+        }
+        areaNames[key] = image
+        return image
+    }
+
+    /// A long name split at the space nearest its middle, so it sits more compactly inside its area.
+    static func wrapped(_ name: String) -> String {
+        guard name.count > 20 else { return name }
+        let middle = name.count / 2
+        let spaces = name.indices.filter { name[$0] == " " }
+        guard let split = spaces.min(by: {
+            abs(name.distance(from: name.startIndex, to: $0) - middle) < abs(name.distance(from: name.startIndex, to: $1) - middle)
+        }) else { return name }
+        return name[..<split] + "\n" + name[name.index(after: split)...]
     }
 
     nonisolated(unsafe) private static var pointNames: [String: NSImage] = [:]

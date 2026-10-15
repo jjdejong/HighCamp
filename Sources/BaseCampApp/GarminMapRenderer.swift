@@ -254,6 +254,16 @@ enum GarminPainter {
 
     /// One map's areas in the map's order, then its lines in two passes (see below). With `plainAreas`, patterned
     /// areas (forest drawn as rows of trees, say) are filled plainly, which makes the map much less busy.
+    /// Lines this wide or wider are drawn at `wideLineScale` of the style's width. MapKit shows a tile up to 1.41
+    /// times its size between two zoom levels, so a style's 7-pixel road came out as a 10-pixel band.
+    static let wideLine: CGFloat = 3
+    static let wideLineScale: CGFloat = 0.75
+
+    /// A style width as drawn: wide lines narrower by `wideLineScale`.
+    static func drawnWidth(_ width: CGFloat) -> CGFloat {
+        width >= wideLine ? width * wideLineScale : width
+    }
+
     private static func draw(_ features: MapFeatureSet, plainAreas: Bool, step: Int, crisp: Bool, project: (Coordinate) -> NSPoint) {
         for group in features.areas {
             let path = NSBezierPath()
@@ -278,8 +288,13 @@ enum GarminPainter {
         for (group, path) in zip(features.lines, paths) {
             if group.style.pattern == nil, let border = group.style.border {
                 border.nsColor.setStroke()
-                path.lineWidth = group.style.borderWidth
-                strokeCrisply(path, when: crisp && group.style.borderWidth <= crispWidth + 1)
+                // The border keeps at least a pixel on each side when the line is drawn narrower.
+                let inner = drawnWidth(group.style.width)
+                let side = max(1, (group.style.borderWidth - group.style.width) / 2 * (inner / max(1, group.style.width)))
+                path.lineWidth = inner + 2 * side
+                // Roads are drawn unsmoothed on a screen of one pixel per point, as BaseCamp draws them, so their
+                // one-pixel edges stay sharp instead of blurring into the road's colour.
+                strokeCrisply(path, when: crisp)
             } else {
                 stroke(path, style: group.style, crisp: crisp)
             }
@@ -327,8 +342,8 @@ enum GarminPainter {
     private static func stroke(_ path: NSBezierPath, style: LineStyle, crisp: Bool) {
         guard let pattern = style.pattern else {
             style.rgb.nsColor.setStroke()
-            path.lineWidth = style.width
-            strokeCrisply(path, when: crisp && style.width <= crispWidth)
+            path.lineWidth = drawnWidth(style.width)
+            strokeCrisply(path, when: crisp && (style.border != nil || style.width <= crispWidth))
             return
         }
         // A pattern's rows run along the line, top row on one edge. It is drawn from the outside in, as nested
@@ -337,13 +352,16 @@ enum GarminPainter {
         // pixels as dashes in the foreground colour. Patterns are taken as symmetric, as Garmin's mostly are.
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.beginTransparencyLayer(auxiliaryInfo: nil)
-        if crisp && CGFloat(pattern.rows) <= crispWidth {
+        // Road patterns (an edge row in the background colour on each side, solid rows inside) are unsmoothed, like
+        // bordered roads. Dotted tracks and dashed paths stay smooth unless thin.
+        if crisp && ((style.background != nil && isRoad(pattern)) || CGFloat(pattern.rows) <= crispWidth) {
             context.setShouldAntialias(false)
         }
         defer { context.setShouldAntialias(true) }
         path.lineCapStyle = .butt
+        let row = drawnWidth(CGFloat(pattern.rows)) / CGFloat(pattern.rows)
         for ring in 0..<((pattern.rows + 1) / 2) {
-            path.lineWidth = CGFloat(pattern.rows - 2 * ring)
+            path.lineWidth = CGFloat(pattern.rows - 2 * ring) * row
             path.setLineDash(nil, count: 0, phase: 0)
             if let background = style.background {
                 background.nsColor.setStroke()
@@ -360,6 +378,15 @@ enum GarminPainter {
         }
         path.setLineDash(nil, count: 0, phase: 0)
         context.endTransparencyLayer()
+    }
+
+    /// A road drawn as a pattern: its first and last rows are empty (the edges, in the background colour) and at
+    /// least one row is solid.
+    static func isRoad(_ pattern: GarminTypStyle.Bitmap) -> Bool {
+        guard pattern.rows >= 3 else { return false }
+        let empty = { (row: Int) in !(0..<pattern.width).contains { pattern.isSet(x: $0, y: row) } }
+        let solid = { (row: Int) in (0..<pattern.width).allSatisfy { pattern.isSet(x: $0, y: row) } }
+        return empty(0) && empty(pattern.rows - 1) && (1..<(pattern.rows - 1)).contains(where: solid)
     }
 
     private static func strokeCrisply(_ path: NSBezierPath, when thin: Bool) {

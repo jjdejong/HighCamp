@@ -2,6 +2,20 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## Narrower, sharper roads — 2026-10-15 — Opus
+State: done (this commit). Gate: core 307, 3 skipped.
+User report: the large yellow roads look mushy and too wide (1x screen).
+Cause: OFM's main roads are two-colour patterns (0x10003: a dark olive edge row on each side, yellow rows, a
+dashed dark centre row; 7 px). Drawn as smoothed nested strokes, the 1-px edges and the dashes blurred into the
+yellow; and MapKit shows a tile up to 1.41 times its size between zoom levels, so 7 px became a 10-px soft band.
+- Lines 3 px or wider are drawn at 0.75 of the style's width (`GarminPainter.wideLineScale`); a bordered line
+  keeps at least a pixel of border on each side.
+- At 1x, bordered roads and road patterns (empty first and last rows, a solid row inside: `isRoad`) are drawn
+  unsmoothed, as BaseCamp draws them; dotted tracks and dashed paths stay smooth (unsmoothed they were blocky).
+  Retina is unchanged (smoothed).
+- Checked: z13 tile at scale 1 shown at 1.41 times, before and after (narrower, sharp edge, tracks unchanged);
+  release app at Grenoble z13 and z15.
+
 ## G2: area names — 2026-10-15 — Opus
 State: done (this commit). Gate: core 307, 3 skipped.
 - Named polygons of the level drawn: lakes and rivers, parks, forests, reserves and regional parks, wetlands,

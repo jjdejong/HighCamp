@@ -283,7 +283,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | B5c | Haiku | reviewed | 8259c03 | Route menu: Recalculate Route; reviewed; routes without a profile take the route tool's |
 | B6 | Opus | todo | | |
 | G1 | Opus | done | 577e13a, 6ae12af | Garmin base map; overlay removed |
-| G2 | Opus | in progress | 6ccda55, 0a0de0a, 7e938c4, 941b0c3, a647437, 836b62a, c984702, 6a0a74d, d555220, (this commit) | place, street, point and area names, point icons, POI type choice (and which show below zoom 15) done, seen in the app; names and icons in saved pictures still to do |
+| G2 | Opus | done | 6ccda55, 0a0de0a, 7e938c4, 941b0c3, a647437, 836b62a, c984702, 6a0a74d, d555220, a297d17, (this commit) | place, street, point and area names, point icons, POI type choice (and which show below zoom 15), seen in the app; saved pictures and printed reports draw the icons and names too |
 | G3 | Opus | done | bbfd0a3, 423ba46 | map list sheet; overlays use their finest level; default: first full map on |
 | G0 | Opus | done | | was a decoder bug after all: the y "same sign" flag was read from the x bit when x was signed, so lines zigzagged (contours and roads); fixed 2026-10-13 with a test |
 | G4 | Opus | in progress | dd8e815, (this commit) | DEM reader (GPXSee port) and relief shading on the Garmin maps done; heights for Elevations from Model, waypoints and the planner still to do |

@@ -37,6 +37,14 @@ struct MapPin: Equatable {
         /// The name of a point of interest, written to the right of its icon (drawn in the map tiles), `iconWidth`
         /// points wide. `size` is the style's label size (`GarminTypStyle.LabelSize`), `rgb` its colour if any.
         case pointName(landmark: Bool, iconWidth: Int, size: Int, rgb: MapRGB?)
+
+        /// A name from the Garmin maps rather than a marker.
+        var isName: Bool {
+            switch self {
+            case .place, .street, .areaName, .pointName: true
+            default: false
+            }
+        }
     }
 
     let id: String
@@ -479,56 +487,15 @@ struct MapKitView: NSViewRepresentable {
             let view = mapView.dequeueReusableAnnotationView(withIdentifier: "pin")
                 ?? MKAnnotationView(annotation: pin, reuseIdentifier: "pin")
             view.annotation = pin
-            if case .place(let rank, let size) = pin.style {
-                // Text only, centred on the place. MapKit hides the less important of two names that would overlap.
-                view.image = MarkerImage.place(pin.title ?? "", rank: rank)
-                view.centerOffset = .zero
+            if let name = NameLook(style: pin.style, title: pin.title ?? "") {
+                // Text only. MapKit hides the less important of two names that would overlap.
+                view.image = name.image
+                view.centerOffset = name.offset
                 view.canShowCallout = false
                 view.isDraggable = false
                 view.isEnabled = false
                 view.collisionMode = .rectangle
-                // Below `.required` (1000), which the library's markers keep, so places never hide a waypoint.
-                let tieBreak = max(0, 0x11 - min(size, 0x11)) * 4
-                view.displayPriority = MKFeatureDisplayPriority(rawValue: Float(min(990, 300 + rank * 150 + tieBreak)))
-                view.zPriority = .min
-                return view
-            }
-            if case .areaName(let kind, let importance) = pin.style {
-                view.image = MarkerImage.areaName(pin.title ?? "", kind: kind, importance: importance)
-                view.centerOffset = .zero
-                view.canShowCallout = false
-                view.isDraggable = false
-                view.isEnabled = false
-                view.collisionMode = .rectangle
-                // Under every place name; a lake of 10 km² over most street names, a tennis court under them all.
-                let rank = max(0, min(5, importance - 3))
-                view.displayPriority = MKFeatureDisplayPriority(rawValue: Float(60 + rank * 45))
-                view.zPriority = .min
-                return view
-            }
-            if case .pointName(let landmark, let iconWidth, let size, let rgb) = pin.style {
-                let image = MarkerImage.pointName(pin.title ?? "", size: size, rgb: rgb, landmark: landmark)
-                view.image = image
-                // The text's left edge just right of the icon; the image has 3 points of halo room on each side.
-                view.centerOffset = CGPoint(x: image.size.width / 2 + CGFloat(iconWidth) / 2 - 2, y: 0)
-                view.canShowCallout = false
-                view.isDraggable = false
-                view.isEnabled = false
-                view.collisionMode = .rectangle
-                // Passes and summits above street names; other points under them, and under every place name.
-                view.displayPriority = MKFeatureDisplayPriority(rawValue: landmark ? 280 : 80)
-                view.zPriority = .min
-                return view
-            }
-            if case .street(let angle, let importance, let water) = pin.style {
-                view.image = MarkerImage.street(pin.title ?? "", angle: angle, water: water)
-                view.centerOffset = .zero
-                view.canShowCallout = false
-                view.isDraggable = false
-                view.isEnabled = false
-                view.collisionMode = .rectangle
-                // Under every place name, so towns keep their names; bigger roads first.
-                view.displayPriority = MKFeatureDisplayPriority(rawValue: Float(100 + min(importance, 40) * 4))
+                view.displayPriority = MKFeatureDisplayPriority(rawValue: name.priority)
                 view.zPriority = .min
                 return view
             }
@@ -668,6 +635,45 @@ final class CircleOverlay: MKCircle {}
 
 /// The coverage outline of one map in the map folder.
 final class FootprintOverlay: MKPolygon {}
+
+/// How a map name is drawn: its image, where the image's centre is from the coordinate (in points, y down), and
+/// which of two overlapping names is kept (the higher priority). The map and saved pictures share it.
+struct NameLook {
+    let image: NSImage
+    let offset: CGPoint
+    let priority: Float
+
+    /// Nil for markers that are not names.
+    init?(style: MapPin.Style, title: String) {
+        switch style {
+        case .place(let rank, let size):
+            image = MarkerImage.place(title, rank: rank)
+            offset = .zero
+            // Below `.required` (1000), which the library's markers keep, so places never hide a waypoint.
+            let tieBreak = max(0, 0x11 - min(size, 0x11)) * 4
+            priority = Float(min(990, 300 + rank * 150 + tieBreak))
+        case .areaName(let kind, let importance):
+            image = MarkerImage.areaName(title, kind: kind, importance: importance)
+            offset = .zero
+            // Under every place name; a lake of 10 km² over most street names, a tennis court under them all.
+            let rank = max(0, min(5, importance - 3))
+            priority = Float(60 + rank * 45)
+        case .pointName(let landmark, let iconWidth, let size, let rgb):
+            image = MarkerImage.pointName(title, size: size, rgb: rgb, landmark: landmark)
+            // The text's left edge just right of the icon; the image has 3 points of halo room on each side.
+            offset = CGPoint(x: image.size.width / 2 + CGFloat(iconWidth) / 2 - 2, y: 0)
+            // Passes and summits above street names; other points under them, and under every place name.
+            priority = landmark ? 280 : 80
+        case .street(let angle, let importance, let water):
+            image = MarkerImage.street(title, angle: angle, water: water)
+            offset = .zero
+            // Under every place name, so towns keep their names; bigger roads first.
+            priority = Float(100 + min(importance, 40) * 4)
+        default:
+            return nil
+        }
+    }
+}
 
 /// Small marker images, drawn once per style.
 enum MarkerImage {

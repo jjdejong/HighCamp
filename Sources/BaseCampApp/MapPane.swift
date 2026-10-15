@@ -17,14 +17,8 @@ struct MapPane: View {
     @State private var libraryLayer = LibraryLayerCache()
     /// The visible area and scale, for the place names.
     @State private var viewport: PlaceQuery?
-    /// The place names of the Garmin maps in view.
-    @State private var places: [MapPlace] = []
-    /// The street and river names in view, when zoomed in far enough for them.
-    @State private var streets: [StreetLabel] = []
-    /// The names of the points of interest whose icons are drawn in view.
-    @State private var pointNames: [POIName] = []
-    /// The names of lakes, forests, parks and other areas in view.
-    @State private var areaNames: [AreaLabel] = []
+    /// The names the Garmin maps write in view.
+    @State private var names = MapNames()
 
     var body: some View {
         MapKitView(
@@ -124,15 +118,18 @@ struct MapPane: View {
 
     private func loadPlaces(_ request: PlaceRequest?) async {
         guard let request else {
-            places = []
-            streets = []
-            pointNames = []
-            areaNames = []
+            names = MapNames()
             return
         }
         // Waits for the map to settle, so panning does not read the maps at every step.
         try? await Task.sleep(for: .milliseconds(250))
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, let read = await Self.names(for: request) else { return }
+        names = read
+    }
+
+    /// The names the Garmin maps write in a view, read a little beyond it so names at its edges are kept. Nil when
+    /// the task was cancelled.
+    static func names(for request: PlaceRequest) async -> MapNames? {
         let b = request.viewport.bounds
         let margin = (lat: (b.north - b.south) * 0.1, lon: (b.east - b.west) * 0.1)
         let area = GeoBounds(north: b.north + margin.lat, east: b.east + margin.lon, south: b.south - margin.lat, west: b.west - margin.lon)
@@ -142,25 +139,23 @@ struct MapPane: View {
                 in: area, metersPerPoint: request.viewport.metersPerPoint, map: map, detailOffset: request.detailOffset
             )
         }
-        guard !Task.isCancelled else { return }
-        places = MapPlace.merged(found)
-        pointNames = await Self.pointNames(in: area, request: request)
-        areaNames = await Self.areaNames(in: area, request: request, places: places)
+        guard !Task.isCancelled else { return nil }
+        var names = MapNames()
+        names.places = MapPlace.merged(found)
+        names.points = await pointNames(in: area, request: request)
+        names.areas = await areaNames(in: area, request: request, places: names.places)
 
         // Street names from about zoom 15, where there is room for them between the streets.
-        guard request.viewport.metersPerPoint <= Self.streetNameScale else {
-            streets = []
-            return
-        }
+        guard request.viewport.metersPerPoint <= streetNameScale else { return names }
         var lines: [NamedLine] = []
         for map in request.maps {
             lines += await MapFeatureCache.shared.namedLines(
                 in: area, metersPerPoint: request.viewport.metersPerPoint, map: map, detailOffset: request.detailOffset
             )
         }
-        guard !Task.isCancelled else { return }
-        let placed = StreetLabels.place(lines, metersPerPoint: request.viewport.metersPerPoint)
-        streets = Array(placed.prefix(600))
+        guard !Task.isCancelled else { return nil }
+        names.streets = Array(StreetLabels.place(lines, metersPerPoint: request.viewport.metersPerPoint).prefix(600))
+        return names
     }
 
     /// Street names are written from this scale in, in metres per point (about zoom 15).
@@ -220,42 +215,7 @@ struct MapPane: View {
 
     /// The place names, as text-only markers. MapKit keeps the more important of two that would overlap.
     private var placeLayer: MapLayerContent {
-        var content = MapLayerContent()
-        for place in places {
-            let id = "place-\(place.name)-\(place.coordinate.latitude)-\(place.coordinate.longitude)"
-            content.pins.append(MapPin(
-                id: id, coordinate: place.coordinate, style: .place(rank: place.rank, size: place.size), item: nil, title: place.name
-            ))
-        }
-        for label in areaNames {
-            content.pins.append(MapPin(
-                id: "area-\(label.name)-\(label.coordinate.latitude)-\(label.coordinate.longitude)",
-                coordinate: label.coordinate,
-                style: .areaName(kind: label.kind, importance: label.importance),
-                item: nil, title: label.name
-            ))
-        }
-        for point in pointNames {
-            guard let name = point.poi.name else { continue }
-            content.pins.append(MapPin(
-                id: "poi-\(point.poi.type)-\(point.poi.coordinate.latitude)-\(point.poi.coordinate.longitude)",
-                coordinate: point.poi.coordinate,
-                style: .pointName(
-                    landmark: point.poi.isLandmark, iconWidth: point.iconWidth, size: point.size.rawValue, rgb: point.colour
-                ),
-                item: nil, title: name
-            ))
-        }
-        for street in streets {
-            let degrees = Int((street.angle * 180 / .pi / 3).rounded()) * 3
-            content.pins.append(MapPin(
-                id: "street-\(street.name)-\(street.coordinate.latitude)-\(street.coordinate.longitude)",
-                coordinate: street.coordinate,
-                style: .street(angle: degrees, importance: street.importance, water: street.isWater),
-                item: nil, title: street.name
-            ))
-        }
-        return content
+        MapLayerContent(pins: names.pins)
     }
 
     /// The colour of the stretch picked on a profile: a magenta that stands out from the tracks, routes and maps.
@@ -597,4 +557,52 @@ struct PlaceRequest: Equatable {
     let detailOffset: Int
     var hiddenPointTypes: Set<Int> = []
     var zoomedOutPointTypes = MapPOI.defaultZoomedOutTypes
+}
+
+/// The names the Garmin maps write in a view: places, points of interest, areas and, zoomed in, streets.
+struct MapNames {
+    var places: [MapPlace] = []
+    var points: [POIName] = []
+    var areas: [AreaLabel] = []
+    var streets: [StreetLabel] = []
+
+    /// The names as text-only markers; the map, or a saved picture, keeps the more important of two that overlap.
+    var pins: [MapPin] {
+        var pins: [MapPin] = []
+        for place in places {
+            let id = "place-\(place.name)-\(place.coordinate.latitude)-\(place.coordinate.longitude)"
+            pins.append(MapPin(
+                id: id, coordinate: place.coordinate, style: .place(rank: place.rank, size: place.size), item: nil, title: place.name
+            ))
+        }
+        for label in areas {
+            pins.append(MapPin(
+                id: "area-\(label.name)-\(label.coordinate.latitude)-\(label.coordinate.longitude)",
+                coordinate: label.coordinate,
+                style: .areaName(kind: label.kind, importance: label.importance),
+                item: nil, title: label.name
+            ))
+        }
+        for point in points {
+            guard let name = point.poi.name else { continue }
+            pins.append(MapPin(
+                id: "poi-\(point.poi.type)-\(point.poi.coordinate.latitude)-\(point.poi.coordinate.longitude)",
+                coordinate: point.poi.coordinate,
+                style: .pointName(
+                    landmark: point.poi.isLandmark, iconWidth: point.iconWidth, size: point.size.rawValue, rgb: point.colour
+                ),
+                item: nil, title: name
+            ))
+        }
+        for street in streets {
+            let degrees = Int((street.angle * 180 / .pi / 3).rounded()) * 3
+            pins.append(MapPin(
+                id: "street-\(street.name)-\(street.coordinate.latitude)-\(street.coordinate.longitude)",
+                coordinate: street.coordinate,
+                style: .street(angle: degrees, importance: street.importance, water: street.isWater),
+                item: nil, title: street.name
+            ))
+        }
+        return pins
+    }
 }

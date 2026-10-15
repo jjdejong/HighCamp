@@ -17,7 +17,8 @@ struct RenderedMap {
 }
 
 /// Saves the map as a picture: the base map for the visible area, with the coverage outlines, the lines and the
-/// markers drawn on it. The Garmin maps are drawn from the map folder, as on screen. Apple's maps come from a
+/// markers drawn on it. The Garmin maps are drawn from the map folder, as on screen, with their point icons and
+/// names read for the picture's own area and scale. Apple's maps come from a
 /// snapshot. Other base maps are drawn from their tiles, fetched from the same servers the map uses. The contour
 /// tiles can be added on top of any base map but Apple's.
 @MainActor
@@ -64,6 +65,8 @@ enum MapImageExport {
             ? FetchedTiles()
             : await fetchTiles(columns: columns, rows: rows) { base.tileURL(z: zoom, x: $0, y: $1) }
         let garmin = base == .garmin ? await garminFeatures(projection: projection, base: picture) : nil
+        let request = base == .garmin ? garminNameRequest(projection: projection, base: picture) : nil
+        let names = if let request { await MapPane.names(for: request) } else { MapNames?.none }
         let contourTiles = contours
             ? await fetchTiles(columns: columns, rows: rows) { MapTileURLs.ignWMTS(layer: "ELEVATION.CONTOUR.LINE", z: zoom, x: $0, y: $1) }
             : FetchedTiles()
@@ -86,6 +89,17 @@ enum MapImageExport {
             rect.fill()
             if let garmin {
                 GarminPainter.draw(garmin.features, in: rect, patternOrigin: .zero, step: garmin.step) { projection.point($0) }
+                if let request {
+                    // Thinned at the zoom the names were chosen at, so every name has its icon.
+                    let points = GarminTileRenderer.shownPoints(
+                        garmin.features, zoom: Int(request.viewport.zoomLevel.rounded(.down)),
+                        hidden: request.hiddenPointTypes, zoomedOut: request.zoomedOutPointTypes
+                    )
+                    GarminPainter.drawPoints(points) { projection.point($0) }
+                }
+            }
+            if let names {
+                drawNames(names, avoiding: scene, in: rect, projection: projection)
             }
             draw(baseTiles.images, alpha: 1)
             draw(contourTiles.images, alpha: 0.8)
@@ -112,15 +126,57 @@ enum MapImageExport {
     /// The Garmin features for the picture's area, at the picture's scale, and how much to thin their paths so the
     /// total stays bounded.
     private static func garminFeatures(projection: ImageProjection, base: PictureBase) async -> (features: [GarminMapDrawing], step: Int) {
-        let bounds = projection.bounds
-        let middle = (bounds.north + bounds.south) / 2 * .pi / 180
-        let metersPerPoint = 40_075_016.686 * cos(middle) * projection.widthWorld(worldSize: 1) / projection.size.width
-        let drawings = await base.garmin.drawings(in: bounds, metersPerPoint: metersPerPoint, zoom: projection.zoom(maximum: 21))
+        let drawings = await base.garmin.drawings(
+            in: projection.bounds, metersPerPoint: projection.metersPerPoint, zoom: projection.zoom(maximum: 21)
+        )
         let points = drawings.reduce(0) { total, drawing in
             total + drawing.features.lines.reduce(0) { $0 + $1.paths.reduce(0) { $0 + $1.count } }
                 + drawing.features.areas.reduce(0) { $0 + $1.rings.reduce(0) { $0 + $1.count } }
         }
         return (drawings, max(1, points / maximumFeaturePoints))
+    }
+
+    /// The names to read for the picture, as the map pane reads them for its view: the full maps drawn at the
+    /// picture's zoom. Nil when none is.
+    private static func garminNameRequest(projection: ImageProjection, base: PictureBase) -> PlaceRequest? {
+        let viewport = PlaceQuery(bounds: projection.bounds, metersPerPoint: projection.metersPerPoint)
+        let maps = base.garmin.layers.filter { !$0.isOverlay && $0.isVisible(atZoom: viewport.zoom) }.map(\.url)
+        guard !maps.isEmpty else { return nil }
+        return PlaceRequest(
+            viewport: viewport, maps: maps, detailOffset: base.garmin.detailOffset,
+            hiddenPointTypes: base.garmin.hiddenPointTypes, zoomedOutPointTypes: base.garmin.zoomedOutPointTypes
+        )
+    }
+
+    /// The map's names, as the map shows them: of two that would overlap, the more important, and none over the
+    /// library's markers or cut by the picture's edge.
+    private static func drawNames(_ names: MapNames, avoiding scene: MapScene, in rect: NSRect, projection: ImageProjection) {
+        let looks = names.pins.compactMap { pin -> (look: NameLook, box: NameCollision.Box)? in
+            guard let look = NameLook(style: pin.style, title: pin.title) else { return nil }
+            let point = projection.point(pin.coordinate)
+            let size = look.image.size
+            let box = NameCollision.Box(
+                x: point.x + look.offset.x - size.width / 2, y: point.y + look.offset.y - size.height / 2,
+                width: size.width, height: size.height
+            )
+            return (look, box)
+        }
+        let markers = scene.pins.filter { $0.style != .insertHandle && !$0.style.isName && !isLabelOnly($0.style) }.map { pin in
+            let point = projection.point(pin.coordinate)
+            let size = MarkerImage.image(for: pin.style).size
+            return NameCollision.Box(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height)
+        }
+        let kept = NameCollision.kept(
+            looks.map(\.box), priorities: looks.map(\.look.priority),
+            in: NameCollision.Box(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height), blocked: markers
+        )
+        for index in kept {
+            let (look, box) = looks[index]
+            look.image.draw(
+                in: NSRect(x: box.x, y: box.y, width: box.width, height: box.height),
+                from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil
+            )
+        }
     }
 
     /// The coverage outlines, the lines, and the markers, in that order. Long lines are thinned.
@@ -145,7 +201,8 @@ enum MapImageExport {
             path.stroke()
         }
         // The handles for inserting route stops are for editing on screen only.
-        for pin in scene.pins where pin.style != .insertHandle {
+        // The screen's map names are read again for the picture (see `drawNames`).
+        for pin in scene.pins where pin.style != .insertHandle && !pin.style.isName {
             guard !isLabelOnly(pin.style) else { continue }
             let point = projection.point(pin.coordinate)
             // The same marker as the map, centred on the coordinate.
@@ -294,6 +351,12 @@ private struct ImageProjection {
     func point(_ coordinate: Coordinate) -> NSPoint {
         let point = projection.point(coordinate)
         return NSPoint(x: point.x, y: point.y)
+    }
+
+    /// The ground distance one picture point covers, in the middle of the picture.
+    var metersPerPoint: Double {
+        let middle = (projection.north + projection.south) / 2 * .pi / 180
+        return 40_075_016.686 * cos(middle) * projection.widthWorld(worldSize: 1) / size.width
     }
 
     /// The zoom level at which one tile pixel is about one picture pixel, capped by `maximum`.

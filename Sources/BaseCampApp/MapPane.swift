@@ -228,7 +228,8 @@ struct MapPane: View {
         parts[.coverage] = coverageLayer
         parts[.library] = libraryLayer.content(
             revision: LibraryLayerCache.Revision(
-                library: store.revision, device: store.deviceRevision, deviceGroupsOnMap: store.deviceGroupsOnMap
+                library: store.revision, device: store.deviceRevision, deviceGroupsOnMap: store.deviceGroupsOnMap,
+                node: store.selectedNode
             ),
             selectedItems: store.selectedItems, selectedStop: store.selectedStop, build: buildLibraryLayer
         )
@@ -250,7 +251,11 @@ struct MapPane: View {
     /// Waypoints, routes and tracks, highlighted when selected, and the points of the selected route that can be dragged.
     private func buildLibraryLayer() -> MapLayerContent {
         var content = MapLayerContent()
-        for waypoint in store.library.waypoints {
+        // As BaseCamp: the selected node's items, all of My Collection's, none of the library's while a device
+        // folder is selected. A selected item is drawn anyway.
+        let inNode: Set<LibraryItem>? = if case .device = store.selectedNode { [] } else { store.items(of: store.selectedNode) }
+        let drawn = { (item: LibraryItem) in inNode?.contains(item) ?? true || store.selectedItems.contains(item) }
+        for waypoint in store.library.waypoints where drawn(.waypoint(waypoint.id)) {
             let selected = store.selectedItems.contains(.waypoint(waypoint.id))
             content.pins.append(MapPin(
                 id: "waypoint-\(waypoint.id)",
@@ -266,7 +271,7 @@ struct MapPane: View {
         // the halos are drawn before any selected line, so one item's halo never covers another selected line.
         var selectedHalos: [MapLine] = []
         var selectedLines: [MapLine] = []
-        for route in store.library.routes {
+        for route in store.library.routes where drawn(.route(route.id)) {
             let selected = store.selectedItems.contains(.route(route.id))
             for line in Self.routeLines(route) {
                 if selected {
@@ -304,7 +309,7 @@ struct MapPane: View {
             }
         }
 
-        for track in store.library.tracks {
+        for track in store.library.tracks where drawn(.track(track.id)) {
             let selected = store.selectedItems.contains(.track(track.id))
             for (index, segment) in track.segments.enumerated() {
                 let line = MapLine(
@@ -331,7 +336,7 @@ struct MapPane: View {
     /// so they are told apart from the library's.
     private func addDeviceItems(to content: inout MapLayerContent, selectedHalos: inout [MapLine], selectedLines: inout [MapLine]) {
         for group in store.device.groups {
-            let shown = store.deviceGroupsOnMap.contains(group.id)
+            let shown = store.deviceGroupsOnMap.contains(group.id) || store.selectedNode == .device(group.kind)
             for waypoint in group.library.waypoints {
                 let selected = store.selectedItems.contains(.waypoint(waypoint.id))
                 guard shown || selected else { continue }
@@ -560,6 +565,7 @@ final class LibraryLayerCache {
         let library: Int
         let device: Int
         let deviceGroupsOnMap: Set<String>
+        let node: LibraryNode
     }
 
     private var revision: Revision?

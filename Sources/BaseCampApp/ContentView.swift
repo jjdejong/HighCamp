@@ -253,6 +253,7 @@ struct ContentView: View {
             store.heightSources = elevation.sources(maps: garminMaps)
             recalculator.check(store: store, planner: planner, settings: routing)
         }
+        .modifier(LibraryDialogs())
         .onChange(of: device.contents) { _, contents in
             store.device = contents
         }

@@ -25,8 +25,31 @@ final class LibraryStore {
     private(set) var revision = 0
     /// Counts requests to rename the collection being shown. The sidebar watches it. Not saved.
     var renameRequests = 0
-    /// The collection the sidebar shows, or nil for every item. Not saved.
-    var activeCollectionID: UUID?
+    /// The place in the library tree that is selected: its items are listed and drawn on the map, and new items
+    /// go into it when it is a list. Not saved.
+    var selectedNode = LibraryNode.myCollection
+    /// The list or folder being renamed, for the sidebar's rename sheet.
+    var renaming: LibraryNode?
+    /// Waiting for the user to confirm, for the sidebar's dialogs.
+    var pendingNodeRemoval: LibraryNode?
+    var pendingListDuplication: UUID?
+    var pendingItemDeletion: ItemDeletion?
+    /// New items made while a list folder was selected: the user picks a list in it for them.
+    var pendingListChoice: ListChoice?
+
+    /// Whether the selected node is a list or folder, which can be renamed and removed.
+    var selectedNodeIsEditable: Bool {
+        switch selectedNode {
+        case .list, .folder: true
+        default: false
+        }
+    }
+
+    /// The list selected in the library tree, if a list is.
+    var selectedListID: UUID? {
+        if case .list(let id) = selectedNode { return id }
+        return nil
+    }
     /// Whether the sidebar lists the items or shows them in a table. Not saved.
     var sidebarStyle = SidebarStyle.list
     /// Everything selected in the sidebar. The inspector shows the item when exactly one is selected.
@@ -232,6 +255,7 @@ final class LibraryStore {
             }
         }
         edit("Import") { $0.merge(imported) }
+        placeNewItems(imported.allItems.map(LibraryItem.init).filter(exists))
         if skippedPoints > 0 {
             messages.append("\(skippedPoints) \(skippedPoints == 1 ? "point was" : "points were") skipped because their latitude or longitude is missing or out of range.")
         }
@@ -464,6 +488,7 @@ final class LibraryStore {
     func addWaypoint(name: String, coordinate: Coordinate, comment: String? = nil) {
         let waypoint = Waypoint(name: name, coordinate: coordinate, comment: comment)
         edit("Add Waypoint") { $0.waypoints.append(waypoint) }
+        placeNewItems([.waypoint(waypoint.id)])
         selection = .waypoint(waypoint.id)
         // Its height, as BaseCamp gives one, read after it is added so it shows at once. Undo takes both back.
         guard let sources = heightSources else { return }
@@ -484,12 +509,14 @@ final class LibraryStore {
     /// Adds a planned or imported route and selects it.
     func addRoute(_ route: Route) {
         edit("Add Route") { $0.routes.append(route) }
+        placeNewItems([.route(route.id)])
         selection = .route(route.id)
     }
 
     /// Adds a track read from the device and selects it.
     func addTrack(_ track: Track) {
         edit("Add Track") { $0.tracks.append(track) }
+        placeNewItems([.track(track.id)])
         selection = .track(track.id)
         fitCamera()
     }
@@ -618,6 +645,7 @@ final class LibraryStore {
             library.routes += routes
             library.tracks += tracks
         }
+        placeNewItems(Array(copies))
         selectedItems = copies
     }
 
@@ -662,6 +690,22 @@ final class LibraryStore {
         requestDeviceDeletion(selectedItems.filter(isOnDevice))
         let items = selectedItems.filter { !isOnDevice($0) }
         guard !items.isEmpty else { return }
+        // In a list, BaseCamp asks whether to take the items out of the list or delete them from My Collection. In
+        // My Collection, items in lists are deleted from all of them, so it warns first.
+        if let list = selectedListID {
+            pendingItemDeletion = ItemDeletion(items: items, list: list)
+            return
+        }
+        if items.contains(where: { !library.lists(containing: CollectionItem($0)).isEmpty }) {
+            pendingItemDeletion = ItemDeletion(items: items, list: nil)
+            return
+        }
+        deleteFromMyCollection(items)
+    }
+
+    /// Deletes items from My Collection, and so from every list.
+    func deleteFromMyCollection(_ items: Set<LibraryItem>) {
+        guard !items.isEmpty else { return }
         edit(items.count == 1 ? "Delete" : "Delete \(items.count) Items") { library in
             for item in items {
                 switch item {
@@ -693,53 +737,7 @@ final class LibraryStore {
 
     /// The items of one collection, as library items.
     func items(in collection: LibraryCollection) -> Set<LibraryItem> {
-        Set(collection.items.map { item in
-            switch item {
-            case .waypoint(let id): LibraryItem.waypoint(id)
-            case .route(let id): LibraryItem.route(id)
-            case .track(let id): LibraryItem.track(id)
-            }
-        })
-    }
-
-    /// Creates an empty collection and shows it in the sidebar. Its name is numbered when others have taken it.
-    func createCollection() {
-        let collection = LibraryCollection(name: library.nextCollectionName())
-        edit("New Collection") { $0.collections.append(collection) }
-        activeCollectionID = collection.id
-    }
-
-    /// Adds the selected items to a collection. Items already in it are not added twice.
-    func addSelection(toCollection id: UUID) {
-        let items = selectedItems.compactMap { item -> CollectionItem? in
-            switch item {
-            case .waypoint(let itemID): .waypoint(itemID)
-            case .route(let itemID): .route(itemID)
-            case .track(let itemID): .track(itemID)
-            }
-        }
-        edit("Add to Collection") { library in
-            guard let index = library.collections.firstIndex(where: { $0.id == id }) else { return }
-            for item in items where !library.collections[index].items.contains(item) {
-                library.collections[index].items.append(item)
-            }
-        }
-    }
-
-    /// Removes the selected items from the collection being shown.
-    func removeSelectionFromActiveCollection() {
-        guard let id = activeCollectionID else { return }
-        let items = selectedItems.compactMap { item -> CollectionItem? in
-            switch item {
-            case .waypoint(let itemID): .waypoint(itemID)
-            case .route(let itemID): .route(itemID)
-            case .track(let itemID): .track(itemID)
-            }
-        }
-        edit("Remove from Collection") { library in
-            guard let index = library.collections.firstIndex(where: { $0.id == id }) else { return }
-            library.collections[index].items.removeAll { items.contains($0) }
-        }
+        Set(collection.items.map(LibraryItem.init))
     }
 
     /// Sets the colour a track or route is drawn in. Nil goes back to the default. Choosing colours in a row is one undo step.
@@ -758,27 +756,241 @@ final class LibraryStore {
         }
     }
 
-    /// Renames a collection. Typing into the name is one undo step.
-    func renameCollection(_ id: UUID, to name: String) {
-        edit("Rename Collection", coalesceKey: "collection-\(id)") { library in
-            _ = library.renameCollection(id, to: name)
+    // MARK: Lists and list folders, as BaseCamp organises My Collection
+
+    /// The items a node of the library tree holds, or nil for My Collection (every item).
+    func items(of node: LibraryNode) -> Set<LibraryItem>? {
+        switch node {
+        case .myCollection: nil
+        case .unlisted: Set(library.unlistedItems.map(LibraryItem.init))
+        case .folder(let id): Set(library.items(inFolder: id).map(LibraryItem.init))
+        case .list(let id): library.collections.first { $0.id == id }.map(items(in:)) ?? []
+        case .device(let kind): Set(device.groups.first { $0.kind == kind }?.items ?? [])
         }
     }
 
-    /// Asks the sidebar to show the rename sheet for the collection being shown.
-    func requestRenameCollection() {
-        renameRequests += 1
-    }
-
-    /// Deletes a collection. The items in it stay in the library.
-    func deleteCollection(_ id: UUID) {
-        edit("Delete Collection") { $0.collections.removeAll { $0.id == id } }
-        if activeCollectionID == id {
-            activeCollectionID = nil
+    /// The folder new lists and folders go into: the selected folder, or the folder of the selected list.
+    private var folderForNewNodes: UUID? {
+        switch selectedNode {
+        case .folder(let id): id
+        case .list(let id): library.collections.first { $0.id == id }?.folderID
+        default: nil
         }
     }
 
-    /// Frames the map on the selected items. Nothing happens when nothing is selected.
+    /// A list's place, as "Folder › Sub-folder › List".
+    func path(ofList id: UUID) -> String {
+        guard let list = library.collections.first(where: { $0.id == id }) else { return "" }
+        var names = [list.name]
+        var folder = list.folderID
+        var seen: Set<UUID> = []
+        while let id = folder, !seen.contains(id), let found = library.folders.first(where: { $0.id == id }) {
+            seen.insert(id)
+            names.insert(found.name, at: 0)
+            folder = found.parentID
+        }
+        return names.joined(separator: " › ")
+    }
+
+    /// Every list with its place, by place, for menus.
+    var listsByPath: [(id: UUID, path: String)] {
+        library.collections.map { ($0.id, path(ofList: $0.id)) }
+            .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    /// Adds a list ("New List") to the selected folder, selects it and asks for its name.
+    func newList() {
+        let folder = folderForNewNodes
+        var id: UUID?
+        edit("New List") { id = $0.createList(in: folder) }
+        if let id {
+            selectedNode = .list(id)
+            renaming = .list(id)
+        }
+    }
+
+    /// Adds a list folder ("New Folder") to the selected folder, selects it and asks for its name.
+    func newFolder() {
+        let parent = folderForNewNodes
+        var id: UUID?
+        edit("New List Folder") { id = $0.createFolder(in: parent) }
+        if let id {
+            selectedNode = .folder(id)
+            renaming = .folder(id)
+        }
+    }
+
+    /// The name of a list or folder.
+    func name(of node: LibraryNode) -> String {
+        switch node {
+        case .myCollection: "My Collection"
+        case .unlisted: "Unlisted Data"
+        case .folder(let id): library.folders.first { $0.id == id }?.name ?? ""
+        case .list(let id): library.collections.first { $0.id == id }?.name ?? ""
+        case .device(let kind): kind.title
+        }
+    }
+
+    /// Renames a list or folder. Says so when another beside it has the name, as BaseCamp does.
+    func rename(_ node: LibraryNode, to name: String) {
+        var renamed = false
+        switch node {
+        case .list(let id):
+            edit("Rename List") { renamed = $0.renameCollection(id, to: name) }
+        case .folder(let id):
+            edit("Rename List Folder") { renamed = $0.renameFolder(id, to: name) }
+        default:
+            return
+        }
+        if !renamed, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, name != self.name(of: node) {
+            errorMessage = if case .folder = node {
+                "This folder name has already been used. Please enter a unique folder name."
+            } else {
+                "This list name has already been used. Please enter a unique list name."
+            }
+        }
+    }
+
+    /// Moves a list or folder into a folder, or to the top of My Collection (nil).
+    func move(_ node: LibraryNode, to folder: UUID?) {
+        var moved = false
+        switch node {
+        case .list(let id):
+            guard library.collections.first(where: { $0.id == id })?.folderID != folder else { return }
+            edit("Move List") { moved = $0.moveList(id, to: folder) }
+        case .folder(let id):
+            guard library.folders.first(where: { $0.id == id })?.parentID != folder else { return }
+            if let folder, library.folderTree(id).contains(folder) {
+                errorMessage = "Cannot move \(name(of: node)) to itself."
+                return
+            }
+            edit("Move List Folder") { moved = $0.moveFolder(id, to: folder) }
+        default:
+            return
+        }
+        if !moved {
+            let place = folder.map { name(of: .folder($0)) } ?? "My Collection"
+            errorMessage = "\(place) already has a \(node.isFolder ? "folder" : "list") named \(name(of: node))."
+        }
+    }
+
+    /// Adds library items to a list. Says so when they were all in it already.
+    func add(_ items: [LibraryItem], toList id: UUID) {
+        let wanted = items.filter { !isOnDevice($0) }.map(CollectionItem.init)
+        guard !wanted.isEmpty else { return }
+        var already: [CollectionItem] = []
+        edit("Add to List") { already = $0.add(wanted, toList: id) }
+        if already.count == wanted.count, let item = items.first {
+            errorMessage = "\(name(of: .list(id))) already contains \(wanted.count == 1 ? self.name(of: item) : "these items")."
+        }
+    }
+
+    /// Adds the selected items to a list.
+    func addSelection(toList id: UUID) {
+        add(Array(selectedItems), toList: id)
+    }
+
+    /// Adds the selected items to a new list in the selected folder, then asks for its name.
+    func addSelectionToNewList() {
+        let items = selectedItems.filter { !isOnDevice($0) }.map(CollectionItem.init)
+        let folder = folderForNewNodes
+        var id: UUID?
+        edit("New List") { id = $0.createList(in: folder, items: items) }
+        if let id {
+            renaming = .list(id)
+        }
+    }
+
+    /// Takes the selected items out of the selected list. They stay in My Collection.
+    func removeSelectionFromList() {
+        guard let id = selectedListID else { return }
+        let items = Set(selectedItems.map(CollectionItem.init))
+        edit("Remove from List") { $0.remove(items, fromList: id) }
+        selectedItems = []
+    }
+
+    /// Asks before removing a list or folder (see `confirmRemoval`).
+    func requestRemoval(_ node: LibraryNode) {
+        switch node {
+        case .list, .folder: pendingNodeRemoval = node
+        default: break
+        }
+    }
+
+    /// The items a list or folder holds that are in no other list: deleting them leaves them nowhere but My Collection.
+    func uniqueItems(of node: LibraryNode) -> Int {
+        switch node {
+        case .list(let id): library.uniqueItems(ofList: id).count
+        case .folder(let id): library.uniqueItems(ofFolder: id).count
+        default: 0
+        }
+    }
+
+    /// Removes a list or folder. Its items stay in My Collection, unless `deletingUniqueItems`.
+    func remove(_ node: LibraryNode, deletingUniqueItems: Bool) {
+        switch node {
+        case .list(let id):
+            edit(deletingUniqueItems ? "Delete List and Contents" : "Remove List") { $0.removeList(id, deletingUniqueItems: deletingUniqueItems) }
+        case .folder(let id):
+            edit(deletingUniqueItems ? "Delete Folder and Contents" : "Remove Folder") {
+                $0.removeFolder(id, deletingUniqueItems: deletingUniqueItems)
+            }
+        default:
+            return
+        }
+        if !libraryHas(selectedNode) {
+            selectedNode = .myCollection
+        }
+    }
+
+    /// Copies a list beside it, with copies of its items or the same items.
+    func duplicateList(_ id: UUID, copyingItems: Bool) {
+        var copy: UUID?
+        edit("Duplicate List") { copy = $0.duplicateList(id, copyingItems: copyingItems) }
+        if let copy {
+            selectedNode = .list(copy)
+        }
+    }
+
+    private func libraryHas(_ node: LibraryNode) -> Bool {
+        switch node {
+        case .list(let id): library.collections.contains { $0.id == id }
+        case .folder(let id): library.folders.contains { $0.id == id }
+        default: true
+        }
+    }
+
+    /// New items go where BaseCamp puts them: into the selected list, as part of the step that made them; with a
+    /// list folder selected, the user picks a list in it (`pendingListChoice`). They are in My Collection anyway.
+    private func placeNewItems(_ items: [LibraryItem]) {
+        let wanted = items.map(CollectionItem.init)
+        guard !wanted.isEmpty else { return }
+        switch selectedNode {
+        case .list(let id):
+            if history.amend({ $0.add(wanted, toList: id) }) {
+                revision += 1
+                save()
+            }
+        case .folder(let id):
+            pendingListChoice = ListChoice(items: wanted, folder: id)
+        default:
+            break
+        }
+    }
+
+    /// Puts new items into a list of the folder, or a new list named `newListName` in it.
+    func placeItems(_ choice: ListChoice, inList list: UUID?, newListName: String) {
+        edit("Add to List") { library in
+            if let list {
+                library.add(choice.items, toList: list)
+            } else {
+                let name = newListName.trimmingCharacters(in: .whitespacesAndNewlines)
+                library.createList(in: choice.folder, name: name.isEmpty ? "New List" : name, items: choice.items)
+            }
+        }
+    }
+
+        /// Frames the map on the selected items. Nothing happens when nothing is selected.
     func zoomToSelection() {
         var coordinates: [Coordinate] = []
         for item in selectedItems {
@@ -952,6 +1164,7 @@ final class LibraryStore {
             guard let track = track(id) else { return }
             let copy = Track(name: track.name + " copy", segments: track.segments, color: track.color)
             edit("Duplicate") { $0.tracks.append(copy) }
+            placeNewItems([.track(copy.id)])
             selection = .track(copy.id)
         case .route(let id)?:
             guard let route = route(id) else { return }
@@ -959,6 +1172,7 @@ final class LibraryStore {
             copy.id = UUID()
             copy.name = route.name + " copy"
             edit("Duplicate") { $0.routes.append(copy) }
+            placeNewItems([.route(copy.id)])
             selection = .route(copy.id)
         default:
             break

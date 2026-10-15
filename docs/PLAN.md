@@ -237,6 +237,18 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
   FIT protocol (QMapShack reads only course points). Shown as a "Saved Locations" section; not deleted from the app,
   since one file holds them all. The user's Edge has none at present, so only tests with built files check them.
 
+### G7. BaseCamp's organisation of My Collection. Owner: Opus
+- Asked for by the user: "recreate BaseCamp's exact item organization". Learned from BaseCamp's own interface text
+  (its en.lproj strings, not its code): My Collection holds every item; list folders hold lists and folders, never
+  items; names unique within a folder; Unlisted Data; removing a list or folder keeps its items, or deletes those in
+  no other list; Duplicate List with or without copying items; in a list, Remove from List or Delete from My
+  Collection; in My Collection, deleting deletes from all lists; new items go into the selected list, and with a
+  folder selected the user picks a list in it; an item shows the lists it is in.
+- Done 2026-10-15: `ListFolder` and list `folderID` in core (older files load with lists at the top);
+  `LibraryNode` selection; `LibraryTreeView` (tree, context menus, drag items onto lists and lists or folders into
+  folders), `LibraryDialogs`, Lists menu; the map draws the selected node's items. Not from the strings, so
+  unconfirmed: that BaseCamp's map shows only the selected list. Not done: Smart Lists.
+
 ## Phase C: features (Haiku after Opus has set the shape)
 
 ### C1. Garmin GPX extensions, read and write. Owner: Haiku → Opus review
@@ -321,6 +333,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | D1 | Opus | done | e809ca8, (this commit) | track DEMs from a folder of high-resolution tiles (user request); profile from the track DEM; not yet seen on screen |
 | G5 | Opus | done | (this commit) | closed without code: no overview map in the user's files; Apple Maps fills in when zoomed out (see G5) |
 | G6 | Opus | done | (this commit) | device courses, activities and GPX files in the sidebar and on the map, read-only, Copy to Library; checked with the user's Edge 1040 |
+| G7 | Opus | done | 705fd92, (this commit) | lists in nested list folders, Unlisted Data, BaseCamp's remove/delete choices, new items into the selected list; Smart Lists not done |
 | C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |
 | C5 | Haiku | reviewed | 2a26c42 | accepted; table next to the list; `--sidebar table` hook (debug) |
 | C7 | Haiku | reviewed | bc1a6cc, 69350e5 | accepted; follow-up C7b |

@@ -27,6 +27,7 @@ struct InspectorView: View {
                 Section {
                     TextField("Name", text: nameBinding(for: selection))
                 }
+                listMembership(selection)
                 details(for: selection)
             }
             .formStyle(.grouped)
@@ -58,9 +59,9 @@ struct InspectorView: View {
                     }
                 }
                 collectionMenu
-                if store.activeCollectionID != nil {
-                    Button("Remove from This Collection") {
-                        store.removeSelectionFromActiveCollection()
+                if store.selectedListID != nil {
+                    Button("Remove from List") {
+                        store.removeSelectionFromList()
                     }
                 }
                 Button("Combine Tracks") {
@@ -79,19 +80,44 @@ struct InspectorView: View {
         .formStyle(.grouped)
     }
 
-    /// Adds the selected items to a collection, or to a new one.
+    /// Adds the selected items to a list, or to a new one.
     private var collectionMenu: some View {
-        Menu("Add to Collection") {
-            ForEach(store.library.collections) { collection in
-                Button(collection.name) {
-                    store.addSelection(toCollection: collection.id)
+        Menu("Add to List") {
+            ForEach(store.listsByPath, id: \.id) { list in
+                Button(list.path) {
+                    store.addSelection(toList: list.id)
                 }
             }
             Divider()
-            Button("New Collection") {
-                store.createCollection()
-                if let id = store.activeCollectionID {
-                    store.addSelection(toCollection: id)
+            Button("New List…") {
+                store.addSelectionToNewList()
+            }
+        }
+    }
+
+    /// The lists a library item is in, as BaseCamp says it.
+    private func listMembership(_ item: LibraryItem) -> some View {
+        let name = store.name(of: item).isEmpty ? "Unnamed" : store.name(of: item)
+        let lists = store.library.lists(containing: CollectionItem(item))
+        return Section("Lists") {
+            if lists.isEmpty {
+                Text("'\(name)' is not in any list.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("'\(name)' is in the following list\(lists.count == 1 ? "" : "s"):")
+                    .foregroundStyle(.secondary)
+                ForEach(lists) { list in
+                    Button(store.path(ofList: list.id)) {
+                        store.selectedNode = .list(list.id)
+                    }
+                    .buttonStyle(.link)
+                    .help("Show this list")
+                }
+            }
+            collectionMenu
+            if store.selectedListID != nil {
+                Button("Remove from List") {
+                    store.removeSelectionFromList()
                 }
             }
         }
@@ -354,20 +380,6 @@ struct InspectorView: View {
                 }
                 .disabled(store.profileCursor == nil)
                 .help("Move the pointer over the elevation profile to choose where to cut the track")
-            }
-            Menu("Add to Collection") {
-                ForEach(store.library.collections) { collection in
-                    Button(collection.name) {
-                        store.addSelection(toCollection: collection.id)
-                    }
-                }
-                Divider()
-                Button("New Collection") {
-                    store.createCollection()
-                    if let id = store.activeCollectionID {
-                        store.addSelection(toCollection: id)
-                    }
-                }
             }
             Button(store.selection.map(convertTitle) ?? "Convert") {
                 store.convertSelection()

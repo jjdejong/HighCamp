@@ -52,6 +52,11 @@ struct BaseCampApp: App {
                             store.selectItem(named: String(name), addingToSelection: true)
                         }
                     }
+                    // `--select-list NAME` selects the list with that name in the library tree, for testing.
+                    if let name = Self.launchValue("--select-list"),
+                       let list = store.library.collections.first(where: { $0.name == name }) {
+                        store.selectedNode = .list(list.id)
+                    }
                     // `--select-device NAME` selects the device item with that name once the device has been read, and
                     // frames the map on it, for testing.
                     if let name = Self.launchValue("--select-device") {
@@ -79,15 +84,16 @@ struct BaseCampApp: App {
                         case "maps": store.showMaps = true
                         case "activities": store.showActivities = true
                         case "measure": store.toggleMeasuring()
-                        case "rename": store.requestRenameCollection()
+                        case "rename": if store.selectedListID != nil { store.renaming = store.selectedNode }
                         default: break
                         }
                     }
-                    // `--new-collection` puts the launch selection into a new collection, for testing.
+                    // `--new-collection` puts the launch selection into a new list, and selects the list, for testing.
                     if CommandLine.arguments.contains("--new-collection") {
-                        store.createCollection()
-                        if let id = store.activeCollectionID {
-                            store.addSelection(toCollection: id)
+                        store.addSelectionToNewList()
+                        if case .list(let id)? = store.renaming {
+                            store.renaming = nil
+                            store.selectedNode = .list(id)
                         }
                     }
                     // `--report-png PATH` or `--report-pdf PATH` renders the report for the selection, for testing.
@@ -329,22 +335,36 @@ struct BaseCampCommands: Commands {
             .disabled(!store.canRedo)
         }
 
-        CommandMenu("Collection") {
-            Button("New Collection") {
-                store.createCollection()
+        // BaseCamp's lists and list folders, which organise My Collection. They act on the node selected in the
+        // library tree.
+        CommandMenu("Lists") {
+            Button("New List") {
+                store.newList()
             }
             .keyboardShortcut("n", modifiers: [.command, .option])
-            Button("Rename Collection…") {
-                store.requestRenameCollection()
+            Button("New List Folder") {
+                store.newFolder()
+            }
+            .keyboardShortcut("n", modifiers: [.command, .option, .shift])
+            Divider()
+            Button(store.selectedNode.isFolder ? "Rename Folder…" : "Rename List…") {
+                store.renaming = store.selectedNode
             }
             .keyboardShortcut("k", modifiers: [.command, .option])
-            .disabled(store.activeCollectionID == nil)
-            Button("Delete Collection") {
-                if let id = store.activeCollectionID {
-                    store.deleteCollection(id)
-                }
+            .disabled(!store.selectedNodeIsEditable)
+            Button("Duplicate List…") {
+                store.pendingListDuplication = store.selectedListID
             }
-            .disabled(store.activeCollectionID == nil)
+            .disabled(store.selectedListID == nil)
+            Button(store.selectedNode.isFolder ? "Remove Folder…" : "Remove List…") {
+                store.requestRemoval(store.selectedNode)
+            }
+            .disabled(!store.selectedNodeIsEditable)
+            Divider()
+            Button("Remove from List") {
+                store.removeSelectionFromList()
+            }
+            .disabled(store.selectedListID == nil || store.selectedItems.isEmpty)
         }
 
         CommandMenu("Route") {

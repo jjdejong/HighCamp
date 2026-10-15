@@ -17,7 +17,7 @@ struct SidebarView: View {
     /// The figures for the table. Worked out only while the table is shown, and again after each change to the library.
     @State private var summaries: [ItemSummary] = []
     /// The device's folders shown open in the list, kept between launches. Activities start closed: there are many.
-    @AppStorage("sidebar.openDeviceGroups") private var openDeviceGroups = "courses,gpx"
+    @AppStorage("sidebar.openDeviceGroups") private var openDeviceGroups = "courses,gpx,locations"
 
     var body: some View {
         @Bindable var store = store

@@ -577,11 +577,15 @@ final class LibraryStore {
         return group.items.filter { group.files[$0] == file.name }
     }
 
-    /// Asks to delete the files of the selected device items from the device.
+    /// Asks to delete the files of the selected device items from the device. Saved locations are left out: they
+    /// share one file, so they are deleted on the device itself.
     func requestDeviceDeletion(_ items: Set<LibraryItem>) {
-        let files = deviceFiles(of: items)
+        let all = deviceFiles(of: items)
+        let files = all.filter(\.kind.canDeleteFiles)
         if !files.isEmpty {
             pendingDeviceDeletion = files
+        } else if !all.isEmpty {
+            errorMessage = "\(device.deviceName) keeps all its saved locations in one file, so they are deleted on the device itself, in Saved Locations."
         }
     }
 

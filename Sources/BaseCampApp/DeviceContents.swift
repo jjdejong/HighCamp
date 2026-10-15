@@ -1,8 +1,8 @@
 import BaseCampCore
 import Foundation
 
-/// What is on the device, shown next to the library as BaseCamp shows a device: its courses, its activities and
-/// the waypoints, routes and tracks of its GPX files. Read-only: an item is copied to the library to change it.
+/// What is on the device, shown next to the library as BaseCamp shows a device: its courses, its saved locations,
+/// its activities and the waypoints, routes and tracks of its GPX files. Read-only: an item is copied to the library to change it.
 struct DeviceContents: Equatable {
     /// The device's name, as the status bar shows it.
     var deviceName = ""
@@ -38,12 +38,13 @@ struct DeviceFileRef: Hashable, Identifiable {
 /// One folder of the device and the items read from it.
 struct DeviceGroup: Identifiable, Equatable {
     enum Kind: String, CaseIterable {
-        case courses, activities, gpx
+        case courses, locations, activities, gpx
 
         /// The folder on the device.
         var folder: [String] {
             switch self {
             case .courses: ["Garmin", "Courses"]
+            case .locations: ["Garmin", "Locations"]
             case .activities: ["Garmin", "Activities"]
             case .gpx: ["Garmin", "GPX"]
             }
@@ -52,6 +53,7 @@ struct DeviceGroup: Identifiable, Equatable {
         var title: String {
             switch self {
             case .courses: "Courses"
+            case .locations: "Saved Locations"
             case .activities: "Activities"
             case .gpx: "GPX Files"
             }
@@ -65,6 +67,12 @@ struct DeviceGroup: Identifiable, Equatable {
         /// the map; a selected one is drawn anyway.
         var shownOnMapByDefault: Bool {
             self != .activities
+        }
+
+        /// Whether one item's file can be deleted without taking others: the Edge keeps every saved location in
+        /// one file, so those are deleted on the Edge itself.
+        var canDeleteFiles: Bool {
+            self != .locations
         }
     }
 
@@ -96,6 +104,14 @@ enum DeviceFileReader {
             var library = Library()
             library.tracks = [track]
             return library
+        case .locations:
+            guard var waypoints = try? FITLocations.read(data) else { return Library() }
+            // By name and place: the file's order changes when a location is added or deleted on the Edge.
+            for index in waypoints.indices {
+                let place = waypoints[index].coordinate
+                waypoints[index].id = UUID(stableFrom: "\(key)/\(waypoints[index].name)/\(place.latitude),\(place.longitude)")
+            }
+            return Library(waypoints: waypoints)
         case .gpx:
             guard var library = try? GPX.read(data).library else { return Library() }
             for index in library.waypoints.indices {

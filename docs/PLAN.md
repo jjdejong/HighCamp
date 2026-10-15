@@ -233,6 +233,9 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 - Deleting from the device, asked for by the user: Delete, or "Delete from Device…" in the sidebar menu and the
   inspector, asks first, naming each file (a GPX file goes with all its items), then deletes the files with
   `MTPTransfers.delete`, which checks each is gone, and reads the device again.
+- Saved locations: Garmin/Locations/Locations.fit (FIT type 8), message 29, read by `FITLocations` from the public
+  FIT protocol (QMapShack reads only course points). Shown as a "Saved Locations" section; not deleted from the app,
+  since one file holds them all. The user's Edge has none at present, so only tests with built files check them.
 
 ## Phase C: features (Haiku after Opus has set the shape)
 

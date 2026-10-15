@@ -80,6 +80,43 @@ if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "delete-course"
     exit(0)
 }
 
+// `EdgeProbe list PATH` lists one folder, such as Garmin/Locations. Read-only.
+if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "list" {
+    let path = CommandLine.arguments[2].split(separator: "/").map(String.init)
+    do {
+        let device = try MTPConnection.openFirstDevice()
+        let storageID = try device.storages().first?.id ?? 0
+        for entry in try device.entries(in: path, storageID: storageID).sorted(by: { $0.name < $1.name }) {
+            print("\(entry.isFolder ? "dir " : "file") \(entry.name) (\(entry.size) bytes)")
+        }
+    } catch {
+        print("Could not list: \(error)")
+        exit(1)
+    }
+    exit(0)
+}
+
+// `EdgeProbe fetch PATH/NAME OUTPUT` copies one file, such as GarminDevice.xml or Garmin/Locations/Locations.fit,
+// to OUTPUT. It reads from the device and writes only the local copy.
+if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "fetch" {
+    var path = CommandLine.arguments[2].split(separator: "/").map(String.init)
+    let name = path.removeLast()
+    do {
+        let device = try MTPConnection.openFirstDevice()
+        let storageID = try device.storages().first?.id ?? 0
+        guard let file = try device.entries(in: path, storageID: storageID).first(where: { !$0.isFolder && $0.name == name }) else {
+            print("Not found: \(CommandLine.arguments[2])")
+            exit(1)
+        }
+        try device.download(entryID: file.id, to: URL(fileURLWithPath: CommandLine.arguments[3]))
+        print("Copied \(name) (\(file.size) bytes) to \(CommandLine.arguments[3])")
+    } catch {
+        print("Could not fetch: \(error)")
+        exit(1)
+    }
+    exit(0)
+}
+
 // `EdgeProbe fetch-smallest OUTPUT.fit` copies the smallest activity from Garmin/Activities to OUTPUT.
 // It reads from the device and writes only the local copy.
 if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "fetch-smallest" {

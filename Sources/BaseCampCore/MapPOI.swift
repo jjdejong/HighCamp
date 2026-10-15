@@ -27,14 +27,18 @@ public struct MapPOI: Equatable, Sendable {
         (named && labelled ? 2 : 0) + (named ? 1 : 0)
     }
 
+    /// Below this zoom only landmarks are shown: a town's shops and benches would hide its streets.
+    public static let minimumZoom = 15
+
     /// The points to show at a zoom: in each square of `cellSize` points of the Web Mercator world at that zoom
     /// (256 points per tile), only the one with the highest priority; ties go to the smaller type, then to the
-    /// point further north and west. A point's square depends only on where it is, so every tile, and the labels,
-    /// choose the same points.
-    public static func shown(_ points: [MapPOI], zoom: Int, cellSize: Double = 24) -> [MapPOI] {
+    /// point further north and west. Below `minimumZoom`, landmarks only. A point's square depends only on where it
+    /// is, so every tile, and the labels, choose the same points; and a square holds exactly four of the next
+    /// zoom's, so a point shown at one zoom is shown at the next.
+    public static func shown(_ points: [MapPOI], zoom: Int, cellSize: Double = 32) -> [MapPOI] {
         let worldSize = 256 * pow(2, Double(zoom))
         var best: [Cell: MapPOI] = [:]
-        for point in points {
+        for point in points where zoom >= minimumZoom || point.isLandmark {
             let latitude = max(-85.0511, min(85.0511, point.coordinate.latitude)) * .pi / 180
             let x = (point.coordinate.longitude + 180) / 360 * worldSize
             let y = (1 - log(tan(latitude) + 1 / cos(latitude)) / .pi) / 2 * worldSize

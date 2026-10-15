@@ -2,6 +2,20 @@
 
 Notes from Haiku task runs, in the format from `docs/PLAN.md`. Newest first within each task.
 
+## G2: fewer points when zoomed out; map opens where left — 2026-10-15 — Opus
+State: done (previous commit for the map's opening view, this commit for the points). Gate: core 297, 3 skipped.
+Seen in the release app (the user allowed it; window captures with `screencapture -l`): with Detail at High, the
+finest OFM level was drawn from zoom 14, and every shop, bench and bus stop of Grenoble covered the streets; at
+zoom 11 bike-shop icons covered the overview.
+- Below zoom 15 only landmarks (passes, summits, glaciers, national parks) are drawn and named.
+- Squares are 32 points at every zoom (24 before). One size keeps "a point shown at one zoom is shown at the
+  next" (tested), which the names rely on.
+- Seen after: Grenoble z14 clean (streets, place names, one summit); z16 busy but readable, names beside icons;
+  Chartreuse z15: Col des Aures, Pas de la Suiffière, Col du Frenay, Le Grand Som named.
+- The map now reopens at the saved view (it opened about four times farther out at every launch).
+Note for testers: `defaults write ... map.lastRegion -array` needs `-float` before each number; strings are not
+read back, and the app then goes to the Mac's position.
+
 ## G2: point icons and names — 2026-10-15 — Opus
 State: icons and names done (941b0c3 TYP points, a647437 icons, this commit names). Gate: core 295, 3 skipped.
 - TYP points (QMapShack's parsePoint): day icon, label size and colour, type name. OFM: 125 types, mostly

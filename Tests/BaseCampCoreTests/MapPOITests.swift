@@ -2,7 +2,7 @@ import XCTest
 @testable import BaseCampCore
 
 final class MapPOITests: XCTestCase {
-    /// Points near Grenoble. At zoom 16 a 24-point square is about 130 m across there.
+    /// Points near Grenoble. At zoom 16 a 32-point square is about 170 m across there.
     private func poi(_ type: Int, _ latitude: Double, _ longitude: Double, priority: Int, name: String? = nil) -> MapPOI {
         MapPOI(type: type, coordinate: Coordinate(latitude: latitude, longitude: longitude), name: name, priority: priority)
     }
@@ -17,6 +17,27 @@ final class MapPOITests: XCTestCase {
         XCTAssertTrue(poi(0x6401, 45, 5, priority: 3).isLandmark)
         XCTAssertTrue(poi(0x6616, 45, 5, priority: 3).isLandmark)
         XCTAssertFalse(poi(0x2A0E, 45, 5, priority: 3).isLandmark)
+    }
+
+    func testBelowZoom15OnlyLandmarksAreShown() {
+        let cafe = poi(0x2A0E, 45.188, 5.724, priority: 3, name: "Café")
+        let pass = poi(0x6401, 45.300, 5.830, priority: 3, name: "Col")
+
+        XCTAssertEqual(MapPOI.shown([cafe, pass], zoom: 14), [pass])
+        XCTAssertEqual(MapPOI.shown([cafe, pass], zoom: 15).count, 2)
+    }
+
+    /// The view's names are thinned at the whole zoom below the view's, the tiles at either; a point shown at one
+    /// zoom must be shown at the next.
+    func testAPointShownAtOneZoomIsShownAtTheNext() {
+        let points = (0..<600).map { index in
+            poi(0x2A00 + index % 9, 45.18 + Double(index % 30) * 0.0003, 5.72 + Double(index / 30) * 0.0004, priority: index % 4)
+        }
+        for zoom in 15..<19 {
+            let coarse = Set(MapPOI.shown(points, zoom: zoom).map(\.coordinate))
+            let fine = Set(MapPOI.shown(points, zoom: zoom + 1).map(\.coordinate))
+            XCTAssertTrue(coarse.isSubset(of: fine), "zoom \(zoom)")
+        }
     }
 
     func testTheMostImportantPointOfACrowdedSpotIsShown() {
@@ -36,11 +57,11 @@ final class MapPOITests: XCTestCase {
     }
 
     func testZoomingInShowsMore() {
-        // About 30 m apart: one square at zoom 14, two squares at zoom 19.
+        // About 30 m apart: one square at zoom 15, two squares at zoom 19.
         let a = poi(0x2A00, 45.1880, 5.7240, priority: 1, name: "A")
         let b = poi(0x2A00, 45.1880, 5.7244, priority: 1, name: "B")
 
-        XCTAssertEqual(MapPOI.shown([a, b], zoom: 14).count, 1)
+        XCTAssertEqual(MapPOI.shown([a, b], zoom: 15).count, 1)
         XCTAssertEqual(MapPOI.shown([a, b], zoom: 19).count, 2)
     }
 

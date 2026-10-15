@@ -1,7 +1,11 @@
 # Notices
 
-BaseCamp Clone is free software, licensed under the GNU General Public License version 3 or later.
+HighCamp is free software, licensed under the GNU General Public License version 3 or later.
 See `LICENSE`.
+
+HighCamp is an independent project, not made, endorsed or supported by Garmin. Garmin, BaseCamp and Edge are
+trademarks of Garmin Ltd. or its subsidiaries; they are named only to say which software HighCamp works like and
+which devices it works with.
 
 ## Code from other projects
 

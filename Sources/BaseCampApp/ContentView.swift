@@ -182,7 +182,7 @@ struct ContentView: View {
             store.importFiles(files)
             return true
         } isTargeted: { isDropTargeted = $0 }
-        .alert("BaseCamp Clone", isPresented: errorIsPresented) {
+        .alert("HighCamp", isPresented: errorIsPresented) {
             Button("OK") {}
         } message: {
             Text(store.errorMessage ?? "")

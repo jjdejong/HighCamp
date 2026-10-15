@@ -49,7 +49,7 @@ final class GarminMapListStore {
     private static func explain(_ error: Error, folder: URL) -> String {
         let code = (error as NSError).code
         if code == NSFileReadNoPermissionError || code == EPERM || code == EACCES {
-            return "macOS does not let BaseCamp Clone read \(folder.path). Allow it in System Settings > Privacy & Security > Files and Folders, then reopen this list."
+            return "macOS does not let HighCamp read \(folder.path). Allow it in System Settings > Privacy & Security > Files and Folders, then reopen this list."
         }
         if code == NSFileReadNoSuchFileError {
             return "The map folder \(folder.path) does not exist. Choose another one in Settings."

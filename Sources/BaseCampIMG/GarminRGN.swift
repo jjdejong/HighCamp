@@ -1,6 +1,6 @@
-// Copyright (C) 2026 the BaseCamp Clone contributors
+// Copyright (C) 2026 the HighCamp contributors
 //
-// This file is part of BaseCamp Clone, free software under the GNU General Public License
+// This file is part of HighCamp, free software under the GNU General Public License
 // version 3 or later. See LICENSE.
 //
 // Ported from QMapShack (src/qmapshack/map/CMapIMG.cpp: readSubfileBasics, loadSubDiv;

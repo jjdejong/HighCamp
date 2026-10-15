@@ -32,7 +32,7 @@ final class LocationFinder: NSObject, CLLocationManagerDelegate {
         var message: String {
             switch self {
             case .notAllowed:
-                "Location Services are off for BaseCamp Clone. Turn them on in System Settings > Privacy & Security > Location Services."
+                "Location Services are off for HighCamp. Turn them on in System Settings > Privacy & Security > Location Services."
             case .unavailable(let detail):
                 "Your location could not be found. \(detail)"
             }

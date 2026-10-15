@@ -271,7 +271,7 @@ private final class GPXReader: NSObject, XMLParserDelegate {
 private enum GPXWriter {
     static func write(_ library: Library) -> Data {
         var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        xml += "<gpx version=\"1.1\" creator=\"BaseCamp Clone\" xmlns=\"http://www.topografix.com/GPX/1/1\""
+        xml += "<gpx version=\"1.1\" creator=\"HighCamp\" xmlns=\"http://www.topografix.com/GPX/1/1\""
         xml += " xmlns:gpxx=\"http://www.garmin.com/xmlschemas/GpxExtensions/v3\""
         xml += " xmlns:trp=\"http://www.garmin.com/xmlschemas/TripExtensions/v1\""
         xml += " xmlns:gpxtpx=\"http://www.garmin.com/xmlschemas/TrackPointExtension/v1\""

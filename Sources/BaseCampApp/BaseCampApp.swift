@@ -28,7 +28,7 @@ struct BaseCampApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("BaseCamp Clone") {
+        WindowGroup("HighCamp") {
             ContentView()
                 .environment(store)
                 .environment(device)

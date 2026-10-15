@@ -4,7 +4,7 @@ turn, and points every link at the copies, so the app runs on a Mac without Home
 licence files to Contents/Resources/Licenses and lists the libraries, their versions, licences and source addresses
 in Contents/Resources/Licenses/Libraries.txt.
 
-Usage: Tools/bundle-libraries.py "build/package/BaseCamp Clone.app"
+Usage: Tools/bundle-libraries.py "build/package/HighCamp.app"
 """
 import json
 import os
@@ -109,7 +109,7 @@ def main(app):
     kegs = sorted({"/" + os.path.join(*library.split(os.sep)[1:6]) for library in names if library.startswith(BREW + "/Cellar/")})
     formulas = [keg.split(os.sep)[4] for keg in kegs]
     info = {f["name"]: f for f in json.loads(run("brew", "info", "--json=v2", *formulas))["formulae"]}
-    lines = ["Libraries included in BaseCamp Clone, from Homebrew, with their licences and where their source code is.",
+    lines = ["Libraries included in HighCamp, from Homebrew, with their licences and where their source code is.",
              "Their licence files are in the folders next to this one.", ""]
     for keg in kegs:
         formula, version = keg.split(os.sep)[4:6]

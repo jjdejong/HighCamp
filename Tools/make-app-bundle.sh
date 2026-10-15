@@ -8,7 +8,7 @@ configuration="${1:-debug}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 swift build --package-path "$root" --configuration "$configuration" --product BaseCampApp
 
-bundle="${2:-$root/build/BaseCamp Clone.app}"
+bundle="${2:-$root/build/HighCamp.app}"
 rm -rf "$bundle"
 mkdir -p "$bundle/Contents/MacOS"
 cp "$root/.build/$configuration/BaseCampApp" "$bundle/Contents/MacOS/BaseCampApp"
@@ -20,8 +20,8 @@ cat > "$bundle/Contents/Info.plist" <<PLIST
 <dict>
     <key>CFBundleExecutable</key><string>BaseCampApp</string>
     <key>CFBundleIdentifier</key><string>com.jjj.BaseCampClone</string>
-    <key>CFBundleName</key><string>BaseCamp Clone</string>
-    <key>CFBundleDisplayName</key><string>BaseCamp Clone</string>
+    <key>CFBundleName</key><string>HighCamp</string>
+    <key>CFBundleDisplayName</key><string>HighCamp</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1</string>
     <key>CFBundleVersion</key><string>1</string>

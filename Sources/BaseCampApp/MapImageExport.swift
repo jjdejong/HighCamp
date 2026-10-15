@@ -302,7 +302,7 @@ enum MapImageExport {
                 for (key, url) in batch {
                     group.addTask {
                         var request = URLRequest(url: url)
-                        request.setValue("BaseCamp Clone/0.1 (macOS)", forHTTPHeaderField: "User-Agent")
+                        request.setValue("HighCamp/0.1 (macOS)", forHTTPHeaderField: "User-Agent")
                         guard let loaded = try? await URLSession.shared.data(for: request),
                               (loaded.1 as? HTTPURLResponse)?.statusCode == 200 else { return (key, nil) }
                         return (key, NSImage(data: loaded.0))

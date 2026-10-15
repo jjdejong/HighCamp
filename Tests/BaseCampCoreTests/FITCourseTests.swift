@@ -186,6 +186,22 @@ final class FITCourseTests: XCTestCase {
         XCTAssertEqual(lap.fields[22].map(littleEndian), 40)
     }
 
+    /// Laid out as Garmin Connect writes courses, which an Edge 1040 reads the heights of: heights in
+    /// enhanced_altitude (78), not altitude (2), and timer start and stop events around the records.
+    func testCourseIsLaidOutAsGarminConnectWritesIt() throws {
+        let data = try FITCourse.encode(name: "Layout", points: samplePoints)
+        let all = messages(data)
+
+        XCTAssertEqual(all.map(\.global).filter { $0 != 20 }, [0, 49, 31, 19, 21, 21])
+        let records = all.filter { $0.global == 20 }
+        XCTAssertEqual(records.count, samplePoints.count)
+        XCTAssertTrue(records.allSatisfy { $0.fields[78] != nil && $0.fields[2] == nil })
+        let events = all.filter { $0.global == 21 }
+        XCTAssertEqual(events.map { $0.fields[1] }, [[0], [4]], "timer start, then stop all")
+        XCTAssertEqual(events.first?.fields[253], records.first?.fields[253], "starts at the first point")
+        XCTAssertEqual(events.last?.fields[253], records.last?.fields[253], "stops at the last point")
+    }
+
     /// The data messages of a FIT file, by global message number, with each field's bytes.
     private func messages(_ data: Data) -> [(global: UInt16, fields: [UInt8: [UInt8]])] {
         let bytes = [UInt8](data)

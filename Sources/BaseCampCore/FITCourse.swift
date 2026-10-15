@@ -19,7 +19,10 @@ public enum FITCourseError: Error, Equatable {
 /// Encodes a course as a FIT file, the format Edge devices keep in `Garmin/Courses`.
 ///
 /// Written from the public FIT protocol: a 14-byte file header, then definition and data messages
-/// (file_id, course, lap and record), then a CRC-16 over the whole file.
+/// (file_id, file_creator, course, lap, a timer start event, the records and a timer stop event), then a CRC-16 over
+/// the whole file. Laid out as Garmin Connect writes courses: an Edge 1040 worked out its own climb, 2,000 m for an
+/// 885 m course, from a file with heights in `altitude` and no timer events, and read the course's heights from
+/// one with `enhanced_altitude` and the events.
 public enum FITCourse {
     /// Edge devices show at most this many bytes of the course name.
     public static let maxNameBytes = 48
@@ -29,6 +32,8 @@ public enum FITCourse {
     private static let fitEpochOffset: Int64 = 631_065_600 // 1989-12-31 00:00:00 UTC in Unix time
 
     private static let messageFileID: UInt16 = 0
+    private static let messageFileCreator: UInt16 = 49
+    private static let messageEvent: UInt16 = 21
     private static let messageCourse: UInt16 = 31
     private static let messageLap: UInt16 = 19
     private static let messageRecord: UInt16 = 20
@@ -72,6 +77,14 @@ public enum FITCourse {
         body.uint32(1)
         body.uint32(start)
 
+        body.define(local: 4, global: messageFileCreator, fields: [
+            Field(number: 0, size: 2, baseType: .uint16),
+            Field(number: 1, size: 1, baseType: .uint8),
+        ])
+        body.byte(4)
+        body.uint16(1)
+        body.byte(0)
+
         body.define(local: 1, global: messageCourse, fields: [
             Field(number: 4, size: 1, baseType: .enumeration),
             Field(number: 5, size: UInt8(nameBytes.count + 1), baseType: .string),
@@ -113,12 +126,25 @@ public enum FITCourse {
         body.uint16(climb.map { UInt16(clamping: Int($0.descent.rounded())) } ?? 0xFFFF)
         body.byte(sportCycling)
 
+        // Timer events around the records, event 0 (timer): start (0) at the first point, stop all (4) at the last.
+        body.define(local: 5, global: messageEvent, fields: [
+            Field(number: 253, size: 4, baseType: .uint32),
+            Field(number: 0, size: 1, baseType: .enumeration),
+            Field(number: 1, size: 1, baseType: .enumeration),
+            Field(number: 4, size: 1, baseType: .uint8),
+        ])
+        body.byte(5)
+        body.uint32(start)
+        body.byte(0)
+        body.byte(0)
+        body.byte(0)
+
         body.define(local: 3, global: messageRecord, fields: [
             Field(number: 253, size: 4, baseType: .uint32),
             Field(number: 0, size: 4, baseType: .sint32),
             Field(number: 1, size: 4, baseType: .sint32),
             Field(number: 5, size: 4, baseType: .uint32),
-            Field(number: 2, size: 2, baseType: .uint16),
+            Field(number: 78, size: 4, baseType: .uint32),
         ])
         for (index, point) in points.enumerated() {
             body.byte(3)
@@ -126,8 +152,14 @@ public enum FITCourse {
             body.int32(semicircles(point.coordinate.latitude))
             body.int32(semicircles(point.coordinate.longitude))
             body.uint32(centimetres(cumulative[index]))
-            body.uint16(altitude(heights[index]))
+            body.uint32(altitude(heights[index]))
         }
+
+        body.byte(5)
+        body.uint32(end)
+        body.byte(0)
+        body.byte(4)
+        body.byte(0)
 
         var file = Writer()
         file.byte(14)
@@ -174,11 +206,11 @@ public enum FITCourse {
         UInt32(clamping: Int((meters * 100).rounded()))
     }
 
-    /// FIT stores altitude as (metres + 500) * 5 in a uint16. 0xFFFF means no value.
-    private static func altitude(_ elevation: Double?) -> UInt16 {
-        guard let elevation else { return 0xFFFF }
+    /// FIT stores enhanced altitude as (metres + 500) * 5 in a uint32. 0xFFFFFFFF means no value.
+    private static func altitude(_ elevation: Double?) -> UInt32 {
+        guard let elevation else { return 0xFFFF_FFFF }
         let scaled = ((elevation + 500) * 5).rounded()
-        return UInt16(clamping: Int(max(0, min(scaled, 65_534))))
+        return UInt32(clamping: Int(max(0, min(scaled, 4_294_967_294))))
     }
 
     /// Every point gets a height when any point has one: a missing height is interpolated along the distance
@@ -242,6 +274,7 @@ public extension Track {
 /// FIT field base types needed for the course messages.
 private enum BaseType: UInt8 {
     case enumeration = 0x00
+    case uint8 = 0x02
     case uint16 = 0x84
     case uint32 = 0x86
     case sint32 = 0x85

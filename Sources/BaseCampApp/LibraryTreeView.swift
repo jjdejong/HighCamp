@@ -6,6 +6,7 @@ import SwiftUI
 /// dragged onto a list to add them; lists and folders are dragged into folders, or onto My Collection to go to the top.
 struct LibraryTreeView: View {
     @Environment(LibraryStore.self) private var store
+    @Environment(DeviceStore.self) private var device
     /// The folders shown open, kept between launches.
     @AppStorage("library.openFolders") private var openFolders = ""
 
@@ -134,6 +135,20 @@ struct LibraryTreeView: View {
 
     @ViewBuilder
     private func menu(for node: LibraryNode) -> some View {
+        if case .device = node {} else {
+            Button("Export as GPX…") {
+                store.selectedNode = node
+                store.export(.gpx)
+            }
+            Button("Send to \(device.isConnected ? store.device.deviceName.isEmpty ? "Device" : store.device.deviceName : "Device")") {
+                store.selectedNode = node
+                if let gpx = store.gpxForDevice() {
+                    device.sendGPX(PendingGPX(fileName: gpx.fileName, data: gpx.data))
+                }
+            }
+            .disabled(!device.isConnected || device.isSending)
+            Divider()
+        }
         switch node {
         case .myCollection, .folder:
             Button("New List") {

@@ -285,15 +285,15 @@ final class LibraryStore {
 
         var label: String {
             switch self {
-            case .gpx: "GPX (whole library)…"
-            case .kml: "KML (whole library)…"
-            case .csv: "CSV, waypoints (whole library)…"
+            case .gpx: "GPX (selected list or folder)…"
+            case .kml: "KML (selected list or folder)…"
+            case .csv: "CSV, waypoints (selected list or folder)…"
             case .tcxCourse: "TCX course (selected route or track)…"
             case .fitCourse: "FIT course (selected route or track)…"
             }
         }
 
-        /// Whether the export works on the selected route or track instead of the whole library.
+        /// Whether the export works on the selected route or track instead of the node selected in the library tree.
         var needsSelection: Bool {
             self == .tcxCourse || self == .fitCourse
         }
@@ -324,11 +324,16 @@ final class LibraryStore {
                     ? TCX.course(name: course.name, points: course.points)
                     : try FITCourse.encode(name: course.name, points: course.points)
             } else {
-                name = "Library"
+                // The node selected in the library tree, named after it, as BaseCamp exports a list.
+                guard let part = library(of: selectedNode), !part.isEmpty else {
+                    errorMessage = "\(self.name(of: selectedNode)) has nothing to export."
+                    return
+                }
+                name = self.name(of: selectedNode)
                 switch format {
-                case .gpx: data = try GPX.write(library)
-                case .kml: data = KML.write(library, name: name)
-                case .csv: data = CSV.waypoints(library.waypoints)
+                case .gpx: data = try GPX.write(part)
+                case .kml: data = KML.write(part, name: name)
+                case .csv: data = CSV.waypoints(part.waypoints)
                 default: data = Data()
                 }
             }
@@ -339,13 +344,44 @@ final class LibraryStore {
 
         let panel = NSSavePanel()
         panel.allowedContentTypes = [UTType(filenameExtension: format.fileExtension) ?? .data]
-        panel.nameFieldStringValue = "\(FITCourse.fileName(for: name).dropLast(4)).\(format.fileExtension)"
+        panel.nameFieldStringValue = format.needsSelection
+            ? "\(FITCourse.fileName(for: name).dropLast(4)).\(format.fileExtension)"
+            : "\(Self.diskFileName(name)).\(format.fileExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try data.write(to: url, options: .atomic)
         } catch {
             errorMessage = "Could not export to \(url.lastPathComponent). \(error.localizedDescription)"
         }
+    }
+
+    /// The items of a node of the library tree, as a library of their own, in My Collection's order. Nil for the
+    /// device's folders.
+    func library(of node: LibraryNode) -> Library? {
+        if case .device = node { return nil }
+        let wanted = items(of: node)
+        let keep = { (item: LibraryItem) in wanted?.contains(item) ?? true }
+        return Library(
+            waypoints: library.waypoints.filter { keep(.waypoint($0.id)) },
+            routes: library.routes.filter { keep(.route($0.id)) },
+            tracks: library.tracks.filter { keep(.track($0.id)) }
+        )
+    }
+
+    /// A list's name as a file name on disk: only "/" and ":" are left out.
+    static func diskFileName(_ name: String) -> String {
+        let cleaned = name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? "Library" : cleaned
+    }
+
+    /// The selected node as one GPX file for the device, named after it, or nil (with a message) when it is empty.
+    func gpxForDevice() -> (fileName: String, data: Data)? {
+        guard let part = library(of: selectedNode), !part.isEmpty else {
+            errorMessage = "\(name(of: selectedNode)) has nothing to send."
+            return nil
+        }
+        return (FITCourse.fileName(for: name(of: selectedNode)).dropLast(4) + ".gpx", GPX.write(part))
     }
 
     /// Whether a route or track is selected, so a course can be exported.

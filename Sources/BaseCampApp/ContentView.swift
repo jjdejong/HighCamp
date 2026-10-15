@@ -254,6 +254,16 @@ struct ContentView: View {
             recalculator.check(store: store, planner: planner, settings: routing)
         }
         .modifier(LibraryDialogs())
+        .alert(
+            "Replace the file waiting on the Edge?",
+            isPresented: Binding(get: { device.pendingGPXReplacement != nil }, set: { if !$0 { device.pendingGPXReplacement = nil } }),
+            presenting: device.pendingGPXReplacement
+        ) { file in
+            Button("Replace") { device.sendGPX(file, replacing: true) }
+            Button("Cancel", role: .cancel) {}
+        } message: { file in
+            Text("Garmin/NewFiles already has \(file.fileName), not yet taken in by the Edge. The new file is copied and checked before the old one is deleted.")
+        }
         .onChange(of: device.contents) { _, contents in
             store.device = contents
         }

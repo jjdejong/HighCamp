@@ -248,6 +248,10 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
   `LibraryNode` selection; `LibraryTreeView` (tree, context menus, drag items onto lists and lists or folders into
   folders), `LibraryDialogs`, Lists menu; the map draws the selected node's items. Not from the strings, so
   unconfirmed: that BaseCamp's map shows only the selected list. Not done: Smart Lists.
+- Export and send, asked for by the user: File › Export writes the selected node (list, folder, Unlisted Data, My
+  Collection) as GPX, KML or CSV named after it; "Send … to Device" writes it as one GPX into Garmin/NewFiles (the
+  Edge's GPSData input, as the user's QMapShack branch uploads), checked on the device, asking before replacing a
+  file still waiting there. The Edge takes it in when unplugged.
 
 ## Phase C: features (Haiku after Opus has set the shape)
 

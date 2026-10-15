@@ -25,6 +25,12 @@ struct PendingCourse: Equatable {
     let points: [CoursePoint]
 }
 
+/// A GPX file to send to the device, as one list of the library.
+struct PendingGPX: Equatable {
+    let fileName: String
+    let data: Data
+}
+
 /// Looks for an MTP device, reports what it finds, sends courses to it and reads activities from it.
 /// All device work goes through one `MTPDevice`, so only one libmtp connection exists and nothing overlaps.
 @MainActor
@@ -41,6 +47,12 @@ final class DeviceStore {
     var sendMessage: String?
     /// A course with the same file name is already on the device; the user is asked whether to replace it.
     var pendingReplacement: PendingCourse?
+    /// A GPX file of the same name is waiting in Garmin/NewFiles; the user is asked whether to replace it.
+    var pendingGPXReplacement: PendingGPX?
+
+    /// Where the Edge takes GPX files in (its GarminDevice.xml: GPSData, InputToUnit). It turns their tracks and
+    /// routes into courses, and their waypoints into saved locations, when it is unplugged.
+    nonisolated static let newFilesFolder = ["Garmin", "NewFiles"]
     /// The map being copied to the device, if any.
     var mapTransfer: MapTransfer?
     private var transferMonitor: TransferMonitor?
@@ -230,6 +242,35 @@ final class DeviceStore {
                 pendingReplacement = course
             } catch {
                 sendMessage = "Could not send \(course.fileName). \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// Sends a GPX file to Garmin/NewFiles, checked on the device. When a file of that name is waiting there, nothing
+    /// is sent and `pendingGPXReplacement` asks the user first.
+    func sendGPX(_ file: PendingGPX, replacing: Bool = false) {
+        pendingGPXReplacement = nil
+        guard isConnected, !isSending, mapTransfer == nil else { return }
+        isSending = true
+        let device = device
+        Task {
+            defer { isSending = false }
+            do {
+                let localFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                defer { try? FileManager.default.removeItem(at: localFile) }
+                try file.data.write(to: localFile)
+                try await device.perform { link, storage in
+                    if replacing {
+                        try MTPTransfers.replace(link, localFile: localFile, in: DeviceStore.newFilesFolder, named: file.fileName, storageID: storage.id)
+                    } else {
+                        try MTPTransfers.upload(link, localFile: localFile, to: DeviceStore.newFilesFolder, as: file.fileName, storageID: storage.id)
+                    }
+                }
+                sendMessage = "Sent \(file.fileName) to Garmin/NewFiles and checked it on the device. Unplug the Edge to let it take the courses and locations in."
+            } catch MTPError.alreadyExists where !replacing {
+                pendingGPXReplacement = file
+            } catch {
+                sendMessage = "Could not send \(file.fileName). \(error.localizedDescription)"
             }
         }
     }

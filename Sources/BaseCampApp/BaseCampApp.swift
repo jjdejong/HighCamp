@@ -126,7 +126,8 @@ struct BaseCampApp: App {
         .commands {
             BaseCampCommands(
                 store: store, planner: planner, recalculator: recalculator, routing: routing,
-                elevation: elevation, display: display, layers: mapLayers, garminMaps: garminMaps, trackDEMs: trackDEMs
+                elevation: elevation, display: display, layers: mapLayers, garminMaps: garminMaps, trackDEMs: trackDEMs,
+                device: device
             )
         }
 
@@ -286,6 +287,7 @@ struct BaseCampCommands: Commands {
     let layers: MapLayerSettings
     let garminMaps: GarminMapListStore
     let trackDEMs: TrackDEMStore
+    let device: DeviceStore
 
     /// Building and removing the selected track's or route's own high-resolution DEM.
     @ViewBuilder
@@ -461,6 +463,18 @@ struct BaseCampCommands: Commands {
                     .disabled(format.needsSelection && !store.hasCourseSelection)
                 }
             }
+            // The node selected in the library tree, as one GPX file named after it, as BaseCamp exports a list.
+            Button("Export \u{201C}\(store.name(of: store.selectedNode))\u{201D} as GPX…") {
+                store.export(.gpx)
+            }
+            .keyboardShortcut("e")
+            .disabled(store.library(of: store.selectedNode) == nil)
+            Button("Send \u{201C}\(store.name(of: store.selectedNode))\u{201D} to Device") {
+                if let gpx = store.gpxForDevice() {
+                    device.sendGPX(PendingGPX(fileName: gpx.fileName, data: gpx.data))
+                }
+            }
+            .disabled(store.library(of: store.selectedNode) == nil || !device.isConnected || device.isSending)
 
             Button("Import Activities from Edge…") {
                 store.showActivities = true

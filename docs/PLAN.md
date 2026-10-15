@@ -146,6 +146,9 @@ Next step: <one concrete step>
 
 ### B4. Planner DEM work off the main thread. Owner: Opus
 - `RoutePlanner.planRoute` opens the DEM folder and samples points on the main actor. Move this to a background context without sharing GDAL handles across concurrent tasks. Decide model caching per folder.
+- Done by the way (checked 2026-10-15): `planRoute` went with B5; heights for routing, Elevations from Model and
+  waypoints come from `HeightSources`, and track DEM profiles from `TrackDEMStore`, each opening its own model in a
+  detached task, so no GDAL handle is shared. No cache per folder: a whole lookup, models opened, takes 0.2 to 0.5 s.
 
 ### B5. Routes as stops plus a recalculated shape. Owner: Opus (design and core), then Haiku tasks
 The largest change.
@@ -280,7 +283,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | B2 | Opus | done | 7ffe83e, b87aa68 | hover 61 → 2.5 ms; area fills only on Apple bases |
 | B3 | Opus | done | | design in HANDOFF |
 | B3-impl | Haiku → Opus | reviewed | eed7750 | accepted; a failed backup no longer blocks the save |
-| B4 | Opus | todo | | |
+| B4 | Opus | done | (this commit) | already off the main thread since B5 and G4; no model cache needed (see B4) |
 | B5 | Opus | done | 1d2f670 | design in HANDOFF; core: stops and legs, library file v2 |
 | B5a | Haiku → Opus | done | 717e19b | GPX stops and shape; reviewed; user to check the import in BaseCamp and QMapShack |
 | B5b | Haiku | done | 73b6393 | stops in the inspector: name, via or shaping, distance, leg state, routing profile |

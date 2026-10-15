@@ -1,13 +1,14 @@
 #!/bin/bash
 # Packages the BaseCampApp executable as a macOS app bundle, so macOS can activate it and
-# scripts can find it by bundle identifier. Usage: Tools/make-app-bundle.sh [debug|release]
+# scripts can find it by bundle identifier. Usage: Tools/make-app-bundle.sh [debug|release] [bundle path]
+# The bundle links to Homebrew's libraries; Tools/package-release.sh makes one that runs on other Macs.
 set -euo pipefail
 
 configuration="${1:-debug}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 swift build --package-path "$root" --configuration "$configuration" --product BaseCampApp
 
-bundle="$root/build/BaseCamp Clone.app"
+bundle="${2:-$root/build/BaseCamp Clone.app}"
 rm -rf "$bundle"
 mkdir -p "$bundle/Contents/MacOS"
 cp "$root/.build/$configuration/BaseCampApp" "$bundle/Contents/MacOS/BaseCampApp"

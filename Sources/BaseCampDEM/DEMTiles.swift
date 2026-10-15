@@ -10,7 +10,7 @@ public enum DEMTileIndex {
     /// The tiles in `folder`, reusing the entries of `previous` whose file has not changed. `progress` is called
     /// now and then with the number of files looked at.
     public static func scan(folder: URL, previous: [DEMTileInfo], progress: (Int) -> Void = { _ in }) -> [DEMTileInfo] {
-        GDALAllRegister()
+        _ = GDALSetup.started
         let known = Dictionary(previous.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
         guard let enumerator = FileManager.default.enumerator(
             at: folder, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey, .isDirectoryKey],
@@ -126,7 +126,7 @@ public enum TrackDEMBuilder {
     @discardableResult
     public static func build(tiles: [DEMTileInfo], into folder: URL) throws -> [URL] {
         guard !tiles.isEmpty else { throw Failure.noTiles }
-        GDALAllRegister()
+        _ = GDALSetup.started
         try? FileManager.default.removeItem(at: folder)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 

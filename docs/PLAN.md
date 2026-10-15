@@ -170,6 +170,13 @@ The largest change.
 
 ### B6. Release packaging. Owner: Opus
 - Signed release `.app` with bundled libmtp, GDAL and PROJ data, rpath fixes, and a GPL source offer.
+- Done 2026-10-15: `Tools/package-release.sh` writes `build/package/`: the app with 177 Homebrew libraries copied in
+  and relinked (`Tools/bundle-libraries.py`), GDAL's data and PROJ's database (not its optional grids) in Resources,
+  found through `GDALSetup`; licences and a list of the libraries with their source addresses in
+  `Resources/Licenses`; LICENSE, NOTICE.md and an About-window credit; a zip (54 MB) and the source archive beside
+  it. Signed ad hoc: there is no Developer ID, so it is not notarized and each Mac asks once before opening it.
+  Runs on macOS 26 or later, the version Homebrew built the libraries for. Checked with Homebrew blocked by a
+  sandbox: heights from the DEM folder (PROJ) and the maps came out as before.
 
 ---
 
@@ -289,7 +296,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | B5b | Haiku | done | 73b6393 | stops in the inspector: name, via or shaping, distance, leg state, routing profile |
 | B5-map | Opus | done | a4050b2 | background recalculation, dashed waiting legs, insert handles, Option-click extends |
 | B5c | Haiku | reviewed | 8259c03 | Route menu: Recalculate Route; reviewed; routes without a profile take the route tool's |
-| B6 | Opus | todo | | |
+| B6 | Opus | done | (this commit) | Tools/package-release.sh: bundled libraries and data, ad hoc signature, zip and source archive; macOS 26+, not notarized (see B6) |
 | G1 | Opus | done | 577e13a, 6ae12af | Garmin base map; overlay removed |
 | G2 | Opus | done | 6ccda55, 0a0de0a, 7e938c4, 941b0c3, a647437, 836b62a, c984702, 6a0a74d, d555220, a297d17, (this commit) | place, street, point and area names, point icons, POI type choice (and which show below zoom 15), seen in the app; saved pictures and printed reports draw the icons and names too |
 | G3 | Opus | done | bbfd0a3, 423ba46 | map list sheet; overlays use their finest level; default: first full map on |

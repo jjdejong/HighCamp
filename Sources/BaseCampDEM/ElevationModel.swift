@@ -34,7 +34,7 @@ public final class ElevationModel: @unchecked Sendable {
 
     /// Opens the rasters in `folder` (not its subfolders), in name order with `Current_DEM` first.
     public init(folder: URL) throws {
-        GDALAllRegister()
+        _ = GDALSetup.started
         let extensions: Set<String> = ["vrt", "tif", "tiff", "asc"]
         let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
             .filter { extensions.contains($0.pathExtension.lowercased()) }

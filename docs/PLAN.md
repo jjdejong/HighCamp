@@ -203,6 +203,11 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 
 ### G5. Zoomed-out view. Owner: Opus
 - Use the product's basemap (overview) tiles when zoomed out past the detailed tiles' levels.
+- Closed 2026-10-15 by the user's choice: the user's maps (OFM, Utagawa) carry no overview map, only detailed tiles
+  (coarsest levels 18 and 17 bits, drawn from about zoom 9 to 10), search indexes and the style. Further out, Apple
+  Maps is drawn instead, which reads well there. Drawing the coarsest level further out was tried at zooms 6 to 8: a
+  tangle of thick lines without names, 1 to 3 s a tile. An overview `.img` put in the maps folder would be drawn at
+  its own levels by the map list, with no new code.
 
 ---
 
@@ -288,7 +293,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G0 | Opus | done | | was a decoder bug after all: the y "same sign" flag was read from the x bit when x was signed, so lines zigzagged (contours and roads); fixed 2026-10-13 with a test |
 | G4 | Opus | done | dd8e815, d77e4a1, (this commit) | DEM reader (GPXSee port) and relief shading on the Garmin maps; maps' heights for Elevations from Model, new waypoints and the route recalculator (DEM folder first, setting for maps first); shading in saved pictures and printed reports |
 | D1 | Opus | done | e809ca8, (this commit) | track DEMs from a folder of high-resolution tiles (user request); profile from the track DEM; not yet seen on screen |
-| G5 | Opus | todo | | basemap when zoomed out |
+| G5 | Opus | done | (this commit) | closed without code: no overview map in the user's files; Apple Maps fills in when zoomed out (see G5) |
 | C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |
 | C5 | Haiku | reviewed | 2a26c42 | accepted; table next to the list; `--sidebar table` hook (debug) |
 | C7 | Haiku | reviewed | bc1a6cc, 69350e5 | accepted; follow-up C7b |

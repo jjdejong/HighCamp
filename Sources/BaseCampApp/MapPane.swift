@@ -116,7 +116,10 @@ struct MapPane: View {
         let zoom = viewport.zoom
         let maps = garmin.layers.filter { !$0.isOverlay && $0.isVisible(atZoom: zoom) }.map(\.url)
         guard !maps.isEmpty else { return nil }
-        return PlaceRequest(viewport: viewport, maps: maps, detailOffset: garmin.detailOffset, hiddenPointTypes: garmin.hiddenPointTypes)
+        return PlaceRequest(
+            viewport: viewport, maps: maps, detailOffset: garmin.detailOffset, hiddenPointTypes: garmin.hiddenPointTypes,
+            zoomedOutPointTypes: garmin.zoomedOutPointTypes
+        )
     }
 
     private func loadPlaces(_ request: PlaceRequest?) async {
@@ -207,7 +210,7 @@ struct MapPane: View {
         for name in all {
             byPoint["\(name.poi.type)|\(name.poi.coordinate.latitude)|\(name.poi.coordinate.longitude)"] = name
         }
-        let named = MapPOI.shown(all.map(\.poi), zoom: zoom).compactMap { poi -> POIName? in
+        let named = MapPOI.shown(all.map(\.poi), zoom: zoom, zoomedOut: request.zoomedOutPointTypes).compactMap { poi -> POIName? in
             guard poi.name != nil, let name = byPoint["\(poi.type)|\(poi.coordinate.latitude)|\(poi.coordinate.longitude)"],
                   name.labelled else { return nil }
             return name
@@ -593,4 +596,5 @@ struct PlaceRequest: Equatable {
     let maps: [URL]
     let detailOffset: Int
     var hiddenPointTypes: Set<Int> = []
+    var zoomedOutPointTypes = MapPOI.defaultZoomedOutTypes
 }

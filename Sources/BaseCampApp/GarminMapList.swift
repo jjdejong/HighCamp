@@ -96,10 +96,14 @@ final class GarminMapListStore {
     }
 
     /// What the renderer needs: the maps that are on, bottom first, with their files.
-    func configuration(detail: GarminDetail, softColors: Bool, relief: Double = 0, hiddenPointTypes: Set<Int> = []) -> GarminMapConfiguration {
+    func configuration(
+        detail: GarminDetail, softColors: Bool, relief: Double = 0, hiddenPointTypes: Set<Int> = [],
+        zoomedOutPointTypes: Set<Int> = MapPOI.defaultZoomedOutTypes
+    ) -> GarminMapConfiguration {
         guard let folder else {
             return GarminMapConfiguration(
-                layers: [], detailOffset: detail.offset, softColors: softColors, relief: relief, hiddenPointTypes: hiddenPointTypes
+                layers: [], detailOffset: detail.offset, softColors: softColors, relief: relief, hiddenPointTypes: hiddenPointTypes,
+                zoomedOutPointTypes: zoomedOutPointTypes
             )
         }
         return GarminMapConfiguration(
@@ -112,7 +116,8 @@ final class GarminMapListStore {
             detailOffset: detail.offset,
             softColors: softColors,
             relief: relief,
-            hiddenPointTypes: hiddenPointTypes
+            hiddenPointTypes: hiddenPointTypes,
+            zoomedOutPointTypes: zoomedOutPointTypes
         )
     }
 
@@ -155,4 +160,6 @@ struct GarminMapConfiguration: Equatable, Sendable {
     var relief = 0.0
     /// Point types the user chose not to see: neither their icons nor their names are drawn.
     var hiddenPointTypes: Set<Int> = []
+    /// Point types drawn below zoom 15 too; the others appear from zoom 15.
+    var zoomedOutPointTypes = MapPOI.defaultZoomedOutTypes
 }

@@ -19,12 +19,34 @@ final class MapPOITests: XCTestCase {
         XCTAssertFalse(poi(0x2A0E, 45, 5, priority: 3).isLandmark)
     }
 
-    func testBelowZoom15OnlyLandmarksAreShown() {
+    func testBelowZoom15OnlyTheZoomedOutTypesAreShown() {
+        let cafe = poi(0x2A0E, 45.188, 5.724, priority: 3, name: "Café")
+        let pass = poi(0x6401, 45.300, 5.830, priority: 3, name: "Col")
+        let hut = poi(0x4805, 45.400, 5.900, priority: 3, name: "Refuge")
+
+        XCTAssertEqual(Set(MapPOI.shown([cafe, pass, hut], zoom: 14).map(\.type)), [0x6401, 0x4805], "passes and huts by default")
+        XCTAssertEqual(MapPOI.shown([cafe, pass, hut], zoom: 15).count, 3)
+    }
+
+    func testTheZoomedOutTypesCanBeChosen() {
         let cafe = poi(0x2A0E, 45.188, 5.724, priority: 3, name: "Café")
         let pass = poi(0x6401, 45.300, 5.830, priority: 3, name: "Col")
 
-        XCTAssertEqual(MapPOI.shown([cafe, pass], zoom: 14), [pass])
-        XCTAssertEqual(MapPOI.shown([cafe, pass], zoom: 15).count, 2)
+        XCTAssertEqual(MapPOI.shown([cafe, pass], zoom: 12, zoomedOut: [0x2A0E]), [cafe])
+        XCTAssertTrue(MapPOI.shown([cafe, pass], zoom: 12, zoomedOut: []).isEmpty)
+        XCTAssertEqual(MapPOI.shown([cafe, pass], zoom: 15, zoomedOut: []).count, 2, "every type from zoom 15")
+    }
+
+    /// The nesting guarantee holds across zoom 15 too: what is shown zoomed out is still shown at zoom 15.
+    func testAPointShownZoomedOutIsShownAtZoom15() {
+        let points = (0..<600).map { index in
+            poi([0x2A00, 0x6401, 0x4805, 0x5001][index % 4], 45.18 + Double(index % 30) * 0.003, 5.72 + Double(index / 30) * 0.004,
+                priority: index % 4)
+        }
+        let coarse = Set(MapPOI.shown(points, zoom: 14).map(\.coordinate))
+        let fine = Set(MapPOI.shown(points, zoom: 15).map(\.coordinate))
+        XCTAssertFalse(coarse.isEmpty)
+        XCTAssertTrue(coarse.isSubset(of: fine))
     }
 
     /// The view's names are thinned at the whole zoom below the view's, the tiles at either; a point shown at one

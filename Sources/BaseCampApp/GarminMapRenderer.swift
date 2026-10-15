@@ -106,19 +106,22 @@ enum GarminTileRenderer {
             GarminPainter.draw(
                 drawings, in: rect, patternOrigin: origin, relief: relief, crisp: scale < 1.5, lines: .forZoom(z), project: project
             )
-            GarminPainter.drawPoints(Self.shownPoints(drawings, zoom: z, hidden: configuration.hiddenPointTypes), project: project)
+            let points = Self.shownPoints(
+                drawings, zoom: z, hidden: configuration.hiddenPointTypes, zoomedOut: configuration.zoomedOutPointTypes
+            )
+            GarminPainter.drawPoints(points, project: project)
         }
     }
 
     /// The points of every map drawn, thinned for the zoom over all of them, so two maps' icons do not overlap.
-    /// Hidden types are left out first, so the room they leave goes to the others.
-    static func shownPoints(_ drawings: [GarminMapDrawing], zoom: Int, hidden: Set<Int>) -> [DrawnPOI] {
+    /// Hidden types are left out first, so the room they leave goes to the others. Below zoom 15, only the zoomed-out types.
+    static func shownPoints(_ drawings: [GarminMapDrawing], zoom: Int, hidden: Set<Int>, zoomedOut: Set<Int>) -> [DrawnPOI] {
         let all = drawings.flatMap(\.features.points).filter { !hidden.contains($0.poi.type) }
         var icons: [MapPOIKey: POIIcon] = [:]
         for point in all where icons[MapPOIKey(point.poi)] == nil {
             icons[MapPOIKey(point.poi)] = point.icon
         }
-        return MapPOI.shown(all.map(\.poi), zoom: zoom).map { DrawnPOI(poi: $0, icon: icons[MapPOIKey($0)]) }
+        return MapPOI.shown(all.map(\.poi), zoom: zoom, zoomedOut: zoomedOut).map { DrawnPOI(poi: $0, icon: icons[MapPOIKey($0)]) }
     }
 
     /// A point's identity, to find its icon again after thinning.

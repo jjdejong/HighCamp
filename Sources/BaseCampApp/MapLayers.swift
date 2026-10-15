@@ -1,4 +1,5 @@
 import AppKit
+import BaseCampCore
 import MapKit
 import Observation
 
@@ -184,6 +185,10 @@ final class MapLayerSettings {
     var hiddenPointTypes: Set<Int> {
         didSet { UserDefaults.standard.set(hiddenPointTypes.sorted(), forKey: "map.hiddenPointTypes") }
     }
+    /// Point types of the Garmin maps drawn below zoom 15 too, chosen in the Points of Interest window.
+    var zoomedOutPointTypes: Set<Int> {
+        didSet { UserDefaults.standard.set(zoomedOutPointTypes.sorted(), forKey: "map.zoomedOutPointTypes") }
+    }
     /// Dashed outlines and names for the area each map in the map folder covers.
     var showCoverage: Bool {
         didSet { UserDefaults.standard.set(showCoverage, forKey: "map.showCoverage") }
@@ -201,6 +206,7 @@ final class MapLayerSettings {
         garminSoftColors = defaults.object(forKey: "map.garminSoftColors") as? Bool ?? true
         reliefStrength = defaults.object(forKey: "map.reliefStrength") as? Double ?? Self.mediumRelief
         hiddenPointTypes = Set(defaults.array(forKey: "map.hiddenPointTypes") as? [Int] ?? [])
+        zoomedOutPointTypes = (defaults.array(forKey: "map.zoomedOutPointTypes") as? [Int]).map(Set.init) ?? MapPOI.defaultZoomedOutTypes
     }
 
     static let lightRelief = 0.3
@@ -209,7 +215,10 @@ final class MapLayerSettings {
 
     /// The Garmin maps as the map pane draws them.
     func garminConfiguration(_ maps: GarminMapListStore) -> GarminMapConfiguration {
-        maps.configuration(detail: garminDetail, softColors: garminSoftColors, relief: reliefStrength, hiddenPointTypes: hiddenPointTypes)
+        maps.configuration(
+            detail: garminDetail, softColors: garminSoftColors, relief: reliefStrength, hiddenPointTypes: hiddenPointTypes,
+            zoomedOutPointTypes: zoomedOutPointTypes
+        )
     }
 
     /// The base map for a picture of what the screen shows.

@@ -27,23 +27,35 @@ public struct MapPOI: Equatable, Sendable {
         (named && labelled ? 2 : 0) + (named ? 1 : 0)
     }
 
-    /// Below this zoom only landmarks are shown: a town's shops and benches would hide its streets.
+    /// Below this zoom only the types chosen to show when zoomed out are drawn: a town's shops and benches would
+    /// hide its streets.
     public static let minimumZoom = 15
 
+    /// The types shown below `minimumZoom` until the user chooses others: passes, summits, glaciers, national parks,
+    /// huts, shelters and springs, as OFM and Utagawa number them. 0x640E is a national park in OFM but a playground
+    /// in Utagawa; 0x6617 and 0x661B are Utagawa's passes.
+    public static let defaultZoomedOutTypes: Set<Int> = [
+        0x6401, 0x6616, 0x6617, 0x661B, 0x650A, 0x640E, // passes, summits, glaciers, national parks
+        0x2B06, 0x4803, 0x4804, 0x4805, 0x4806, 0x4807, 0x6402, // huts and shelters
+        0x6511, // springs
+    ]
+
     /// The points to show at a zoom: in each square of `cellSize` points of the Web Mercator world at that zoom
-    /// (256 points per tile), only the one with the highest priority; ties go to the smaller type, then to the
-    /// point further north and west. Below `minimumZoom`, landmarks only. A point's square depends only on where it
-    /// is, so every tile, and the labels, choose the same points; and a square holds exactly four of the next
-    /// zoom's, so a point shown at one zoom is shown at the next.
-    public static func shown(_ points: [MapPOI], zoom: Int, cellSize: Double = 32) -> [MapPOI] {
+    /// (256 points per tile), only one: a `zoomedOut` type before others, then the highest priority; ties go to the
+    /// smaller type, then to the point further north and west. Below `minimumZoom`, only the `zoomedOut` types. A
+    /// point's square depends only on where it is, so every tile, and the labels, choose the same points; and a square
+    /// holds exactly four of the next zoom's, so a point shown at one zoom is shown at the next.
+    public static func shown(
+        _ points: [MapPOI], zoom: Int, zoomedOut: Set<Int> = defaultZoomedOutTypes, cellSize: Double = 32
+    ) -> [MapPOI] {
         let worldSize = 256 * pow(2, Double(zoom))
         var best: [Cell: MapPOI] = [:]
-        for point in points where zoom >= minimumZoom || point.isLandmark {
+        for point in points where zoom >= minimumZoom || zoomedOut.contains(point.type) {
             let latitude = max(-85.0511, min(85.0511, point.coordinate.latitude)) * .pi / 180
             let x = (point.coordinate.longitude + 180) / 360 * worldSize
             let y = (1 - log(tan(latitude) + 1 / cos(latitude)) / .pi) / 2 * worldSize
             let cell = Cell(x: Int((x / cellSize).rounded(.down)), y: Int((y / cellSize).rounded(.down)))
-            if let current = best[cell], !point.wins(over: current) {
+            if let current = best[cell], !point.wins(over: current, zoomedOut: zoomedOut) {
                 continue
             }
             best[cell] = point
@@ -56,7 +68,10 @@ public struct MapPOI: Equatable, Sendable {
         let y: Int
     }
 
-    private func wins(over other: MapPOI) -> Bool {
+    /// The zoomed-out types first at every zoom, so one shown zoomed out is not pushed off at zoom 15 by a shop.
+    private func wins(over other: MapPOI, zoomedOut: Set<Int>) -> Bool {
+        let chosen = zoomedOut.contains(type), otherChosen = zoomedOut.contains(other.type)
+        if chosen != otherChosen { return chosen }
         if priority != other.priority { return priority > other.priority }
         if type != other.type { return type < other.type }
         if coordinate.latitude != other.coordinate.latitude { return coordinate.latitude > other.coordinate.latitude }

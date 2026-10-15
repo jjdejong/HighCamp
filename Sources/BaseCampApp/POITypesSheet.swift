@@ -3,7 +3,8 @@ import BaseCampCore
 import SwiftUI
 
 /// Which kinds of points of interest the Garmin maps show: each type the maps' styles define, with its icon, in
-/// Garmin's families. A hidden type loses its icon and its name, and leaves its room to the others.
+/// Garmin's families. A hidden type loses its icon and its name, and leaves its room to the others. Below zoom 15
+/// only the types ticked "Zoomed out" are drawn, so a town's shops do not hide its streets.
 struct POITypesSheet: View {
     @Environment(MapLayerSettings.self) private var mapLayers
     @Environment(GarminMapListStore.self) private var maps
@@ -16,7 +17,7 @@ struct POITypesSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Points of Interest")
                 .font(.title2.bold())
-            Text("Choose which points the Garmin maps show. A hidden type loses its icon and its name. Below zoom 15, only passes, summits, glaciers and national parks are shown.")
+            Text("Choose which points the Garmin maps show. A hidden type loses its icon and its name. Below zoom 15, only the types ticked in the Zoomed Out column are shown; the others appear as you zoom in.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             TextField("Filter by name", text: $search)
@@ -30,6 +31,15 @@ struct POITypesSheet: View {
                     description: Text("The Garmin maps that are on have no style for their points.")
                 )
             } else {
+                HStack {
+                    Text("Show")
+                    Spacer()
+                    Text("Zoomed Out")
+                        .frame(width: Self.zoomedOutWidth)
+                }
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
                 List {
                     ForEach(groups, id: \.category) { group in
                         Section {
@@ -75,6 +85,27 @@ struct POITypesSheet: View {
     }
 
     private func header(_ category: POICategory, types: [POIType]) -> some View {
+        HStack {
+            showToggle(category, types: types)
+            Spacer()
+            Toggle("Zoomed out", isOn: Binding(
+                get: { types.contains { mapLayers.zoomedOutPointTypes.contains($0.type) } },
+                set: { on in
+                    if on {
+                        mapLayers.zoomedOutPointTypes.formUnion(types.map(\.type))
+                    } else {
+                        mapLayers.zoomedOutPointTypes.subtract(types.map(\.type))
+                    }
+                }
+            ))
+            .toggleStyle(.checkbox)
+            .labelsHidden()
+            .help("Show \(category.title.lowercased()) below zoom 15")
+            .frame(width: Self.zoomedOutWidth)
+        }
+    }
+
+    private func showToggle(_ category: POICategory, types: [POIType]) -> some View {
         let hidden = types.filter { mapLayers.hiddenPointTypes.contains($0.type) }.count
         return Toggle(isOn: Binding(
             get: { hidden < types.count },
@@ -96,6 +127,27 @@ struct POITypesSheet: View {
     }
 
     private func row(_ type: POIType) -> some View {
+        HStack {
+            showToggle(type)
+            Toggle("Zoomed out", isOn: Binding(
+                get: { mapLayers.zoomedOutPointTypes.contains(type.type) },
+                set: { on in
+                    if on {
+                        mapLayers.zoomedOutPointTypes.insert(type.type)
+                    } else {
+                        mapLayers.zoomedOutPointTypes.remove(type.type)
+                    }
+                }
+            ))
+            .toggleStyle(.checkbox)
+            .labelsHidden()
+            .help("Show this type below zoom 15")
+            .disabled(mapLayers.hiddenPointTypes.contains(type.type))
+            .frame(width: Self.zoomedOutWidth)
+        }
+    }
+
+    private func showToggle(_ type: POIType) -> some View {
         Toggle(isOn: Binding(
             get: { !mapLayers.hiddenPointTypes.contains(type.type) },
             set: { show in
@@ -119,6 +171,8 @@ struct POITypesSheet: View {
         }
         .toggleStyle(.checkbox)
     }
+
+    private static let zoomedOutWidth: CGFloat = 80
 
     /// The style's name with a capital first letter, or the type number when the style has no name.
     static func title(_ type: POIType) -> String {

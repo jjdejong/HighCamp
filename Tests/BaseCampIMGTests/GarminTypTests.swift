@@ -142,6 +142,48 @@ final class GarminTypTests: XCTestCase {
         XCTAssertEqual(style.fills[5], fill.colour)
     }
 
+    /// `makeTyp()` with a point section: a summit (0x6616) with a 2 by 2 one-bit icon and a small label in a set
+    /// colour, and a version 2 type (0x10301) with a 1 by 1 icon in a colour with alpha and a name.
+    private func makeTypWithPoints() -> [UInt8] {
+        var bytes = makeTyp()
+        func put32(_ value: Int, at position: Int) {
+            for index in 0..<4 { bytes[position + index] = UInt8((value >> (8 * index)) & 0xff) }
+        }
+        func put(_ values: [UInt8], at position: Int) {
+            bytes.replaceSubrange(position..<(position + values.count), with: values)
+        }
+        put32(0x1c0, at: 0x17) // point data
+        put32(0x1b0, at: 0x33) // point array: offset, modulo 3, size 6
+        put([3, 0], at: 0x37)
+        put32(6, at: 0x39)
+        put([0x16 | 0xC0, 0x0C, 0x00], at: 0x1b0) // type word (0x66 << 5) | 0x16, record 0
+        put([0x21 | 0x60, 0x20, 0x10], at: 0x1b3) // type word 0x2000 | (0x03 << 5) | 0x01, record 0x10
+        // Flags: text colour. 2 by 2, one colour (red), plain: 1 bit per pixel, index 1 transparent.
+        put([0x08, 2, 2, 1, 0x00, 0x00, 0x00, 0xff, 0b10, 0b01, 0x0a, 0x11, 0x22, 0x33], at: 0x1c0)
+        // Flags: names. 1 by 1, one colour with alpha (transparency 5), then "Summit" in language 0.
+        put([0x04, 1, 1, 1, 0x20, 0x30, 0x20, 0x10, 0x05, 0x00], at: 0x1d0)
+        put([17, 0x00] + Array("Summit".utf8) + [0], at: 0x1da)
+        return bytes
+    }
+
+    func testPointIconsAndLabels() throws {
+        let style = try GarminTypStyle(bytes: makeTypWithPoints())
+        XCTAssertEqual(Set(style.points.keys), [0x6616, 0x10301])
+
+        let summit = try XCTUnwrap(style.points[0x6616])
+        XCTAssertEqual(summit.width, 2)
+        XCTAssertEqual(summit.height, 2)
+        let red: [UInt8] = [255, 0, 0, 255], clear: [UInt8] = [0, 0, 0, 0]
+        XCTAssertEqual(summit.rgba, red + clear + clear + red, "low bits first; index 1 has no colour")
+        XCTAssertEqual(summit.labelSize, .small)
+        XCTAssertEqual(summit.labelColour, GarminTypStyle.RGB(red: 0x33, green: 0x22, blue: 0x11))
+
+        let other = try XCTUnwrap(style.points[0x10301])
+        XCTAssertEqual(other.rgba, [0x10, 0x20, 0x30, 170])
+        XCTAssertEqual(other.name, "Summit")
+        XCTAssertEqual(other.labelSize, .standard)
+    }
+
     func testNotATypFileIsRejected() {
         XCTAssertThrowsError(try GarminTypStyle(bytes: [UInt8](repeating: 0, count: 0x80)))
     }
@@ -160,5 +202,23 @@ final class GarminTypTests: XCTestCase {
         // Roads have borders and tracks have patterns in this style.
         XCTAssertTrue(style.lines.values.contains { $0.border != nil })
         XCTAssertTrue(style.lines.values.contains { $0.pattern != nil })
+    }
+
+    func testRealMapHasPointIcons() throws {
+        guard let path = ProcessInfo.processInfo.environment["IMG_TEST_PATH"], !path.isEmpty else {
+            throw XCTSkip("set IMG_TEST_PATH to a Garmin .img file")
+        }
+        let style = try XCTUnwrap(try GarminIMG(url: URL(fileURLWithPath: path)).typStyle())
+        XCTAssertGreaterThan(style.points.count, 20)
+        for (type, point) in style.points {
+            XCTAssertEqual(point.rgba.count, point.width * point.height * 4, String(format: "type %X", type))
+            XCTAssertLessThanOrEqual(max(point.width, point.height), 64, String(format: "type %X", type))
+        }
+        if ProcessInfo.processInfo.environment["TYP_POINTS_DUMP"] != nil {
+            for type in style.points.keys.sorted() {
+                let point = style.points[type]!
+                print(String(format: "TYPPOINT %06X %dx%d %@ %@", type, point.width, point.height, "\(point.labelSize)", point.name ?? "-"))
+            }
+        }
     }
 }

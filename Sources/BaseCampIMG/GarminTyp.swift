@@ -1,8 +1,8 @@
 // Garmin style file (TYP): the colours and widths that a map is drawn with.
 // Ported from QMapShack's map/garmin/CGarminTyp.cpp, and the polygon draw order from map/CMapIMG.cpp
 // (Copyright 2008-2014 Oliver Eichler, GPL-3.0-or-later).
-// The day styles of lines (colour, border, width, bitmap pattern), of polygons (colour or bitmap pattern) and the
-// polygon draw order are read. Labels, points and night colours are skipped.
+// The day styles of lines (colour, border, width, bitmap pattern), of polygons (colour or bitmap pattern), the
+// polygon draw order, and the day icons and labels of points are read. Night colours are skipped.
 
 import BaseCampCore
 import Foundation
@@ -65,6 +65,27 @@ public struct GarminTypStyle: Sendable {
         public var background: RGB?
     }
 
+    /// How a point's name is written: QMapShack's `label_type_e`.
+    public enum LabelSize: Int, Sendable {
+        case standard = 0, none, small, normal, large
+    }
+
+    /// A point's icon and label. The icon is `width` by `height` pixels, row by row from the top, four bytes per
+    /// pixel: red, green, blue and alpha (not premultiplied).
+    public struct Point: Equatable, Sendable {
+        public let width: Int
+        public let height: Int
+        public let rgba: [UInt8]
+        public var labelSize: LabelSize = .standard
+        /// The day colour of the label, when the style sets one.
+        public var labelColour: RGB?
+        /// What the type is, in the style's first language (for example "Summit"), when the style names it.
+        public var name: String?
+    }
+
+    /// Point style by feature type: type byte then subtype byte (0x6616 for a summit). Version 2 types are
+    /// 0x10000 + (type << 8) + subtype.
+    public private(set) var points: [Int: Point] = [:]
     /// Line style by feature type. Version 2 types are 0x10000 + (type << 8) + subtype.
     public private(set) var lines: [Int: Line] = [:]
     /// Polygon style by feature type.
@@ -98,6 +119,7 @@ public struct GarminTypStyle: Sendable {
             }
         }
         orderEntries = Self.orderEntries(bytes, array: Array(bytes[0x51..<0x5b]))
+        points = Self.points(bytes)
     }
 
     /// The polygon types in the order they are drawn, bottom first, as QMapShack's `CMapIMG` draws them: types 0x00
@@ -151,6 +173,218 @@ public struct GarminTypStyle: Sendable {
             result.append((type, dataOffset + recordOffset))
         }
         return result
+    }
+
+    /// The point section, following QMapShack's `CGarminTyp::parsePoint`. Point types keep their subtype in the low
+    /// byte. Icons with more than 8 bits per pixel are skipped, as QMapShack does.
+    private static func points(_ bytes: [UInt8]) -> [Int: Point] {
+        let dataOffset = Int(u32(bytes, 0x17))
+        let array = Array(bytes[0x33..<0x3d])
+        let offset = Int(u32(array, 0))
+        let modulo = Int(u16(array, 4))
+        let size = Int(u32(array, 6))
+        guard (3...5).contains(modulo), size % modulo == 0 else { return [:] }
+        let encoding = textEncoding(codepage: Int(u16(bytes, 0x15)))
+        var result: [Int: Point] = [:]
+        for element in 0..<(size / modulo) {
+            let position = offset + modulo * element
+            guard position + modulo <= bytes.count else { break }
+            let typeWord = Int(u16(bytes, position))
+            let recordOffset: Int
+            switch modulo {
+            case 5: recordOffset = Int(u16(bytes, position + 2)) | (Int(u8(bytes, position + 4)) << 16)
+            case 4: recordOffset = Int(u16(bytes, position + 2))
+            default: recordOffset = Int(u8(bytes, position + 2))
+            }
+            let packed = (typeWord >> 5) | ((typeWord & 0x1f) << 11)
+            let subtype = typeWord & 0x1f
+            let type = typeWord & 0x2000 != 0
+                ? 0x10000 | ((packed & 0x7ff) << 8) | subtype
+                : ((packed & 0x7ff) << 8) + subtype
+            var reader = Reader(bytes: bytes, position: dataOffset + recordOffset)
+            if let point = point(&reader, encoding: encoding) {
+                result[type] = point
+            }
+        }
+        return result
+    }
+
+    private static func point(_ reader: inout Reader, encoding: String.Encoding) -> Point? {
+        guard let flags = reader.byte(), let width = reader.byte().map(Int.init), let height = reader.byte().map(Int.init),
+              var colourCount = reader.byte().map(Int.init), let colourKind = reader.byte(),
+              let bpp = bitsPerPixel(colours: colourCount, kind: colourKind), width > 0, height > 0 else { return nil }
+        if colourKind == 0x20 || colourKind == 0x00, colourCount == 0, bpp >= 16 {
+            colourCount = width * height
+        }
+        guard bpp < 16, let palette = colourTable(&reader, count: colourCount, size: 1 << bpp, alpha: colourKind == 0x20),
+              let indices = pixels(&reader, width: width, height: height, bpp: bpp) else { return nil }
+        var rgba = [UInt8](repeating: 0, count: width * height * 4)
+        for (pixel, index) in indices.enumerated() where index < palette.count {
+            let colour = palette[index]
+            rgba[pixel * 4] = colour.red
+            rgba[pixel * 4 + 1] = colour.green
+            rgba[pixel * 4 + 2] = colour.blue
+            rgba[pixel * 4 + 3] = colour.alpha
+        }
+        var point = Point(width: width, height: height, rgba: rgba)
+
+        // The night icon: its own colours and pixels (3), or its own colours only (2). Read past it.
+        let night = flags & 0x03
+        if night == 0x03 || night == 0x02 {
+            guard let count = reader.byte().map(Int.init), let kind = reader.byte(),
+                  let nightBpp = bitsPerPixel(colours: count, kind: kind),
+                  colourTable(&reader, count: count, size: 1 << nightBpp, alpha: kind == 0x20) != nil else { return point }
+            if night == 0x03, pixels(&reader, width: width, height: height, bpp: nightBpp) == nil {
+                return point
+            }
+        }
+
+        if flags & 0x04 != 0 {
+            point.name = localizedName(&reader, encoding: encoding)
+        }
+        if flags & 0x08 != 0, let text = reader.byte() {
+            point.labelSize = LabelSize(rawValue: Int(text & 0x07)) ?? .standard
+            if text & 0x08 != 0, let blue = reader.byte(), let green = reader.byte(), let red = reader.byte() {
+                point.labelColour = RGB(red: red, green: green, blue: blue)
+            }
+        }
+        return point
+    }
+
+    /// QMapShack's `decodeBppAndBytes`: the bits per pixel for a colour count and colour kind (0x00 plain, 0x10
+    /// with a transparent colour, 0x20 with alpha).
+    private static func bitsPerPixel(colours: Int, kind: UInt8) -> Int? {
+        switch kind {
+        case 0x00:
+            if colours < 3 { return colours }
+            if colours == 3 { return 2 }
+            if colours < 16 { return 4 }
+            if colours < 256 { return 8 }
+        case 0x10:
+            if colours == 0 { return 1 }
+            if colours < 3 { return 2 }
+            if colours < 15 { return 4 }
+            if colours < 256 { return 8 }
+        case 0x20:
+            if colours == 0 { return 16 }
+            if colours < 3 { return colours }
+            if colours < 4 { return 2 }
+            if colours < 16 { return 4 }
+            if colours < 256 { return 8 }
+        default:
+            break
+        }
+        return nil
+    }
+
+    private struct RGBA {
+        let red, green, blue, alpha: UInt8
+    }
+
+    /// QMapShack's `decodeColorTable`: blue, green, red per colour; with alpha, 28 bits per colour (red, green and
+    /// blue bytes, then 4 bits of transparency). Indices from `count` to `size` are transparent.
+    private static func colourTable(_ reader: inout Reader, count: Int, size: Int, alpha: Bool) -> [RGBA]? {
+        var colours: [RGBA] = []
+        if alpha {
+            var register: UInt32 = 0
+            var bits: UInt32 = 0
+            for _ in 0..<count {
+                while bits < 28 {
+                    guard let byte = reader.byte() else { return nil }
+                    register = (register & ~(0xFF << bits)) | (UInt32(byte) << bits)
+                    bits += 8
+                }
+                let transparency = UInt8((register >> 24) & 0x0F)
+                colours.append(RGBA(
+                    red: UInt8((register >> 16) & 0xFF), green: UInt8((register >> 8) & 0xFF), blue: UInt8(register & 0xFF),
+                    alpha: (15 - transparency) * 17
+                ))
+                register >>= 28
+                bits -= 28
+            }
+        } else {
+            for _ in 0..<count {
+                guard let blue = reader.byte(), let green = reader.byte(), let red = reader.byte() else { return nil }
+                colours.append(RGBA(red: red, green: green, blue: blue, alpha: 255))
+            }
+        }
+        while colours.count < size {
+            colours.append(RGBA(red: 0, green: 0, blue: 0, alpha: 0))
+        }
+        return colours
+    }
+
+    /// QMapShack's `decodeBitmap`: each row starts on a byte; pixels are packed from the low bits up.
+    private static func pixels(_ reader: inout Reader, width: Int, height: Int, bpp: Int) -> [Int]? {
+        guard [1, 2, 4, 8].contains(bpp) else { return bpp == 0 ? Array(repeating: 0, count: width * height) : nil }
+        let mask = (1 << bpp) - 1
+        var result: [Int] = []
+        result.reserveCapacity(width * height)
+        for _ in 0..<height {
+            var x = 0
+            while x < width {
+                guard let byte = reader.byte() else { return nil }
+                var value = Int(byte)
+                for _ in 0..<(8 / bpp) where x < width {
+                    result.append(value & mask)
+                    value >>= bpp
+                    x += 1
+                }
+            }
+        }
+        return result
+    }
+
+    /// The first of a record's names (one per language), following QMapShack's `parsePoint`.
+    private static func localizedName(_ reader: inout Reader, encoding: String.Encoding) -> String? {
+        guard let first = reader.byte() else { return nil }
+        var length = Int(first)
+        var step = 1
+        if first & 0x01 == 0 {
+            guard let second = reader.byte() else { return nil }
+            step = 2
+            length |= Int(second) << 8
+        }
+        length -= step
+        var names: [String] = []
+        while length > 0 {
+            guard reader.byte() != nil else { break } // language code
+            length -= 2 * step
+            var text: [UInt8] = []
+            while length > 0 {
+                guard let byte = reader.byte() else { break }
+                length -= 2 * step
+                if byte == 0 { break }
+                text.append(byte)
+            }
+            if let name = String(bytes: text, encoding: encoding), !name.isEmpty {
+                names.append(name)
+            }
+        }
+        return names.first
+    }
+
+    private static func textEncoding(codepage: Int) -> String.Encoding {
+        switch codepage {
+        case 65001: return .utf8
+        case 1250: return .windowsCP1250
+        case 1251: return .windowsCP1251
+        case 1253: return .windowsCP1253
+        case 1254: return .windowsCP1254
+        default: return .windowsCP1252
+        }
+    }
+
+    /// Reads bytes in turn, and gives nil past the end instead of trapping.
+    private struct Reader {
+        let bytes: [UInt8]
+        var position: Int
+
+        mutating func byte() -> UInt8? {
+            guard position >= 0, position < bytes.count else { return nil }
+            defer { position += 1 }
+            return bytes[position]
+        }
     }
 
     /// The draw order section: five bytes per entry, a type and a mask of subtypes. Same checks as QMapShack's

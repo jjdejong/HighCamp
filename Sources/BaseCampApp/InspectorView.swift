@@ -17,6 +17,11 @@ struct InspectorView: View {
     var body: some View {
         if store.selectedItems.count > 1 {
             multipleSelection
+        } else if let selection = store.selection, store.isOnDevice(selection) {
+            Form {
+                deviceDetails(selection)
+            }
+            .formStyle(.grouped)
         } else if let selection = store.selection {
             Form {
                 Section {
@@ -43,6 +48,12 @@ struct InspectorView: View {
                 }
             }
             Section("Actions") {
+                if store.selectedItems.contains(where: store.isOnDevice) {
+                    Button("Copy to Library") {
+                        store.copyToLibrary(store.selectedItems)
+                    }
+                    .help("Adds copies of the selected items on the device to the library")
+                }
                 collectionMenu
                 if store.activeCollectionID != nil {
                     Button("Remove from This Collection") {
@@ -83,12 +94,13 @@ struct InspectorView: View {
         }
     }
 
-    /// The names of the items, in sidebar order: waypoints, routes, then tracks.
+    /// The names of the items, in sidebar order: waypoints, routes, tracks, then the device's.
     private func names(of items: Set<LibraryItem>) -> [String] {
         let waypoints = store.library.waypoints.filter { items.contains(.waypoint($0.id)) }.map(\.name)
         let routes = store.library.routes.filter { items.contains(.route($0.id)) }.map(\.name)
         let tracks = store.library.tracks.filter { items.contains(.track($0.id)) }.map(\.name)
-        return waypoints + routes + tracks
+        let device = store.device.groups.flatMap(\.items).filter(items.contains).map { store.name(of: $0) }
+        return waypoints + routes + tracks + device
     }
 
     private func nameBinding(for item: LibraryItem) -> Binding<String> {
@@ -114,6 +126,52 @@ struct InspectorView: View {
             if let track = store.track(id) {
                 trackDetails(track)
                 sendSection(name: track.name, points: track.coursePoints)
+            }
+        }
+    }
+
+    // MARK: The device's items
+
+    /// An item on the device: what and where it is, its figures and profile, and a way to copy it to the library,
+    /// where it can be changed. Nothing here changes the device.
+    @ViewBuilder
+    private func deviceDetails(_ item: LibraryItem) -> some View {
+        Section {
+            LabeledContent("Name", value: store.name(of: item).isEmpty ? "Unnamed" : store.name(of: item))
+                .textSelection(.enabled)
+            if let group = store.deviceGroup(of: item) {
+                LabeledContent("On", value: "\(store.device.deviceName), \(group.kind.title)")
+            }
+            Button("Copy to Library") {
+                store.copyToLibrary([item])
+            }
+            .help("Adds a copy to the library, where it can be renamed, edited and sent back")
+        }
+        switch item {
+        case .waypoint(let id):
+            if let waypoint = store.waypoint(id) {
+                Section("Position") {
+                    LabeledContent("Shown as", value: UnitFormat.coordinate(waypoint.coordinate, display.coordinates))
+                        .textSelection(.enabled)
+                    if let height = waypoint.elevation {
+                        LabeledContent("Height", value: UnitFormat.elevation(height, display.units))
+                    }
+                }
+            }
+        case .route(let id):
+            if let route = store.route(id) {
+                Section("Route") {
+                    LabeledContent("Points", value: "\(route.points.count)")
+                }
+                statisticsSections(route.statistics, pickable: false, profile: { route.profile(of: $0) })
+            }
+        case .track(let id):
+            if let track = store.track(id) {
+                Section("Track") {
+                    LabeledContent("Segments", value: "\(track.segments.count)")
+                    LabeledContent("Points", value: "\(track.pointCount)")
+                }
+                statisticsSections(track.statistics, pickable: false, profile: { track.profile(of: $0) })
             }
         }
     }

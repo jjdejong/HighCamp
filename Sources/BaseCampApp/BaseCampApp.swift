@@ -52,6 +52,17 @@ struct BaseCampApp: App {
                             store.selectItem(named: String(name), addingToSelection: true)
                         }
                     }
+                    // `--select-device NAME` selects the device item with that name once the device has been read, and
+                    // frames the map on it, for testing.
+                    if let name = Self.launchValue("--select-device") {
+                        for _ in 0..<120 where store.device.groups.isEmpty || store.device.progress != nil {
+                            try? await Task.sleep(for: .milliseconds(500))
+                        }
+                        if let item = store.device.groups.flatMap(\.items).first(where: { store.name(of: $0) == name }) {
+                            store.selection = item
+                            store.zoomToSelection()
+                        }
+                    }
                     // `--profile-range FROM TO` picks that stretch of the selected track's profile, in kilometres, for testing.
                     if let range = Self.launchProfileRange() {
                         store.profileRange = range

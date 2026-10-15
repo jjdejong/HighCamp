@@ -16,6 +16,8 @@ struct SidebarView: View {
     @State private var renameDraft = ""
     /// The figures for the table. Worked out only while the table is shown, and again after each change to the library.
     @State private var summaries: [ItemSummary] = []
+    /// The device's folders shown open in the list, kept between launches. Activities start closed: there are many.
+    @AppStorage("sidebar.openDeviceGroups") private var openDeviceGroups = "courses,gpx"
 
     var body: some View {
         @Bindable var store = store
@@ -57,6 +59,13 @@ struct SidebarView: View {
                             Label(displayName(track.name), systemImage: "waveform.path")
                                 .tag(LibraryItem.track(track.id))
                                 .id(LibraryItem.track(track.id))
+                        }
+                    }
+                    // The connected device's folders, under the library, as BaseCamp lists a device.
+                    if store.activeCollectionID == nil {
+                        // A folder with nothing in it is left out once the device has been read.
+                        ForEach(store.device.groups.filter { !$0.items.isEmpty || store.device.progress != nil }) { group in
+                            deviceSection(group)
                         }
                     }
                 }
@@ -216,6 +225,61 @@ struct SidebarView: View {
         if !items.isEmpty {
             Button("Zoom to Selection") { zoom(to: items) }
         }
+        if items.contains(where: store.isOnDevice) {
+            Button("Copy to Library") { store.copyToLibrary(items) }
+        }
+    }
+
+    // MARK: The device
+
+    /// One folder of the device: its items, its count, how far reading has got, and whether the map shows it.
+    private func deviceSection(_ group: DeviceGroup) -> some View {
+        let items = deviceItems(group)
+        let open = Binding(
+            get: { openDeviceGroups.split(separator: ",").contains(Substring(group.id)) },
+            set: { isOpen in
+                var ids = Set(openDeviceGroups.split(separator: ",").map(String.init))
+                if isOpen { ids.insert(group.id) } else { ids.remove(group.id) }
+                openDeviceGroups = ids.sorted().joined(separator: ",")
+            }
+        )
+        return Section(isExpanded: open) {
+            ForEach(items, id: \.item) { row in
+                Label(displayName(row.name), systemImage: row.symbol)
+                    .tag(row.item)
+                    .id(row.item)
+            }
+        } header: {
+            HStack(spacing: 6) {
+                Text("\(store.device.deviceName) · \(group.kind.title) (\(items.count))")
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                Spacer()
+                if let progress = store.device.progress {
+                    ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
+                        .progressViewStyle(.circular)
+                        .controlSize(.mini)
+                        .help("Reading the device: \(progress.done) of \(progress.total) files")
+                }
+                let shown = store.deviceGroupsOnMap.contains(group.id)
+                Button(shown ? "Hide on Map" : "Show on Map", systemImage: shown ? "eye" : "eye.slash") {
+                    if shown { store.deviceGroupsOnMap.remove(group.id) } else { store.deviceGroupsOnMap.insert(group.id) }
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help(shown ? "Shown on the map; a selected item is always shown" : "Not shown on the map, unless selected")
+            }
+        }
+    }
+
+    /// The rows of one device folder that match the name filter.
+    private func deviceItems(_ group: DeviceGroup) -> [(item: LibraryItem, name: String, symbol: String)] {
+        let symbol = group.kind == .courses ? "flag.checkered" : group.kind == .activities ? "bicycle" : "waveform.path"
+        var rows: [(item: LibraryItem, name: String, symbol: String)] = []
+        rows += group.library.waypoints.map { (.waypoint($0.id), $0.name, "mappin") }
+        rows += group.library.routes.map { (.route($0.id), $0.name, "map") }
+        rows += group.library.tracks.map { (.track($0.id), $0.name, symbol) }
+        return rows.filter { matches($0.name) }
     }
 
     /// Brings an item selected elsewhere, as by clicking it on the map, into view: the collection and the name

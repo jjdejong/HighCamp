@@ -45,6 +45,12 @@ final class DeviceStore {
     var mapTransfer: MapTransfer?
     private var transferMonitor: TransferMonitor?
     private var refreshTask: Task<Void, Never>?
+    /// The device's courses, activities and GPX files, read after it connects.
+    var contents = DeviceContents()
+    /// Where copies of the device's files are kept, so a device connected again only has new files read. Set by
+    /// the main view; nothing is read from the device without it.
+    var cacheFolder: URL?
+    private var contentsTask: Task<Void, Never>?
     @ObservationIgnored private let device = MTPDevice()
 
     /// Free space on the device's first storage, if known.
@@ -76,7 +82,97 @@ final class DeviceStore {
             }
             if !Task.isCancelled {
                 state = result
+                if case .connected(let name, _) = result {
+                    loadContents(deviceName: name)
+                } else {
+                    contentsTask?.cancel()
+                    contents = DeviceContents()
+                }
             }
+        }
+    }
+
+    /// Reads the device's courses, activities and GPX files, one file at a time so a send can go between two, and
+    /// publishes what is read as it goes. A file already copied, with the same name and size, is read from the copy.
+    private func loadContents(deviceName: String) {
+        guard let cacheFolder else { return }
+        contentsTask?.cancel()
+        let device = device
+        let folder = cacheFolder.appendingPathComponent(deviceName)
+        contentsTask = Task {
+            let listed: [(kind: DeviceGroup.Kind, files: [MTPEntry])]
+            do {
+                listed = try await device.perform { link, storage in
+                    DeviceGroup.Kind.allCases.map { kind in
+                        // A device without the folder (no GPX files, say) has nothing of that kind.
+                        let entries = (try? link.entries(in: kind.folder, storageID: storage.id)) ?? []
+                        let files = entries
+                            .filter { !$0.isFolder && ($0.name as NSString).pathExtension.lowercased() == kind.fileExtension }
+                            .sorted { kind == .activities ? $0.name > $1.name : $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+                        return (kind, files)
+                    }
+                }
+            } catch {
+                return
+            }
+            var groups = listed.map { DeviceGroup(kind: $0.kind) }
+            let total = listed.reduce(0) { $0 + $1.files.count }
+            var done = 0
+            contents = DeviceContents(deviceName: deviceName, groups: groups, progress: (0, total))
+            for (index, entry) in listed.enumerated() {
+                let local = folder.appendingPathComponent(entry.kind.rawValue)
+                try? FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
+                Self.removeCopies(in: local, except: Set(entry.files.map(\.name)))
+                for file in entry.files {
+                    guard !Task.isCancelled else { return }
+                    let copy = local.appendingPathComponent(file.name)
+                    if Self.size(of: copy) != file.size {
+                        do {
+                            try await device.perform { link, _ in try link.download(entryID: file.id, to: copy) }
+                        } catch {
+                            try? FileManager.default.removeItem(at: copy)
+                            done += 1
+                            continue
+                        }
+                    }
+                    let kind = entry.kind
+                    let items = await Task.detached(priority: .utility) {
+                        (try? Data(contentsOf: copy)).map { DeviceFileReader.items(in: $0, file: file.name, kind: kind) } ?? Library()
+                    }.value
+                    groups[index].library.waypoints += items.waypoints
+                    groups[index].library.routes += items.routes
+                    groups[index].library.tracks += items.tracks
+                    done += 1
+                    // Published every few files, so the sidebar fills in without redrawing for each one.
+                    if done % 8 == 0 || done == total {
+                        contents = DeviceContents(deviceName: deviceName, groups: groups, progress: done == total ? nil : (done, total))
+                    }
+                }
+            }
+            // By the names shown, as the library is listed; activities newest first.
+            for index in groups.indices {
+                let byName = { (a: String, b: String) in a.localizedStandardCompare(b) == .orderedAscending }
+                groups[index].library.waypoints.sort { byName($0.name, $1.name) }
+                groups[index].library.routes.sort { byName($0.name, $1.name) }
+                if groups[index].kind == .activities {
+                    groups[index].library.tracks.sort { ($0.segments.first?.first?.time ?? .distantPast) > ($1.segments.first?.first?.time ?? .distantPast) }
+                } else {
+                    groups[index].library.tracks.sort { byName($0.name, $1.name) }
+                }
+            }
+            contents = DeviceContents(deviceName: deviceName, groups: groups, progress: nil)
+        }
+    }
+
+    nonisolated private static func size(of file: URL) -> UInt64? {
+        (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? NSNumber)?.uint64Value
+    }
+
+    /// Removes the copies of files that are no longer on the device.
+    nonisolated private static func removeCopies(in folder: URL, except names: Set<String>) {
+        let copies = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        for name in copies where !names.contains(name) {
+            try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
         }
     }
 

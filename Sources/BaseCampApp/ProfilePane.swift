@@ -151,16 +151,22 @@ struct ProfilePane: View {
         HStack(spacing: 8) {
             zoomButtons(length: length)
             if item.isTrack {
+                // A track on the device is not changed here: it is copied to the library first.
+                let editable = !(store.selection.map(store.isOnDevice) ?? false)
                 Divider().frame(height: 16)
-                Button("Delete Selected Points") { store.deleteProfileRange() }
-                    .disabled(store.profileRange == nil)
-                    .help("Drag across the profile to pick points, then delete them")
+                if editable {
+                    Button("Delete Selected Points") { store.deleteProfileRange() }
+                        .disabled(store.profileRange == nil)
+                        .help("Drag across the profile to pick points, then delete them")
+                }
                 Button("Clear") { store.profileRange = nil }
                     .disabled(store.profileRange == nil)
                     .help("Forget the stretch picked on the profile")
-                Button("Split Here") { store.splitSelectedTrackAtCursor() }
-                    .disabled(store.profileCursor == nil)
-                    .help("Cut the track in two at the profile cursor")
+                if editable {
+                    Button("Split Here") { store.splitSelectedTrackAtCursor() }
+                        .disabled(store.profileCursor == nil)
+                        .help("Cut the track in two at the profile cursor")
+                }
             }
             Button {
                 display.showsProfilePane = false

@@ -221,6 +221,16 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 
 ---
 
+### G6. The device's contents next to the library. Owner: Opus
+- As BaseCamp lists a device, and as the user's QMapShack branch loads a Garmin over MTP: the Edge's courses,
+  activities and GPX files listed under the library, drawn on the map, selectable with inspector and profile,
+  read-only, with Copy to Library.
+- Done 2026-10-15: `DeviceStore` reads Garmin/Courses, Garmin/Activities and Garmin/GPX after the device connects,
+  one file at a time, keeping copies in "Device Files" next to the library so a device connected again only has new
+  or changed files read (123 files in about 15 s the first time). Items get ids from their file (`UUID(stableFrom:)`)
+  so a selection survives a reload. Courses take the name in the file. Sidebar: a section per folder, collapsible,
+  with an eye to show it on the map (activities off by default; a selected item is always drawn, in teal).
+
 ## Phase C: features (Haiku after Opus has set the shape)
 
 ### C1. Garmin GPX extensions, read and write. Owner: Haiku → Opus review
@@ -304,6 +314,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G4 | Opus | done | dd8e815, d77e4a1, (this commit) | DEM reader (GPXSee port) and relief shading on the Garmin maps; maps' heights for Elevations from Model, new waypoints and the route recalculator (DEM folder first, setting for maps first); shading in saved pictures and printed reports |
 | D1 | Opus | done | e809ca8, (this commit) | track DEMs from a folder of high-resolution tiles (user request); profile from the track DEM; not yet seen on screen |
 | G5 | Opus | done | (this commit) | closed without code: no overview map in the user's files; Apple Maps fills in when zoomed out (see G5) |
+| G6 | Opus | done | (this commit) | device courses, activities and GPX files in the sidebar and on the map, read-only, Copy to Library; checked with the user's Edge 1040 |
 | C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |
 | C5 | Haiku | reviewed | 2a26c42 | accepted; table next to the list; `--sidebar table` hook (debug) |
 | C7 | Haiku | reviewed | bc1a6cc, 69350e5 | accepted; follow-up C7b |

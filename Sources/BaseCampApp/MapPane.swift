@@ -227,7 +227,10 @@ struct MapPane: View {
         parts[.places] = placeLayer
         parts[.coverage] = coverageLayer
         parts[.library] = libraryLayer.content(
-            revision: store.revision, selectedItems: store.selectedItems, selectedStop: store.selectedStop, build: buildLibraryLayer
+            revision: LibraryLayerCache.Revision(
+                library: store.revision, device: store.deviceRevision, deviceGroupsOnMap: store.deviceGroupsOnMap
+            ),
+            selectedItems: store.selectedItems, selectedStop: store.selectedStop, build: buildLibraryLayer
         )
         parts[.measure] = measureLayer
         if let range = store.profileRange, let measure = store.selectedMeasure {
@@ -319,8 +322,44 @@ struct MapPane: View {
                 }
             }
         }
+        addDeviceItems(to: &content, selectedHalos: &selectedHalos, selectedLines: &selectedLines)
         content.lines += selectedHalos + selectedLines
         return content
+    }
+
+    /// The connected device's items: those of the folders shown on the map, and any selected. Their lines are teal,
+    /// so they are told apart from the library's.
+    private func addDeviceItems(to content: inout MapLayerContent, selectedHalos: inout [MapLine], selectedLines: inout [MapLine]) {
+        for group in store.device.groups {
+            let shown = store.deviceGroupsOnMap.contains(group.id)
+            for waypoint in group.library.waypoints {
+                let selected = store.selectedItems.contains(.waypoint(waypoint.id))
+                guard shown || selected else { continue }
+                content.pins.append(MapPin(
+                    id: "device-waypoint-\(waypoint.id)",
+                    coordinate: waypoint.coordinate,
+                    style: .waypoint(selected: selected, symbol: waypoint.symbol),
+                    item: .waypoint(waypoint.id),
+                    title: waypoint.name,
+                    showsLabel: true
+                ))
+            }
+            let lines = group.library.routes.map { (LibraryItem.route($0.id), [$0.points.map(\.coordinate)]) }
+                + group.library.tracks.map { (LibraryItem.track($0.id), $0.segments.map { $0.map(\.coordinate) }) }
+            for (item, pieces) in lines {
+                let selected = store.selectedItems.contains(item)
+                guard shown || selected else { continue }
+                for (index, piece) in pieces.enumerated() where piece.count > 1 {
+                    let line = MapLine(id: "device-\(item)-\(index)", coordinates: piece, color: .teal, item: item)
+                    if selected {
+                        selectedHalos.append(Self.selectionHalo(for: line))
+                        selectedLines.append(line)
+                    } else {
+                        content.lines.append(line)
+                    }
+                }
+            }
+        }
     }
 
     /// A route's line, cut where legs start or stop waiting for the router: those legs are drawn dashed.
@@ -516,12 +555,19 @@ struct MapPane: View {
 /// profile cursor moving, do not rebuild it. Handing back the same arrays also keeps the map's comparison quick.
 @MainActor
 final class LibraryLayerCache {
-    private var revision: Int?
+    /// The library's revision, the device's, and the device folders shown.
+    struct Revision: Equatable {
+        let library: Int
+        let device: Int
+        let deviceGroupsOnMap: Set<String>
+    }
+
+    private var revision: Revision?
     private var selectedItems: Set<LibraryItem> = []
     private var selectedStop: UUID?
     private var cached = MapLayerContent()
 
-    func content(revision: Int, selectedItems: Set<LibraryItem>, selectedStop: UUID?, build: () -> MapLayerContent) -> MapLayerContent {
+    func content(revision: Revision, selectedItems: Set<LibraryItem>, selectedStop: UUID?, build: () -> MapLayerContent) -> MapLayerContent {
         if revision != self.revision || selectedItems != self.selectedItems || selectedStop != self.selectedStop {
             cached = build()
             self.revision = revision

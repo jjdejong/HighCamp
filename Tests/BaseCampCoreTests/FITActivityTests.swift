@@ -30,7 +30,7 @@ final class FITActivityTests: XCTestCase {
 
         let track = try FITActivity.read(data, name: "Imported")
 
-        XCTAssertEqual(track.name, "Imported")
+        XCTAssertEqual(track.name, "Round trip", "a course keeps its own name")
         XCTAssertEqual(track.segments.count, 1)
         let points = track.segments[0]
         XCTAssertEqual(points.count, 12)

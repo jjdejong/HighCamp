@@ -190,9 +190,9 @@ final class LibraryStore {
 
     private func exists(_ item: LibraryItem) -> Bool {
         switch item {
-        case .waypoint(let id): library.waypoints.contains { $0.id == id }
-        case .route(let id): library.routes.contains { $0.id == id }
-        case .track(let id): library.tracks.contains { $0.id == id }
+        case .waypoint(let id): waypoint(id) != nil
+        case .route(let id): route(id) != nil
+        case .track(let id): track(id) != nil
         }
     }
 
@@ -496,16 +496,93 @@ final class LibraryStore {
 
     // MARK: Items
 
+    /// A waypoint of the library, or of the connected device.
     func waypoint(_ id: UUID) -> Waypoint? {
-        library.waypoints.first { $0.id == id }
+        library.waypoints.first { $0.id == id } ?? deviceItems.waypoints.first { $0.id == id }
     }
 
     func route(_ id: UUID) -> Route? {
-        library.routes.first { $0.id == id }
+        library.routes.first { $0.id == id } ?? deviceItems.routes.first { $0.id == id }
     }
 
     func track(_ id: UUID) -> Track? {
-        library.tracks.first { $0.id == id }
+        library.tracks.first { $0.id == id } ?? deviceItems.tracks.first { $0.id == id }
+    }
+
+    // MARK: The device's items
+
+    /// What is on the connected device, by folder (see `DeviceContents`). Set by the main view. Its items can be
+    /// selected, shown and measured like the library's, but not changed: they are copied to the library for that.
+    var device = DeviceContents() {
+        didSet {
+            guard device != oldValue else { return }
+            deviceItems = device.library
+            deviceRevision += 1
+            measureCache = nil
+            clearMissingSelection()
+        }
+    }
+    /// Every item on the device, for looking items up.
+    private(set) var deviceItems = Library()
+    /// Bumped when the device's items change, so the map draws them again.
+    private(set) var deviceRevision = 0
+
+    /// The device's folders drawn on the map. Activities are not, until asked: a device holds hundreds.
+    var deviceGroupsOnMap: Set<String> = LibraryStore.savedDeviceGroupsOnMap() {
+        didSet { UserDefaults.standard.set(deviceGroupsOnMap.sorted(), forKey: "device.groupsOnMap") }
+    }
+
+    private static func savedDeviceGroupsOnMap() -> Set<String> {
+        if let saved = UserDefaults.standard.array(forKey: "device.groupsOnMap") as? [String] {
+            return Set(saved)
+        }
+        return Set(DeviceGroup.Kind.allCases.filter(\.shownOnMapByDefault).map(\.rawValue))
+    }
+
+    /// Whether the item is on the device rather than in the library.
+    func isOnDevice(_ item: LibraryItem) -> Bool {
+        switch item {
+        case .waypoint(let id): !library.waypoints.contains { $0.id == id } && deviceItems.waypoints.contains { $0.id == id }
+        case .route(let id): !library.routes.contains { $0.id == id } && deviceItems.routes.contains { $0.id == id }
+        case .track(let id): !library.tracks.contains { $0.id == id } && deviceItems.tracks.contains { $0.id == id }
+        }
+    }
+
+    /// The device's folder an item is in.
+    func deviceGroup(of item: LibraryItem) -> DeviceGroup? {
+        device.groups.first { $0.items.contains(item) }
+    }
+
+    /// Copies items from the device into the library, as new items, and selects the copies.
+    func copyToLibrary(_ items: Set<LibraryItem>) {
+        var copies: Set<LibraryItem> = []
+        var waypoints: [Waypoint] = [], routes: [Route] = [], tracks: [Track] = []
+        for item in items where isOnDevice(item) {
+            switch item {
+            case .waypoint(let id):
+                guard var copy = waypoint(id) else { continue }
+                copy.id = UUID()
+                waypoints.append(copy)
+                copies.insert(.waypoint(copy.id))
+            case .route(let id):
+                guard var copy = route(id) else { continue }
+                copy.id = UUID()
+                routes.append(copy)
+                copies.insert(.route(copy.id))
+            case .track(let id):
+                guard var copy = track(id) else { continue }
+                copy.id = UUID()
+                tracks.append(copy)
+                copies.insert(.track(copy.id))
+            }
+        }
+        guard !copies.isEmpty else { return }
+        edit(copies.count == 1 ? "Copy to Library" : "Copy \(copies.count) Items to Library") { library in
+            library.waypoints += waypoints
+            library.routes += routes
+            library.tracks += tracks
+        }
+        selectedItems = copies
     }
 
     func name(of item: LibraryItem) -> String {

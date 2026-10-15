@@ -7,7 +7,7 @@ public enum FITReadError: Error, Equatable {
 }
 
 /// Reads the GPS track from a FIT activity or course file: the position, altitude and time of each
-/// record message. Other messages, and developer fields, are skipped.
+/// record message, and a course's name. Other messages, and developer fields, are skipped.
 public enum FITActivity {
     private static let messageRecord: UInt16 = 20
     private static let fieldTimestamp: UInt8 = 253
@@ -17,10 +17,12 @@ public enum FITActivity {
     private static let fieldEnhancedAltitude: UInt8 = 78
     private static let fitEpochOffset: Double = 631_065_600
 
+    /// The track, named after the course when the file is a course with a name, else `name`.
     public static func read(_ data: Data, name: String) throws -> Track {
         var reader = Reader(bytes: [UInt8](data))
         let points = try reader.readRecordPoints()
-        return Track(name: name, segments: points.isEmpty ? [] : [points])
+        let courseName = reader.courseName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Track(name: courseName.flatMap { $0.isEmpty ? nil : $0 } ?? name, segments: points.isEmpty ? [] : [points])
     }
 }
 
@@ -47,6 +49,8 @@ private struct Reader {
     var end = 0
     var definitions: [UInt8: MessageDefinition] = [:]
     var lastTimestamp: UInt32 = 0
+    /// The name in a course message (31, field 5), if the file has one.
+    var courseName: String?
 
     init(bytes: [UInt8]) {
         self.bytes = bytes
@@ -145,6 +149,17 @@ private struct Reader {
         let start = position
         position += length
 
+        if definition.globalNumber == 31 {
+            var offset = start
+            for field in definition.fields {
+                if field.number == 5 {
+                    let text = bytes[offset..<(offset + field.size)].prefix { $0 != 0 }
+                    courseName = String(decoding: text, as: UTF8.self)
+                }
+                offset += field.size
+            }
+            return nil
+        }
         guard definition.globalNumber == 20 else {
             return nil
         }

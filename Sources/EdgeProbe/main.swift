@@ -82,6 +82,27 @@ if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "fetch-smallest
     exit(0)
 }
 
+// `EdgeProbe fetch-course NAME OUTPUT.fit` copies one course from Garmin/Courses, matched by exact name, to OUTPUT.
+// It reads from the device and writes only the local copy.
+if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "fetch-course" {
+    let name = CommandLine.arguments[2]
+    do {
+        let device = try MTPConnection.openFirstDevice()
+        let storageID = try device.storages().first?.id ?? 0
+        let files = try device.entries(in: ["Garmin", "Courses"], storageID: storageID).filter { !$0.isFolder }
+        guard let course = files.first(where: { $0.name == name }) else {
+            print("Not found: \(name)")
+            exit(1)
+        }
+        try device.download(entryID: course.id, to: URL(fileURLWithPath: CommandLine.arguments[3]))
+        print("Copied \(course.name) (\(course.size) bytes) to \(CommandLine.arguments[3])")
+    } catch {
+        print("Could not fetch: \(error)")
+        exit(1)
+    }
+    exit(0)
+}
+
 do {
     let device = try MTPConnection.openFirstDevice()
     for storage in try device.storages() {

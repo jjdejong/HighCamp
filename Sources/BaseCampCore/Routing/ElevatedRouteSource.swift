@@ -7,7 +7,7 @@ import Foundation
 /// would put false grades where they meet, so a partly covered route keeps the router's heights.
 public struct ElevatedRouteSource: RouteSource {
     /// The height of each coordinate, or nil where there is none. One result for each coordinate.
-    public typealias Heights = @Sendable ([Coordinate]) -> [Double?]
+    public typealias Heights = @Sendable ([Coordinate]) async -> [Double?]
 
     private let base: RouteSource
     private let heights: Heights
@@ -19,7 +19,7 @@ public struct ElevatedRouteSource: RouteSource {
 
     public func route(via points: [Coordinate], nogos: [NoGo]) async throws -> RouteGeometry {
         var route = try await base.route(via: points, nogos: nogos)
-        let values = heights(route.points.map(\.coordinate))
+        let values = await heights(route.points.map(\.coordinate))
         guard values.count == route.points.count, values.allSatisfy({ $0 != nil }) else {
             return route
         }

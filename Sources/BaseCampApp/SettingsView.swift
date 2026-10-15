@@ -15,6 +15,7 @@ struct SettingsView: View {
         @Bindable var mapSettings = mapSettings
         @Bindable var routing = routing
         @Bindable var display = display
+        @Bindable var elevation = elevation
         Form {
             Section("Units and positions") {
                 Picker("Units", selection: $display.units) {
@@ -67,7 +68,11 @@ struct SettingsView: View {
                         }
                     }
                 }
-                Text("Heights for tracks, routes and waypoints that have none come from the first model in this folder that covers the point. Put the best model first, such as Current_DEM.vrt.")
+                Picker("Heights from", selection: $elevation.mapHeightsFirst) {
+                    Text("These models, then the Garmin maps").tag(false)
+                    Text("The Garmin maps, then these models").tag(true)
+                }
+                Text("Heights for tracks, routes, new waypoints and the route planner come from the first model in this folder that covers the point, or from the heights the Garmin maps carry. A track or route takes all its heights from one source when one covers it. Put the best model first, such as Current_DEM.vrt.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

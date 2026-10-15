@@ -226,9 +226,14 @@ struct ContentView: View {
         } message: { course in
             Text("Garmin/Courses already has \(course.fileName). The new course is copied and checked before the old one is deleted.")
         }
+        .onChange(of: elevation.sources(maps: garminMaps), initial: true) { _, sources in
+            store.heightSources = sources
+        }
         .task(id: store.revision) {
-            // Legs whose stops changed are recalculated with their route's profile, in the background.
-            recalculator.check(store: store, planner: planner, settings: routing, demFolder: elevation.folder)
+            // Legs whose stops changed are recalculated with their route's profile, in the background, with
+            // heights from the elevation models and the Garmin maps (set here too, so the first check has them).
+            store.heightSources = elevation.sources(maps: garminMaps)
+            recalculator.check(store: store, planner: planner, settings: routing)
         }
         .onAppear {
             device.refresh()

@@ -167,40 +167,13 @@ public final class ElevationModel: @unchecked Sendable {
 public extension Track {
     /// The track with heights from the model. With `replaceExisting` false, only points without a height are filled.
     func withElevations(from model: ElevationModel, replaceExisting: Bool) -> (Track, filled: Int, missing: Int) {
-        var copy = self
-        var filled = 0
-        var missing = 0
-        for segmentIndex in copy.segments.indices {
-            for pointIndex in copy.segments[segmentIndex].indices {
-                let point = copy.segments[segmentIndex][pointIndex]
-                if point.elevation != nil && !replaceExisting { continue }
-                if let height = model.elevation(at: point.coordinate) {
-                    copy.segments[segmentIndex][pointIndex].elevation = height
-                    filled += 1
-                } else {
-                    missing += 1
-                }
-            }
-        }
-        return (copy, filled, missing)
+        withElevations(model.elevations(for: allCoordinates), replaceExisting: replaceExisting)
     }
 }
 
 public extension Route {
     func withElevations(from model: ElevationModel, replaceExisting: Bool) -> (Route, filled: Int, missing: Int) {
-        var points = self.points
-        var filled = 0
-        var missing = 0
-        for index in points.indices {
-            if points[index].elevation != nil && !replaceExisting { continue }
-            if let height = model.elevation(at: points[index].coordinate) {
-                points[index].elevation = height
-                filled += 1
-            } else {
-                missing += 1
-            }
-        }
-        return (replacingPoints(points) ?? self, filled, missing)
+        withElevations(model.elevations(for: points.map(\.coordinate)), replaceExisting: replaceExisting)
     }
 }
 

@@ -10,9 +10,10 @@ actor MapReliefCache {
     /// DEM parts kept in memory. One is a few hundred kilobytes.
     static let maximumParts = 96
 
-    /// One map tile's heights and the area its finest grid covers.
+    /// One map tile's heights, its finest grid and the area that grid covers.
     struct Part: Sendable {
         let dem: GarminDEM
+        let finestLevel: Int
         let bounds: GeoBounds
     }
 
@@ -53,8 +54,13 @@ actor MapReliefCache {
             return cached
         }
         var part: Part?
-        if let dem = try? image.dem(of: key.subfile), let finest = dem.levels.min(by: { $0.pixelWidth < $1.pixelWidth }) {
-            part = Part(dem: dem, bounds: GeoBounds(north: finest.north, east: finest.east, south: finest.south, west: finest.west))
+        if let dem = try? image.dem(of: key.subfile),
+           let index = dem.levels.indices.min(by: { dem.levels[$0].pixelWidth < dem.levels[$1].pixelWidth }) {
+            let finest = dem.levels[index]
+            part = Part(
+                dem: dem, finestLevel: index,
+                bounds: GeoBounds(north: finest.north, east: finest.east, south: finest.south, west: finest.west)
+            )
         }
         parts[key] = .some(part)
         partOrder.append(key)

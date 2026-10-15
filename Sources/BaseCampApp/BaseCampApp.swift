@@ -23,6 +23,7 @@ struct BaseCampApp: App {
         #if DEBUG
         Self.renderTileAndExitIfAsked()
         Self.printPointNamesAndExitIfAsked()
+        Self.printHeightsAndExitIfAsked()
         #endif
     }
 
@@ -177,6 +178,35 @@ struct BaseCampApp: App {
         }
     }
 
+    /// `--heights LAT,LON;LAT,LON --maps A.img,B.img --dem FOLDER [--maps-first]` prints each place's height from the
+    /// folder, from the maps, and as `HeightSources` combines them, and quits without opening a window.
+    static func printHeightsAndExitIfAsked() {
+        guard let spec = launchValue("--heights"), let maps = launchValue("--maps"), let folder = launchValue("--dem") else { return }
+        let places = spec.split(separator: ";").compactMap { pair -> Coordinate? in
+            let numbers = pair.split(separator: ",").compactMap { Double($0) }
+            return numbers.count == 2 ? Coordinate(latitude: numbers[0], longitude: numbers[1]) : nil
+        }
+        let urls = maps.split(separator: ",").map { URL(fileURLWithPath: String($0)) }
+        let first = CommandLine.arguments.contains("--maps-first")
+        let both = HeightSources(folder: URL(fileURLWithPath: folder), maps: urls, mapsFirst: first)
+        let folderOnly = HeightSources(folder: both.folder, maps: [])
+        let mapsOnly = HeightSources(folder: URL(fileURLWithPath: "/nonexistent"), maps: urls, mapsFirst: true)
+        Task.detached {
+            let fromFolder = await folderOnly.heights(for: places)
+            let fromMaps = await mapsOnly.heights(for: places)
+            let combined = await both.heights(for: places)
+            func text(_ value: Double?) -> String { value.map { String(format: "%.1f", $0) } ?? "-" }
+            for index in places.indices {
+                print(places[index].latitude, places[index].longitude,
+                      "folder", text(fromFolder[index]), "maps", text(fromMaps[index]), "used", text(combined[index]))
+            }
+            exit(0)
+        }
+        while true {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        }
+    }
+
     /// `--render-tile Z/X/Y OUT.png --maps A.img,B.img [--relief 0.45] [--scale 2] [--detail 1]` draws one Garmin tile, as the map
     /// pane would, saves it and quits without opening a window. For checking the renderer.
     static func renderTileAndExitIfAsked() {
@@ -311,7 +341,7 @@ struct BaseCampCommands: Commands {
                 guard case .route(let id)? = store.selection else { return }
                 // Clears the route's earlier failures too, so legs the router refused are asked again.
                 if store.markRouteForRecalculation(id, fallbackProfile: planner.selectedProfileID) {
-                    recalculator.retry(id, store: store, planner: planner, settings: routing, demFolder: elevation.folder)
+                    recalculator.retry(id, store: store, planner: planner, settings: routing)
                 }
             }
             .disabled(!canRecalculateSelection)
@@ -362,12 +392,10 @@ struct BaseCampCommands: Commands {
             .keyboardShortcut("j", modifiers: [.command, .option])
             Divider()
             Button("Elevations from Model") {
-                store.fillElevationsFromModel(folder: elevation.folder, replaceExisting: false)
+                store.fillElevationsFromModel(replaceExisting: false)
             }
             Button("Replace Elevations from Model") {
-                store.fillElevationsFromModel(
-                    folder: trackDEMs.modelFolder(for: store.selection, store: store) ?? elevation.folder, replaceExisting: true
-                )
+                store.fillElevationsFromModel(trackDEM: trackDEMs.modelFolder(for: store.selection, store: store), replaceExisting: true)
             }
             Divider()
             trackDEMCommands

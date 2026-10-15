@@ -142,7 +142,7 @@ struct InspectorView: View {
                 LabeledContent("Height", value: UnitFormat.elevation(height, display.units))
             }
             Button("Height from Elevation Model") {
-                store.fillElevationsFromModel(folder: elevation.folder, replaceExisting: true)
+                store.fillElevationsFromModel(replaceExisting: true)
             }
             if let time = waypoint.time {
                 LabeledContent("Time", value: time.formatted(date: .abbreviated, time: .shortened))
@@ -323,13 +323,11 @@ struct InspectorView: View {
                 .help("Join another track onto this one, after its last point")
             }
             Button("Elevations from Model") {
-                store.fillElevationsFromModel(folder: elevation.folder, replaceExisting: false)
+                store.fillElevationsFromModel(replaceExisting: false)
             }
             .help("Fill in heights where the track or route has none")
             Button("Replace Elevations from Model") {
-                store.fillElevationsFromModel(
-                    folder: trackDEMs.modelFolder(for: store.selection, store: store) ?? elevation.folder, replaceExisting: true
-                )
+                store.fillElevationsFromModel(trackDEM: trackDEMs.modelFolder(for: store.selection, store: store), replaceExisting: true)
             }
             .help("Take every point's height from the model: the track DEM when there is one")
         }
@@ -464,7 +462,7 @@ struct InspectorView: View {
                     Text("Some legs could not be recalculated.")
                     Spacer()
                     Button("Try Again") {
-                        recalculator.retry(route.id, store: store, planner: planner, settings: routing, demFolder: elevation.folder)
+                        recalculator.retry(route.id, store: store, planner: planner, settings: routing)
                     }
                 } else {
                     Text("\(waiting.count) leg(s) waiting for the router.")

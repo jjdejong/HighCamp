@@ -361,80 +361,74 @@ final class LibraryStore {
         }
     }
 
-    /// Fills in heights for the selected track, route or waypoint from the elevation models in `folder`.
-    /// With `replaceExisting` false, only points without a height are filled.
-    func fillElevationsFromModel(folder: URL, replaceExisting: Bool) {
-        guard let selection else { return }
+    /// Where heights come from: the elevation folder and the Garmin maps that are on. Set by the main view.
+    @ObservationIgnored var heightSources: HeightSources?
+
+    /// Fills in heights for the selected track, route or waypoint from the elevation models and the Garmin maps'
+    /// heights (see `HeightSources`), or from the item's own track DEM when `trackDEM` is given. With
+    /// `replaceExisting` false, only points without a height are filled.
+    func fillElevationsFromModel(trackDEM: URL? = nil, replaceExisting: Bool) {
+        guard let selection, var sources = heightSources else { return }
+        if let trackDEM {
+            sources.folder = trackDEM
+            sources.mapsFirst = false
+        }
+        let nothing = sources.maps.isEmpty
+            ? "No elevation model in \(sources.folder.lastPathComponent) covers this"
+            : "Neither the elevation models in \(sources.folder.lastPathComponent) nor the Garmin maps have heights for this"
         switch selection {
         case .track(let id):
             guard let track = track(id) else { return }
             Task {
-                do {
-                    let result = try await Task.detached {
-                        try ElevationModel(folder: folder).track(track, replaceExisting: replaceExisting)
-                    }.value
-                    guard result.filled > 0 else {
-                        errorMessage = result.missing == 0 && !replaceExisting
-                            ? "Every point of this track already has a height. Use Replace to take heights from the model."
-                            : "No elevation model in \(folder.lastPathComponent) covers this track."
-                        return
-                    }
-                    var applied = false
-                    edit("Elevations from Model") { library in
-                        guard let index = library.tracks.firstIndex(where: { $0.id == id }),
-                              let updated = library.tracks[index].applyingElevations(from: result.item, computedFrom: track) else { return }
-                        library.tracks[index] = updated
-                        applied = true
-                    }
-                    if !applied {
-                        errorMessage = "The track changed while heights were being read; try again."
-                    }
-                } catch {
-                    errorMessage = error.localizedDescription
+                let result = track.withElevations(await sources.heights(for: track.allCoordinates), replaceExisting: replaceExisting)
+                guard result.filled > 0 else {
+                    errorMessage = result.missing == 0 && !replaceExisting
+                        ? "Every point of this track already has a height. Use Replace to take heights from the model."
+                        : "\(nothing) track."
+                    return
+                }
+                var applied = false
+                edit("Elevations from Model") { library in
+                    guard let index = library.tracks.firstIndex(where: { $0.id == id }),
+                          let updated = library.tracks[index].applyingElevations(from: result.0, computedFrom: track) else { return }
+                    library.tracks[index] = updated
+                    applied = true
+                }
+                if !applied {
+                    errorMessage = "The track changed while heights were being read; try again."
                 }
             }
         case .route(let id):
             guard let route = route(id) else { return }
             Task {
-                do {
-                    let result = try await Task.detached {
-                        try ElevationModel(folder: folder).route(route, replaceExisting: replaceExisting)
-                    }.value
-                    guard result.filled > 0 else {
-                        errorMessage = result.missing == 0 && !replaceExisting
-                            ? "Every point of this route already has a height. Use Replace to take heights from the model."
-                            : "No elevation model in \(folder.lastPathComponent) covers this route."
-                        return
-                    }
-                    var applied = false
-                    edit("Elevations from Model") { library in
-                        guard let index = library.routes.firstIndex(where: { $0.id == id }),
-                              let updated = library.routes[index].applyingElevations(from: result.item, computedFrom: route) else { return }
-                        library.routes[index] = updated
-                        applied = true
-                    }
-                    if !applied {
-                        errorMessage = "The route changed while heights were being read; try again."
-                    }
-                } catch {
-                    errorMessage = error.localizedDescription
+                let result = route.withElevations(
+                    await sources.heights(for: route.points.map(\.coordinate)), replaceExisting: replaceExisting
+                )
+                guard result.filled > 0 else {
+                    errorMessage = result.missing == 0 && !replaceExisting
+                        ? "Every point of this route already has a height. Use Replace to take heights from the model."
+                        : "\(nothing) route."
+                    return
+                }
+                var applied = false
+                edit("Elevations from Model") { library in
+                    guard let index = library.routes.firstIndex(where: { $0.id == id }),
+                          let updated = library.routes[index].applyingElevations(from: result.0, computedFrom: route) else { return }
+                    library.routes[index] = updated
+                    applied = true
+                }
+                if !applied {
+                    errorMessage = "The route changed while heights were being read; try again."
                 }
             }
         case .waypoint(let id):
             guard let coordinate = waypoint(id)?.coordinate else { return }
             Task {
-                do {
-                    let height = try await Task.detached {
-                        try ElevationModel(folder: folder).elevation(at: coordinate)
-                    }.value
-                    guard let height else {
-                        errorMessage = "No elevation model in \(folder.lastPathComponent) covers this waypoint."
-                        return
-                    }
-                    updateWaypoint(id, field: "elevation") { $0.elevation = height }
-                } catch {
-                    errorMessage = error.localizedDescription
+                guard let height = await sources.heights(for: [coordinate]).first ?? nil else {
+                    errorMessage = "\(nothing) waypoint."
+                    return
                 }
+                updateWaypoint(id, field: "elevation") { $0.elevation = height }
             }
         }
     }
@@ -471,6 +465,20 @@ final class LibraryStore {
         let waypoint = Waypoint(name: name, coordinate: coordinate, comment: comment)
         edit("Add Waypoint") { $0.waypoints.append(waypoint) }
         selection = .waypoint(waypoint.id)
+        // Its height, as BaseCamp gives one, read after it is added so it shows at once. Undo takes both back.
+        guard let sources = heightSources else { return }
+        Task {
+            guard let height = await sources.heights(for: [coordinate]).first ?? nil else { return }
+            let changed = history.amend { library in
+                guard let index = library.waypoints.firstIndex(where: { $0.id == waypoint.id }),
+                      library.waypoints[index].elevation == nil, library.waypoints[index].coordinate == coordinate else { return }
+                library.waypoints[index].elevation = height
+            }
+            if changed {
+                revision += 1
+                save()
+            }
+        }
     }
 
     /// Adds a planned or imported route and selects it.

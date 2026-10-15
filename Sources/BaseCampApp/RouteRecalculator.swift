@@ -50,19 +50,19 @@ final class RouteRecalculator {
     }
 
     /// Forgets the route's failures, so its waiting legs are tried again.
-    func retry(_ route: UUID, store: LibraryStore, planner: RoutePlanner, settings: RoutingSettings, demFolder: URL) {
+    func retry(_ route: UUID, store: LibraryStore, planner: RoutePlanner, settings: RoutingSettings) {
         failures = failures.filter { $0.key.route != route }
-        check(store: store, planner: planner, settings: settings, demFolder: demFolder)
+        check(store: store, planner: planner, settings: settings)
     }
 
     /// Looks for waiting legs and works through them. Called after every change to the library.
-    func check(store: LibraryStore, planner: RoutePlanner, settings: RoutingSettings, demFolder: URL) {
+    func check(store: LibraryStore, planner: RoutePlanner, settings: RoutingSettings) {
         guard !isRunning else { return }
         isRunning = true
         Task {
             while let next = nextRequest(in: store.library) {
                 current = next
-                let outcome = await calculate(next, profiles: planner.profiles, settings: settings, demFolder: demFolder)
+                let outcome = await calculate(next, profiles: planner.profiles, settings: settings, heights: store.heightSources)
                 current = nil
                 switch outcome {
                 case .success(let leg):
@@ -100,7 +100,7 @@ final class RouteRecalculator {
         case failure(String)
     }
 
-    private func calculate(_ request: Request, profiles: [RoutingProfile], settings: RoutingSettings, demFolder: URL) async -> Outcome {
+    private func calculate(_ request: Request, profiles: [RoutingProfile], settings: RoutingSettings, heights: HeightSources?) async -> Outcome {
         guard let profile = profiles.first(where: { $0.id == request.profileID }) else {
             return .failure("The route's routing profile no longer exists. Choose another in the inspector.")
         }
@@ -109,10 +109,10 @@ final class RouteRecalculator {
         }
         let client = BRouterClient(baseURL: server, profile: profile.brouterProfile)
         let points = [request.start.coordinate, request.end.coordinate]
-        let source: RouteSource = await Task.detached { () -> RouteSource in
-            guard let model = try? ElevationModel(folder: demFolder) else { return client }
-            return ElevatedRouteSource(base: client) { model.elevations(for: $0) }
-        }.value
+        // Steep stretches are judged on terrain heights, from one source for the whole leg (never mixed).
+        let source: RouteSource = heights.map { heights in
+            ElevatedRouteSource(base: client) { await heights.heights(for: $0, mixing: false) }
+        } ?? client
         do {
             let plan = try await ConstrainedRouter.plan(via: points, profile: profile, source: source)
             let line = plan.geometry.points.map { RoutePoint(coordinate: $0.coordinate, elevation: $0.elevation) }

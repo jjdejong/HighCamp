@@ -332,7 +332,7 @@ struct InspectorView: View {
         routePointList(route)
         colourSection(.route(route.id), color: route.color, defaultColour: MapLineColor.blue)
         editSection(canSplit: false)
-        statisticsSections(route.statistics, pickable: false, profile: { route.profile(of: $0) })
+        statisticsSections(route.statistics, pickable: true, profile: { route.profile(of: $0) })
         trackDEMSection(.route(route.id))
     }
 
@@ -767,10 +767,13 @@ struct InspectorView: View {
                 }
                 if pickable {
                     HStack {
-                        Button("Delete Selected Points") {
-                            store.deleteProfileRange()
+                        // Points are deleted from tracks only; on a route the stretch gives its figures.
+                        if case .track? = store.selection {
+                            Button("Delete Selected Points") {
+                                store.deleteProfileRange()
+                            }
+                            .help("Drag across the profile to pick points, then delete them")
                         }
-                        .help("Drag across the profile to pick points, then delete them")
                         Button("Clear") {
                             store.profileRange = nil
                         }

@@ -44,7 +44,7 @@ extension ProfileSeries {
 
 /// One series against distance, in the chosen units. Moving the pointer over the chart moves the profile cursor,
 /// which is drawn as a line here and as a marker on the map, and stays where it was left. With `pickable`, dragging
-/// across the chart picks a stretch of the track, shaded here and on the map.
+/// across the chart picks a stretch of the line, shaded here and on the map.
 struct ElevationChart: View {
     let profile: [ElevationProfilePoint]
     let series: ProfileSeries
@@ -138,7 +138,7 @@ struct ElevationChart: View {
         return Array(profile[max(first - 1, 0)...min(max(last, first) + 1, profile.count - 1)])
     }
 
-    /// The stretch picked on the profile, in the chosen distance unit. Only a track's profile can pick one.
+    /// The stretch picked on the profile, in the chosen distance unit, when the chart can pick one.
     private func pickedRange(_ units: UnitSystem) -> Binding<ClosedRange<Double>?> {
         Binding(
             get: {

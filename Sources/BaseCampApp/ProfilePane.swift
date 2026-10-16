@@ -56,7 +56,7 @@ struct ProfilePane: View {
                 header(item, choices: choices, shown: shown, heights: heights, length: points.last?.distanceMeters ?? 0)
                 Divider()
                 if points.count > 1 {
-                    ElevationChart(profile: points, series: shown, pickable: item.isTrack, domain: domain, height: nil, drawLimit: 2_000)
+                    ElevationChart(profile: points, series: shown, pickable: true, domain: domain, height: nil, drawLimit: 2_000)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(GeometryReader { proxy in
@@ -146,23 +146,21 @@ struct ProfilePane: View {
     private func buttons(_ item: Item, length: Double) -> some View {
         HStack(spacing: 8) {
             zoomButtons(length: length)
-            if item.isTrack {
-                // A track on the device is not changed here: it is copied to the library first.
-                let editable = !(store.selection.map(store.isOnDevice) ?? false)
-                Divider().frame(height: 16)
-                if editable {
-                    Button("Delete Selected Points") { store.deleteProfileRange() }
-                        .disabled(store.profileRange == nil)
-                        .help("Drag across the profile to pick points, then delete them")
-                }
-                Button("Clear") { store.profileRange = nil }
+            // A track on the device is not changed here: it is copied to the library first.
+            let editable = item.isTrack && !(store.selection.map(store.isOnDevice) ?? false)
+            Divider().frame(height: 16)
+            if editable {
+                Button("Delete Selected Points") { store.deleteProfileRange() }
                     .disabled(store.profileRange == nil)
-                    .help("Forget the stretch picked on the profile")
-                if editable {
-                    Button("Split Here") { store.splitSelectedTrackAtCursor() }
-                        .disabled(store.profileCursor == nil)
-                        .help("Cut the track in two at the profile cursor")
-                }
+                    .help("Drag across the profile to pick points, then delete them")
+            }
+            Button("Clear") { store.profileRange = nil }
+                .disabled(store.profileRange == nil)
+                .help("Forget the stretch picked on the profile")
+            if editable {
+                Button("Split Here") { store.splitSelectedTrackAtCursor() }
+                    .disabled(store.profileCursor == nil)
+                    .help("Cut the track in two at the profile cursor")
             }
             Button {
                 display.showsProfilePane = false

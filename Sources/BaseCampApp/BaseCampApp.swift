@@ -11,6 +11,7 @@ struct BaseCampApp: App {
     @State private var routing = RoutingSettings()
     @State private var planner = RoutePlanner()
     @State private var brouter = BRouterServer()
+    @State private var brouterInstall = BRouterInstall()
     @State private var mapLayers = MapLayerSettings()
     @State private var mapCoverage = MapCoverageStore()
     @State private var display = DisplaySettings()
@@ -36,6 +37,7 @@ struct BaseCampApp: App {
                 .environment(routing)
                 .environment(planner)
                 .environment(brouter)
+                .environment(brouterInstall)
                 .environment(mapLayers)
                 .environment(mapCoverage)
                 .environment(display)
@@ -67,6 +69,17 @@ struct BaseCampApp: App {
                             store.selection = item
                             store.zoomToSelection()
                         }
+                    }
+                    // `--install-brouter` installs BRouter in its folder, downloads the map data the library's routes need
+                    // and starts the server, for testing.
+                    if CommandLine.arguments.contains("--install-brouter") {
+                        let folder = routing.brouterFolder
+                        if !brouterInstall.isInstalled(in: folder) {
+                            await brouterInstall.install(into: folder)
+                        }
+                        await brouterInstall.downloadTiles(brouterInstall.missingTiles(for: store.library.routes.map { $0.stops.map(\.coordinate) }, in: folder), into: folder)
+                        brouter.start(routing)
+                        print("BROUTER installed=\(brouterInstall.isInstalled(in: folder)) tiles=\(brouterInstall.tiles(in: folder).map(\.name)) problem=\(brouterInstall.problem ?? "none") server=\(brouter.lastError ?? "started")")
                     }
                     // `--build-track-dem` frames the map on the selected item and builds its track DEM, for testing.
                     if CommandLine.arguments.contains("--build-track-dem"), let item = store.selection {
@@ -122,6 +135,10 @@ struct BaseCampApp: App {
 #endif
                 .onAppear {
                     NSApplication.shared.activate(ignoringOtherApps: true)
+                    // HighCamp's own BRouter runs while HighCamp does.
+                    if routing.engine == .local, brouterInstall.isInstalled(in: routing.brouterFolder) {
+                        brouter.start(routing)
+                    }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                     brouter.stop()
@@ -139,6 +156,9 @@ struct BaseCampApp: App {
 
         Settings {
             SettingsView()
+                .environment(brouterInstall)
+                .environment(brouter)
+                .environment(store)
                 .environment(mapSettings)
                 .environment(routing)
                 .environment(display)

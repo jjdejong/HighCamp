@@ -17,6 +17,8 @@ struct InspectorView: View {
     @AppStorage("display.profileFromDEM") private var fromDEM = true
     @Environment(RouteRecalculator.self) private var recalculator
     @Environment(RoutingSettings.self) private var routing
+    @Environment(BRouterInstall.self) private var brouterInstall
+    @Environment(BRouterServer.self) private var brouterServer
 
     var body: some View {
         content
@@ -326,6 +328,7 @@ struct InspectorView: View {
             LabeledContent("Points", value: "\(route.points.count)")
             routingPicker(route)
             recalculationStatus(route)
+            missingMapData(route)
             farStopsSummary(route)
         }
         // The stops come first: they are what is edited on the map.
@@ -601,6 +604,39 @@ struct InspectorView: View {
         }
         .font(.caption)
         .buttonStyle(.link)
+    }
+
+    /// When HighCamp's BRouter lacks the map data a route needs: which tiles, and a button to download them.
+    @ViewBuilder
+    private func missingMapData(_ route: Route) -> some View {
+        if routing.engine == .local, route.profileID != nil, brouterInstall.isInstalled(in: routing.brouterFolder) {
+            let missing = brouterInstall.missingTiles(for: [route.stops.map(\.coordinate)], in: routing.brouterFolder)
+            if !missing.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label {
+                        Text("BRouter has no map data here yet (\(missing.joined(separator: ", "))).")
+                    } icon: {
+                        Image(systemName: "arrow.down.circle")
+                            .foregroundStyle(.blue)
+                    }
+                    if let activity = brouterInstall.activity {
+                        Text(activity.text)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Button("Download Map Data") {
+                            Task {
+                                await brouterInstall.downloadTiles(missing, into: routing.brouterFolder)
+                                brouterServer.start(routing)
+                                try? await Task.sleep(for: .seconds(3))
+                                recalculator.retry(route.id, store: store, planner: planner, settings: routing)
+                            }
+                        }
+                        .help("Each tile covers 5° by 5° and is 50 to 250 MB, from brouter.de")
+                    }
+                }
+                .font(.callout)
+            }
+        }
     }
 
     /// At the top of the route's details: how many stops the router could not reach, drawn orange on the map, and

@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Starts and stops a local BRouter server. It runs the same jar and data QMapShack uses.
+/// Starts and stops HighCamp's own BRouter server, from the BRouter folder (see `BRouterInstall`).
 @MainActor
 @Observable
 final class BRouterServer {
@@ -22,14 +22,16 @@ final class BRouterServer {
         }
         let folder = settings.brouterFolder
         let fileManager = FileManager.default
-        guard let jar = (try? fileManager.contentsOfDirectory(atPath: folder.path))?
-            .first(where: { $0.hasPrefix("brouter") && $0.hasSuffix("-all.jar") }) else {
-            lastError = "No brouter-*-all.jar in \(folder.path)."
+        guard let jar = BRouterInstall.jar(in: folder) else {
+            lastError = "BRouter is not installed. Install it in Settings › Routing."
             return
         }
-        for name in ["segments4", "profiles2"] where !fileManager.fileExists(atPath: folder.appendingPathComponent(name).path) {
-            lastError = "\(name) is missing from \(folder.path)."
+        guard settings.hasJava else {
+            lastError = "BRouter needs Java, which is not installed. Install a Java runtime (such as Temurin from adoptium.net), or plan with brouter.de."
             return
+        }
+        for name in ["segments4", "customprofiles"] {
+            try? fileManager.createDirectory(at: folder.appendingPathComponent(name), withIntermediateDirectories: true)
         }
 
         let logURL = Self.logURL
@@ -45,7 +47,8 @@ final class BRouterServer {
             "btools.server.RouteServer",
             folder.appendingPathComponent("segments4").path,
             folder.appendingPathComponent("profiles2").path,
-            folder.appendingPathComponent("customprofiles").path,
+            // BRouter takes this folder relative to the profiles folder; it keeps the profiles HighCamp uploads.
+            "../customprofiles",
             String(port), "2", "127.0.0.1",
         ]
         if let log = try? FileHandle(forWritingTo: logURL) {

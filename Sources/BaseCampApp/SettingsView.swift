@@ -10,6 +10,9 @@ struct SettingsView: View {
     @Environment(DisplaySettings.self) private var display
     @Environment(RoutePlanner.self) private var planner
     @Environment(ElevationSettings.self) private var elevation
+    @Environment(BRouterInstall.self) private var brouterInstall
+    @Environment(BRouterServer.self) private var brouterServer
+    @Environment(LibraryStore.self) private var store
 
     var body: some View {
         @Bindable var mapSettings = mapSettings
@@ -103,21 +106,14 @@ struct SettingsView: View {
                         Text(engine.label).tag(engine)
                     }
                 }
-                TextField("Local BRouter address", text: $routing.localServer)
-                TextField("brouter.de address", text: $routing.onlineServer)
-                LabeledContent("BRouter folder") {
-                    Text(routing.brouterFolder.path)
-                        .textSelection(.enabled)
-                        .lineLimit(2)
-                        .truncationMode(.middle)
+                if routing.engine == .local {
+                    localBRouter
+                } else {
+                    TextField("brouter.de address", text: $routing.onlineServer)
+                    Text("Routes planned with brouter.de send the route points to that site.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                Button("Choose BRouter Folder…") {
-                    chooseBRouterFolder()
-                }
-                TextField("Java", text: $routing.javaPath)
-                Text("The BRouter folder holds the BRouter jar, segments4 and profiles2. It defaults to QMapShack's folder. Routes planned with brouter.de send the route points to that site.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -213,6 +209,117 @@ struct SettingsView: View {
         var names = Set(installed.filter { $0.hasSuffix(".brf") }.map { String($0.dropLast(4)) })
         names.insert(current)
         return names.sorted()
+    }
+
+    /// HighCamp's own BRouter: whether it is installed, Java, the map data tiles, and where it all is.
+    @ViewBuilder
+    private var localBRouter: some View {
+        @Bindable var routing = routing
+        let folder = routing.brouterFolder
+        let installed = brouterInstall.isInstalled(in: folder)
+        LabeledContent("BRouter") {
+            if installed {
+                Text(brouterServer.isRunning ? "Installed, running" : "Installed, not running")
+            } else {
+                Button("Install BRouter \(BRouterInstall.version)") {
+                    Task {
+                        await brouterInstall.install(into: folder)
+                        brouterServer.start(routing)
+                    }
+                }
+                .disabled(brouterInstall.activity != nil)
+                .help("Downloads BRouter (about 6 MB) from its GitHub page into HighCamp's folder")
+            }
+        }
+        LabeledContent("Java") {
+            if routing.hasJava {
+                Text(routing.javaPath)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(routing.javaPath)
+            } else {
+                Text("Not found. Install a Java runtime, such as Temurin (adoptium.net).")
+                    .foregroundStyle(.orange)
+            }
+        }
+        if installed {
+            let tiles = brouterInstall.tiles(in: folder)
+            LabeledContent("Map data") {
+                Text(tiles.isEmpty ? "None yet" : "\(tiles.count) tile\(tiles.count == 1 ? "" : "s"), \(ByteCountFormatter.string(fromByteCount: tiles.reduce(0) { $0 + $1.bytes }, countStyle: .file))")
+            }
+            ForEach(tiles, id: \.name) { tile in
+                HStack {
+                    Text(tile.name)
+                        .monospaced()
+                    Text(ByteCountFormatter.string(fromByteCount: tile.bytes, countStyle: .file))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Delete") {
+                        brouterInstall.deleteTile(tile.name, in: folder)
+                    }
+                    .disabled(brouterInstall.activity != nil)
+                }
+            }
+            let needed = brouterInstall.missingTiles(for: libraryPlaces, in: folder)
+            if !needed.isEmpty {
+                Button("Download Map Data for the Library's Routes (\(needed.joined(separator: ", ")))") {
+                    Task {
+                        await brouterInstall.downloadTiles(needed, into: folder)
+                        brouterServer.start(routing)
+                    }
+                }
+                .disabled(brouterInstall.activity != nil)
+                .help("Each tile covers 5° by 5° and is 50 to 250 MB, from brouter.de")
+            }
+        }
+        if let activity = brouterInstall.activity {
+            HStack {
+                if let fraction = activity.fraction {
+                    ProgressView(value: fraction).frame(width: 120)
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+                Text(activity.text)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        if let problem = brouterInstall.problem ?? brouterServer.lastError {
+            Text(problem)
+                .foregroundStyle(.orange)
+        }
+        LabeledContent("Folder") {
+            Text(folder.path)
+                .textSelection(.enabled)
+                .lineLimit(2)
+                .truncationMode(.middle)
+        }
+        HStack {
+            Button("Show in Finder") {
+                try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                NSWorkspace.shared.activateFileViewerSelecting([folder])
+            }
+            Button("Use Another BRouter Folder…") {
+                chooseBRouterFolder()
+                brouterServer.start(routing)
+            }
+            if folder != BRouterInstall.defaultFolder {
+                Button("Use HighCamp's Folder") {
+                    routing.brouterFolder = BRouterInstall.defaultFolder
+                    brouterServer.start(routing)
+                }
+            }
+        }
+        TextField("Address", text: $routing.localServer)
+        TextField("Java", text: $routing.javaPath)
+        Text("HighCamp runs its own BRouter while it is open, from this folder: the BRouter program, its profiles, and the map data tiles your routes need, downloaded from brouter.de. Another BRouter folder (such as QMapShack's) can be used instead.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    /// The stops of each route, and every 50th point of each track: where routes are planned.
+    private var libraryPlaces: [[Coordinate]] {
+        store.library.routes.map { $0.stops.map(\.coordinate) }
+            + store.library.tracks.flatMap { track in track.segments.map { segment in stride(from: 0, to: segment.count, by: 50).map { segment[$0].coordinate } } }
     }
 
     private func chooseBRouterFolder() {

@@ -143,7 +143,7 @@ struct RoutePlannerBar: View {
                     await planner.checkServer(settings)
                 }
             }
-            .help(server.lastError ?? "Start the local BRouter server from QMapShack's folder")
+.help(server.lastError ?? "Start HighCamp's BRouter (install it and its map data in Settings › Routing)")
         } else {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)

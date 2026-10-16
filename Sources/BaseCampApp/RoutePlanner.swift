@@ -99,7 +99,7 @@ final class RoutePlanner {
     static func message(for error: Error, server: URL) -> String {
         switch error as? RouteError {
         case .missingSegments:
-            "BRouter has no map data for this area. Add the segments covering the route to its folder."
+            "BRouter has no map data for this area. Download it from the route's inspector, or in Settings › Routing."
         case .noRoute:
             "No route was found with these points and limits. Move a point, or raise the grade limit."
         case .server(let code, let text):

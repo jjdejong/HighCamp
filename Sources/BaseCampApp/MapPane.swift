@@ -286,12 +286,15 @@ struct MapPane: View {
         // The stops of the selected route can be dragged.
         if case .route(let id)? = store.selection, let selectedRoute = store.route(id) {
             for (index, point) in selectedRoute.stops.enumerated() {
+                let gap = selectedRoute.routerGap(atStop: index) ?? 0
+                let far = gap > Route.farFromRouterMeters
+                let name = point.name ?? "Point \(index + 1)"
                 content.pins.append(MapPin(
                     id: "route-point-\(selectedRoute.id)-\(index)",
                     coordinate: point.coordinate,
-                    style: .routePoint(selected: point.id == store.selectedStop),
+                    style: .routePoint(selected: point.id == store.selectedStop, farFromWays: far),
                     item: nil,
-                    title: point.name ?? "Point \(index + 1)",
+                    title: far ? "\(name): \(UnitFormat.distance(gap, display.units)) from the nearest way the router knows" : name,
                     routePoint: RoutePointRef(route: selectedRoute.id, index: index)
                 ))
             }
@@ -404,12 +407,24 @@ struct MapPane: View {
         case .stop(let reference):
             guard let route = store.route(reference.route), let stop = route.stops[safe: reference.index] else { return [] }
             let isEnd = reference.index == 0 || reference.index == route.stops.count - 1
-            return [
+            var items = [
                 MapMenuItem(title: "Delete Point") { store.removeRouteStop(route.id, at: reference.index) },
                 MapMenuItem(title: stop.isShaping ? "Make Via Point" : "Make Shaping Point", isEnabled: !isEnd) {
                     store.setRouteStopShaping(route.id, stop: stop.id, isShaping: !stop.isShaping)
                 },
             ]
+            // The routed legs to and from the stop can be kept straight, as for a path the router does not know.
+            let legs = [reference.index - 1, reference.index].filter { route.legs.indices.contains($0) && !route.legs[$0].keepsStraight }
+            if !legs.isEmpty {
+                items.append(.separator)
+                if let gap = route.routerGap(atStop: reference.index), gap > Route.farFromRouterMeters {
+                    items.append(MapMenuItem(title: "\(UnitFormat.distance(gap, display.units)) from the nearest way the router knows", isEnabled: false))
+                }
+                items.append(MapMenuItem(title: legs.count > 1 ? "Keep Legs to and from Here Straight" : "Keep the Leg Here Straight") {
+                    store.setRouteLegsStraight(route.id, legs: legs, straight: true)
+                })
+            }
+            return items
         case .leg(let route, let leg, let coordinate):
             let straight = store.route(route)?.legs[safe: leg]?.keepsStraight ?? false
             return [

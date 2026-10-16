@@ -24,8 +24,9 @@ struct MapPin: Equatable {
         case label(String)
         /// The point under the cursor of an elevation profile.
         case cursor
-        /// A stop of the selected route. Drag it to move the stop; click it to select it.
-        case routePoint(selected: Bool)
+        /// A stop of the selected route. Drag it to move the stop; click it to select it. Orange when it is far from
+        /// any way the router knows, so the route reaches it there and back.
+        case routePoint(selected: Bool, farFromWays: Bool = false)
         /// The middle of a leg of the selected route. Drag it to insert a stop there.
         case insertHandle
         /// A place name from the Garmin maps, drawn as text only. `rank` and `size` are its importance (see `MapPlace`).
@@ -727,9 +728,10 @@ enum MarkerImage {
             image = pill(text)
         case .cursor:
             image = dot(diameter: 12, fill: .white, label: nil, ring: .systemRed)
-        case .routePoint(let selected):
+        case .routePoint(let selected, let far):
             image = selected
-                ? dot(diameter: 14, fill: .systemBlue, label: nil, ring: .white)
+                ? dot(diameter: 14, fill: far ? .systemOrange : .systemBlue, label: nil, ring: .white)
+                : far ? dot(diameter: 12, fill: .systemOrange, label: nil, ring: .white)
                 : dot(diameter: 10, fill: .white, label: nil, ring: .systemBlue)
         case .insertHandle:
             image = dot(diameter: 9, fill: NSColor.white.withAlphaComponent(0.75), label: nil, ring: NSColor.systemBlue.withAlphaComponent(0.6))

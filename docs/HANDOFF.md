@@ -130,6 +130,15 @@ Not done: the stops themselves still have no height in the library (the inspecto
 Giving a stop the height of the router's line at it would change the stop, which `setLeg` uses to spot stale
 answers, so it needs care. Not checked on the device by Claude (never written to it): the user re-sends.
 
+## Far stops seen on the map — 2026-10-16 — Opus
+State: done (this and the previous commit). Gate: 344 tests, 3 skipped, no DIAG. The user added points along the
+path but kept no leg straight, and did not see the warnings (low in the stop list).
+- Stops more than 20 m (was 30) from the router's line are orange on the map, with the distance in their
+  title; right-clicking a stop offers to keep the routed legs to and from it straight (and says how far it is).
+- The Route section at the top of the inspector lists the far points with "Keep Their Legs Straight".
+- A leg whose two stops meet the same router point (BRouter answers one point) failed as an unreadable answer;
+  it is now a line of no length. That was the user's failed leg 8→9.
+
 ## Straight legs, and stops far from the router's ways — 2026-10-16 — Opus
 State: done (cec49af core, this commit app). Gate: 343 tests, 3 skipped, no DIAG. Seen in the debug app on a
 copy of the user's library.

@@ -326,6 +326,7 @@ struct InspectorView: View {
             LabeledContent("Points", value: "\(route.points.count)")
             routingPicker(route)
             recalculationStatus(route)
+            farStopsSummary(route)
         }
         // The stops come first: they are what is edited on the map.
         routePointList(route)
@@ -600,6 +601,31 @@ struct InspectorView: View {
         }
         .font(.caption)
         .buttonStyle(.link)
+    }
+
+    /// At the top of the route's details: how many stops the router could not reach, drawn orange on the map, and
+    /// a way to keep all their routed legs straight at once.
+    @ViewBuilder
+    private func farStopsSummary(_ route: Route) -> some View {
+        let far = route.stops.indices.filter { (route.routerGap(atStop: $0) ?? 0) > Route.farFromRouterMeters }
+        let legs = Set(far.flatMap { [$0 - 1, $0] }).filter { route.legs.indices.contains($0) && !route.legs[$0].keepsStraight }.sorted()
+        if !far.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Label {
+                    Text(far.count == 1
+                         ? "Point \(far[0] + 1) is far from any way the router knows (orange on the map), so the route goes there and back."
+                         : "Points \(far.map { String($0 + 1) }.joined(separator: ", ")) are far from any way the router knows (orange on the map), so the route goes there and back.")
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+                Button("Keep Their Legs Straight") {
+                    store.setRouteLegsStraight(route.id, legs: legs, straight: true)
+                }
+                .help("Straight lines to and from these points, never recalculated, to follow a path the router does not know")
+            }
+            .font(.callout)
+        }
     }
 
     /// A stop the router could not reach: it starts from the nearest way it knows, so the route goes there and back

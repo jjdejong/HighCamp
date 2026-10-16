@@ -30,7 +30,30 @@ public enum GradeAnalysis {
         maxGradePercent: Double,
         windowMeters: Double = defaultWindowMeters
     ) -> [SteepSection] {
-        let distances = cumulativeDistances(points)
+        steepSections(in: points, distances: cumulativeDistances(points), maxGradePercent: maxGradePercent, windowMeters: windowMeters)
+    }
+
+    /// Climbs steeper than `maxGradePercent` on a profile's heights, at the profile's own distances: a track's
+    /// profile does not count the gaps between its segments, and the map finds a stretch by those distances.
+    public static func steepSections(
+        inProfile profile: [ElevationProfilePoint],
+        maxGradePercent: Double,
+        windowMeters: Double = defaultWindowMeters
+    ) -> [SteepSection] {
+        steepSections(
+            in: profile.map { CoursePoint(coordinate: $0.coordinate, elevation: $0.value) },
+            distances: profile.map(\.distanceMeters),
+            maxGradePercent: maxGradePercent,
+            windowMeters: windowMeters
+        )
+    }
+
+    private static func steepSections(
+        in points: [CoursePoint],
+        distances: [Double],
+        maxGradePercent: Double,
+        windowMeters: Double
+    ) -> [SteepSection] {
         let grades = uphillGrades(points, distances: distances, windowMeters: windowMeters)
         guard !grades.isEmpty else { return [] }
 

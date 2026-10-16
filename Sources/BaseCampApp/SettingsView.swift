@@ -94,7 +94,7 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            routingProfilesSection
+            RoutingProfileSettings()
             Section("Routing") {
                 Picker("Engine", selection: $routing.engine) {
                     ForEach(RoutingSettings.Engine.allCases) { engine in
@@ -114,96 +114,6 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 520, height: 720)
         .padding()
-    }
-
-    /// Edits the limits of the selected routing profile. The planner bar uses the same profiles.
-    @ViewBuilder
-    private var routingProfilesSection: some View {
-        let profile = planner.selectedProfile
-        Section("Routing profiles") {
-            Picker("Profile", selection: Binding(
-                get: { planner.selectedProfileID },
-                set: { planner.selectProfile($0) }
-            )) {
-                ForEach(planner.profiles) { item in
-                    Text(item.name).tag(item.id)
-                }
-            }
-            TextField("Name", text: profileBinding(\.name))
-            Picker("BRouter profile", selection: profileBinding(\.brouterProfile)) {
-                ForEach(brouterProfileNames(including: profile.brouterProfile), id: \.self) { name in
-                    Text(name).tag(name)
-                }
-            }
-            Toggle("Limit grade", isOn: Binding(
-                get: { profile.maxGradePercent != nil },
-                set: { limited in planner.updateSelected { $0.maxGradePercent = limited ? 12 : nil } }
-            ))
-            // The rest only matters with a grade limit: it says when and how far to detour around a steep stretch.
-            if let limit = profile.maxGradePercent {
-                valueSlider("Max grade", value: "\(Int(limit))%", Binding(
-                    get: { limit },
-                    set: { value in planner.updateSelected { $0.maxGradePercent = value.rounded() } }
-                ), in: 5...25, step: 1)
-                valueSlider("Steep stretch from", value: "\(Int(profile.minimumClimbMeters)) m", Binding(
-                    get: { profile.minimumClimbMeters },
-                    set: { value in planner.updateSelected { $0.minimumClimbMeters = (value / 50).rounded() * 50 } }
-                ), in: 100...1000, step: 50)
-                .help("How long, along the route, a stretch steeper than the limit must be before a way round it is sought")
-                valueSlider("Max detour", value: "\(Int(profile.maxDetourPercent))% longer", Binding(
-                    get: { profile.maxDetourPercent },
-                    set: { value in planner.updateSelected { $0.maxDetourPercent = (value / 5).rounded() * 5 } }
-                ), in: 10...150, step: 5)
-                Stepper(value: Binding(
-                    get: { profile.maxPasses },
-                    set: { value in planner.updateSelected { $0.maxPasses = value } }
-                ), in: 1...10) {
-                    LabeledContent("Avoidance passes", value: "\(profile.maxPasses)")
-                }
-            }
-            HStack {
-                Button("Add Profile") {
-                    planner.addProfile()
-                }
-                Button("Delete Profile") {
-                    planner.deleteSelectedProfile()
-                }
-                .disabled(planner.profiles.count <= 1)
-            }
-            Text("A detour is sought only for a stretch steeper than the max grade and at least the steep-stretch distance long, measured along the route (not a height). It may make the route at most the max detour longer. The BRouter profile names come from the profiles2 folder of the BRouter folder.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// A binding to one field of the selected profile.
-    /// A slider with its value beside it, on one line with its label.
-    private func valueSlider(_ label: String, value: String, _ binding: Binding<Double>, in range: ClosedRange<Double>, step: Double) -> some View {
-        LabeledContent(label) {
-            HStack(spacing: 8) {
-                Slider(value: binding, in: range, step: step)
-                    .labelsHidden()
-                Text(value)
-                    .monospacedDigit()
-                    .frame(width: 84, alignment: .trailing)
-            }
-        }
-    }
-
-    private func profileBinding(_ keyPath: WritableKeyPath<RoutingProfile, String>) -> Binding<String> {
-        Binding(
-            get: { planner.selectedProfile[keyPath: keyPath] },
-            set: { value in planner.updateSelected { $0[keyPath: keyPath] = value } }
-        )
-    }
-
-    /// The BRouter profiles installed in the BRouter folder, plus the one in use even if it is not installed.
-    private func brouterProfileNames(including current: String) -> [String] {
-        let folder = routing.brouterFolder.appendingPathComponent("profiles2")
-        let installed = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
-        var names = Set(installed.filter { $0.hasSuffix(".brf") }.map { String($0.dropLast(4)) })
-        names.insert(current)
-        return names.sorted()
     }
 
     /// HighCamp's own BRouter: whether it is installed, Java, the map data tiles, and where it all is.

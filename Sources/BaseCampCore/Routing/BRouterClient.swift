@@ -59,16 +59,19 @@ public struct BRouterClient: RouteSource {
 
     public let baseURL: URL
     public let profile: String
+    /// Overrides of the profile's settings (see `BRouterParameters`).
+    public let options: [String: Double]
     private let fetch: Fetch
 
-    public init(baseURL: URL, profile: String, fetch: @escaping Fetch = BRouterClient.urlSessionFetch) {
+    public init(baseURL: URL, profile: String, options: [String: Double] = [:], fetch: @escaping Fetch = BRouterClient.urlSessionFetch) {
         self.baseURL = baseURL
         self.profile = profile
+        self.options = options
         self.fetch = fetch
     }
 
     public func route(via points: [Coordinate], nogos: [NoGo]) async throws -> RouteGeometry {
-        let url = Self.requestURL(baseURL: baseURL, profile: profile, via: points, nogos: nogos)
+        let url = Self.requestURL(baseURL: baseURL, profile: profile, options: options, via: points, nogos: nogos)
         let (status, body) = try await fetch(url)
         guard status == 200 else {
             let text = String(decoding: body, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -93,7 +96,7 @@ public struct BRouterClient: RouteSource {
         }
     }
 
-    public static func requestURL(baseURL: URL, profile: String, via points: [Coordinate], nogos: [NoGo]) -> URL {
+    public static func requestURL(baseURL: URL, profile: String, options: [String: Double] = [:], via points: [Coordinate], nogos: [NoGo]) -> URL {
         let endpoint = baseURL.appendingPathComponent("brouter")
         var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)!
         var items = [
@@ -108,6 +111,7 @@ public struct BRouterClient: RouteSource {
             }
             items.append(URLQueryItem(name: "nogos", value: areas.joined(separator: "|")))
         }
+        items += BRouterParameters.queryItems(options)
         components.queryItems = items
         return components.url!
     }

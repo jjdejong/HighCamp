@@ -15,6 +15,9 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
     /// A climb only triggers a detour when it is at least this long, in metres, above the grade limit.
     /// Shorter steep stretches are accepted as they are.
     public var minimumClimbMeters: Double
+    /// The BRouter profile's settings changed for this profile (see `BRouterParameters`), sent with each request.
+    /// Settings left at the profile's own value are not kept. True is 1, false 0.
+    public var brouterOptions: [String: Double]
 
     public static let defaultMinimumClimbMeters = 300.0
 
@@ -25,7 +28,8 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
         maxGradePercent: Double? = nil,
         maxDetourPercent: Double = 50,
         maxPasses: Int = 4,
-        minimumClimbMeters: Double = RoutingProfile.defaultMinimumClimbMeters
+        minimumClimbMeters: Double = RoutingProfile.defaultMinimumClimbMeters,
+        brouterOptions: [String: Double] = [:]
     ) {
         self.id = id
         self.name = name
@@ -34,10 +38,11 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
         self.maxDetourPercent = maxDetourPercent
         self.maxPasses = maxPasses
         self.minimumClimbMeters = minimumClimbMeters
+        self.brouterOptions = brouterOptions
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, brouterProfile, maxGradePercent, maxDetourPercent, maxPasses, minimumClimbMeters
+        case id, name, brouterProfile, maxGradePercent, maxDetourPercent, maxPasses, minimumClimbMeters, brouterOptions
     }
 
     /// Profiles saved before a setting existed still load, with that setting's default.
@@ -51,6 +56,7 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
         maxPasses = try values.decodeIfPresent(Int.self, forKey: .maxPasses) ?? 4
         minimumClimbMeters = try values.decodeIfPresent(Double.self, forKey: .minimumClimbMeters)
             ?? RoutingProfile.defaultMinimumClimbMeters
+        brouterOptions = try values.decodeIfPresent([String: Double].self, forKey: .brouterOptions) ?? [:]
     }
 
     /// Profiles offered before the user creates any.

@@ -14,7 +14,7 @@ HighCamp is an independent project, not made, endorsed or supported by Garmin (s
 - **Library**: waypoints, routes and tracks in My Collection, organised in lists and nested list folders as in
   BaseCamp; import and export GPX, KML, TCX, FIT and CSV; a list exports as one GPX file named after it.
 - **Planning**: routes from stops, calculated by HighCamp's own BRouter (installed from Settings, with the map data
-  your routes need) or brouter.de, with routing profiles; steep climbs judged on terrain heights, with tunnels and
+  your routes need) or brouter.de, with routing profiles that keep their own BRouter settings; steep climbs judged on terrain heights, with tunnels and
   bridges levelled; steep stretches marked on the map; legs kept straight where the router has no path.
 - **Heights**: elevation profiles and statistics; heights from a folder of elevation models (GDAL) or from the maps
   themselves; high-resolution DEMs gathered along a single track.

@@ -59,7 +59,8 @@ final class RoutePlanner {
             maxGradePercent: source.maxGradePercent,
             maxDetourPercent: source.maxDetourPercent,
             maxPasses: source.maxPasses,
-            minimumClimbMeters: source.minimumClimbMeters
+            minimumClimbMeters: source.minimumClimbMeters,
+            brouterOptions: source.brouterOptions
         )
         profiles.append(copy)
         selectProfile(copy.id)

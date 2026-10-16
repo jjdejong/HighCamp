@@ -96,6 +96,7 @@ struct RoutePlannerBar: View {
                 planner.updateSelected { $0.maxGradePercent = limited ? 12 : nil }
             }
         ))
+        .toggleStyle(.checkbox)
         .fixedSize()
         if let limit = profile.maxGradePercent {
             Text("Max grade")

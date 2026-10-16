@@ -613,6 +613,8 @@ struct InspectorView: View {
         switch leg.state {
         case .straight:
             return "Straight"
+        case .keptStraight:
+            return "Straight, not routed"
         case .calculated(let profileID):
             guard let profileID, let profile = planner.profiles.first(where: { $0.id == profileID }) else {
                 return "Calculated"

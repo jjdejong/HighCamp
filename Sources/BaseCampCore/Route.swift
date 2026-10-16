@@ -71,12 +71,23 @@ public struct RouteLeg: Equatable, Codable, Sendable {
     /// Set when a stop at either end changed since the leg was calculated. The leg is drawn straight until the
     /// router has recalculated it.
     public var needsRecalculation: Bool
+    /// The user chose a straight line here, as for a path the router does not know: it is never sent to the
+    /// router, and stays straight when its stops move.
+    public var keepsStraight: Bool
+    /// How far, in metres, the router's line starts from the leg's first stop and ends from its last: the router
+    /// begins at the nearest way it can use, so a stop away from any such way leaves a gap. Nil when not known.
+    public var startGap: Double?
+    public var endGap: Double?
 
-    public init(shape: [RoutePoint] = [], method: Method = .direct, profileID: UUID? = nil, needsRecalculation: Bool = false) {
+    public init(shape: [RoutePoint] = [], method: Method = .direct, profileID: UUID? = nil, needsRecalculation: Bool = false,
+                keepsStraight: Bool = false, startGap: Double? = nil, endGap: Double? = nil) {
         self.shape = shape
         self.method = method
         self.profileID = profileID
         self.needsRecalculation = needsRecalculation
+        self.keepsStraight = keepsStraight
+        self.startGap = startGap
+        self.endGap = endGap
     }
 
     public init(from decoder: Decoder) throws {
@@ -85,6 +96,9 @@ public struct RouteLeg: Equatable, Codable, Sendable {
         method = try values.decodeIfPresent(Method.self, forKey: .method) ?? .direct
         profileID = try values.decodeIfPresent(UUID.self, forKey: .profileID)
         needsRecalculation = try values.decodeIfPresent(Bool.self, forKey: .needsRecalculation) ?? false
+        keepsStraight = try values.decodeIfPresent(Bool.self, forKey: .keepsStraight) ?? false
+        startGap = try values.decodeIfPresent(Double.self, forKey: .startGap)
+        endGap = try values.decodeIfPresent(Double.self, forKey: .endGap)
     }
 }
 
@@ -147,12 +161,16 @@ public struct Route: Identifiable, Equatable, Sendable {
         }
         let indices = cutIndices(of: line, at: stops.map(\.coordinate))
         var placed = stops
+        // How far each stop was moved onto the line: far when the router found no way near it.
+        var gaps: [Double] = []
         for (stop, index) in indices.enumerated() {
+            gaps.append(Geodesy.distance(from: stops[stop].coordinate, to: line[index].coordinate))
             placed[stop].coordinate = line[index].coordinate
             placed[stop].elevation = line[index].elevation
         }
-        let legs = zip(indices, indices.dropFirst()).map { start, end in
-            RouteLeg(shape: start + 1 < end ? Array(line[(start + 1)..<end]) : [], method: .calculated, profileID: profileID)
+        let legs = zip(indices, indices.dropFirst()).enumerated().map { leg, cut in
+            RouteLeg(shape: cut.0 + 1 < cut.1 ? Array(line[(cut.0 + 1)..<cut.1]) : [], method: .calculated, profileID: profileID,
+                     startGap: gaps[leg], endGap: gaps[leg + 1])
         }
         return Route(id: id, name: name, stops: placed, legs: legs, profileID: profileID, color: color)
     }
@@ -190,8 +208,9 @@ public struct Route: Identifiable, Equatable, Sendable {
         } else if index >= legs.count {
             legs.removeLast()
         } else {
+            let straight = legs[index - 1].keepsStraight && legs[index].keepsStraight
             legs.remove(at: index)
-            legs[index - 1] = changedLeg()
+            legs[index - 1] = changedLeg(keepingStraight: straight)
         }
     }
 
@@ -206,10 +225,30 @@ public struct Route: Identifiable, Equatable, Sendable {
         } else if index == stops.count - 1 {
             legs.append(changedLeg())
         } else {
-            legs[index - 1] = changedLeg()
-            legs.insert(changedLeg(), at: index)
+            // A stop added to a straight leg, to follow a path more closely, leaves both halves straight.
+            let straight = legs[index - 1].keepsStraight
+            legs[index - 1] = changedLeg(keepingStraight: straight)
+            legs.insert(changedLeg(keepingStraight: straight), at: index)
         }
     }
+
+    /// Keeps a leg straight (true), never sent to the router, or hands it back to the router (false).
+    public mutating func setLegStraight(at index: Int, _ straight: Bool) {
+        guard legs.indices.contains(index), legs[index].keepsStraight != straight else { return }
+        legs[index] = straight ? RouteLeg(method: .direct, keepsStraight: true) : changedLeg()
+    }
+
+    /// How far the router's line passes from a stop, in metres: the larger gap of the calculated legs beside it.
+    /// Nil when neither leg says, as for straight legs.
+    public func routerGap(atStop index: Int) -> Double? {
+        guard stops.indices.contains(index) else { return nil }
+        let before = index > 0 ? legs[index - 1].endGap : nil
+        let after = index < legs.count ? legs[index].startGap : nil
+        return [before, after].compactMap { $0 }.max()
+    }
+
+    /// Beyond this many metres from the router's line, a stop is reported: the router knows no way near it.
+    public static let farFromRouterMeters = 30.0
 
     /// Changes a stop's name or kind, which leaves the line as it is.
     public mutating func updateStop(at index: Int, _ change: (inout RouteStop) -> Void) {
@@ -239,7 +278,7 @@ public struct Route: Identifiable, Equatable, Sendable {
     @discardableResult
     public mutating func markAllLegsForRecalculation() -> Bool {
         guard profileID != nil, !legs.isEmpty else { return false }
-        for index in legs.indices {
+        for index in legs.indices where !legs[index].keepsStraight {
             legs[index].needsRecalculation = true
         }
         return true
@@ -271,6 +310,8 @@ public struct Route: Identifiable, Equatable, Sendable {
         copy.legs = legs.reversed().map { leg in
             var reversed = leg
             reversed.shape = leg.shape.reversed()
+            reversed.startGap = leg.endGap
+            reversed.endGap = leg.startGap
             return reversed
         }
         return copy
@@ -314,16 +355,16 @@ public struct Route: Identifiable, Equatable, Sendable {
         }
     }
 
-    private func changedLeg() -> RouteLeg {
-        RouteLeg(method: .direct, profileID: profileID, needsRecalculation: profileID != nil)
+    private func changedLeg(keepingStraight straight: Bool = false) -> RouteLeg {
+        straight ? RouteLeg(method: .direct, keepsStraight: true) : RouteLeg(method: .direct, profileID: profileID, needsRecalculation: profileID != nil)
     }
 
     private mutating func invalidateLegs(around index: Int) {
         if index > 0 {
-            legs[index - 1] = changedLeg()
+            legs[index - 1] = changedLeg(keepingStraight: legs[index - 1].keepsStraight)
         }
         if index < legs.count {
-            legs[index] = changedLeg()
+            legs[index] = changedLeg(keepingStraight: legs[index].keepsStraight)
         }
     }
 

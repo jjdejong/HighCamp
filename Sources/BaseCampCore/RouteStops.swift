@@ -28,6 +28,8 @@ public extension RouteLeg {
     enum State: Equatable, Sendable {
         /// A straight line, with no shape points.
         case straight
+        /// Kept straight by the user: never sent to the router.
+        case keptStraight
         /// Calculated by the router with this profile. Nil when the profile is not known.
         case calculated(profileID: UUID?)
         /// Taken as it came, from a file or an older library.
@@ -37,6 +39,7 @@ public extension RouteLeg {
     }
 
     var state: State {
+        if keepsStraight { return .keptStraight }
         if needsRecalculation { return .waiting }
         switch method {
         case .direct: return .straight

@@ -40,7 +40,9 @@ public extension RouteLeg {
         RouteLeg(
             shape: line.filter { $0.coordinate != start && $0.coordinate != end },
             method: .calculated,
-            profileID: profileID
+            profileID: profileID,
+            startGap: line.first.map { Geodesy.distance(from: start, to: $0.coordinate) },
+            endGap: line.last.map { Geodesy.distance(from: end, to: $0.coordinate) }
         )
     }
 }

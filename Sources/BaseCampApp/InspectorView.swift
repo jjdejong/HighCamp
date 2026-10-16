@@ -361,11 +361,6 @@ struct InspectorView: View {
                 LabeledContent("Tiles", value: info.summary)
                 LabeledContent("Corridor", value: "\(Int(info.corridor)) m each side")
                 LabeledContent("Built", value: info.built.formatted(date: .abbreviated, time: .shortened))
-                Text(info.areas == nil
-                     ? "Rebuild it to outline its tiles on the map."
-                     : "Its finer tiles are outlined on the map while this item is selected.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 HStack {
                     Button("Rebuild") { build(item) }
                         .disabled(trackDEMs.status != nil)

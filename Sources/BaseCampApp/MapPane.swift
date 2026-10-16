@@ -14,7 +14,6 @@ struct MapPane: View {
     @Environment(MapSettings.self) private var mapSettings
     @Environment(DisplaySettings.self) private var display
     @Environment(GarminMapListStore.self) private var garminMaps
-    @Environment(TrackDEMStore.self) private var trackDEMs
     @State private var libraryLayer = LibraryLayerCache()
     /// The visible area and scale, for the place names.
     @State private var viewport: PlaceQuery?
@@ -227,7 +226,6 @@ struct MapPane: View {
         var parts: [MapLayerKind: MapLayerContent] = [:]
         parts[.places] = placeLayer
         parts[.coverage] = coverageLayer
-        parts[.trackDEM] = trackDEMLayer
         parts[.library] = libraryLayer.content(
             revision: LibraryLayerCache.Revision(
                 library: store.revision, device: store.deviceRevision, deviceGroupsOnMap: store.deviceGroupsOnMap,
@@ -455,14 +453,6 @@ struct MapPane: View {
             ))
         }
         return content
-    }
-
-    /// The finer tiles of the selected item's track DEM, so it can be seen where the exact heights end.
-    private var trackDEMLayer: MapLayerContent {
-        guard let item = store.selection, let areas = trackDEMs.info(for: item, store: store)?.areas else { return MapLayerContent() }
-        return MapLayerContent(areas: TrackDEM.outlined(areas).enumerated().map { index, area in
-            MapArea(id: "track-dem-\(index)", outline: area.outline)
-        })
     }
 
     private var coverageLayer: MapLayerContent {

@@ -92,14 +92,6 @@ public enum TrackDEM {
         return tiers
     }
 
-    /// The tiles worth outlining on the map: all but the coarsest kind when there are finer ones. The coarse
-    /// tiles only fill in beyond the fine ones, and are often far larger than the track (EU-DEM's are 1000 km).
-    public static func outlined(_ areas: [DEMTileArea]) -> [DEMTileArea] {
-        let tiers = tiers(areas)
-        guard tiers.count > 1, let coarsest = tiers.last?.resolution else { return areas }
-        return areas.filter { $0.resolution < coarsest }
-    }
-
     /// The line's points, with places added between them so no two are more than `step` metres apart.
     public static func places(along line: [Coordinate], every step: Double) -> [Coordinate] {
         guard var previous = line.first else { return [] }

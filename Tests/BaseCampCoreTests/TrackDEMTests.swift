@@ -60,18 +60,6 @@ final class TrackDEMTests: XCTestCase {
         XCTAssertEqual(turned.area, DEMTileArea(outline: corners, resolution: 1))
     }
 
-    func testTheCoarsestTilesAreNotOutlinedWhenFinerOnesAreThere() {
-        let areas = [
-            tile("fine", south: 45.0, west: 5.0, resolution: 1).area,
-            tile("five", south: 45.0, west: 5.045, resolution: 5.002).area,
-            tile("eu", south: 40.0, west: 0.0, size: 10, resolution: 25).area,
-            tile("eu2", south: 40.0, west: 10.0, size: 10, resolution: 24.98).area,
-        ]
-        XCTAssertEqual(TrackDEM.outlined(areas).map(\.resolution), [1, 5.002])
-        // One kind of tile only: all are outlined.
-        XCTAssertEqual(TrackDEM.outlined(Array(areas[2...])).count, 2)
-    }
-
     func testTiersCountTheTilesOfEachResolutionFinestFirst() {
         let areas = [
             tile("eu", south: 40.0, west: 0.0, size: 10, resolution: 25).area,

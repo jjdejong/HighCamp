@@ -130,6 +130,11 @@ Not done: the stops themselves still have no height in the library (the inspecto
 Giving a stop the height of the router's line at it would change the stop, which `setLeg` uses to spot stale
 answers, so it needs care. Not checked on the device by Claude (never written to it): the user re-sends.
 
+## Track DEM tint taken off the map — 2026-10-16 — Opus
+State: done (this commit). Gate: 334 tests, 3 skipped, no DIAG. The user found the indigo tint spoilt the map:
+the `.trackDEM` layer, `MapArea`/`AreaOverlay` and `TrackDEM.outlined` are gone. The tiles' corners stay in the
+index and their areas in "track DEM.json" (the inspector's tile summary uses them).
+
 ## Track DEMs seen: progress and result, inspector section, tiles on the map — 2026-10-16 — Opus
 State: done (40a8e69 core, this commit app). Gate: 335 tests, 3 skipped, no DIAG. Seen in the debug app on a
 copy of the user's library (`--build-track-dem`, new debug option: frames the selection and builds its DEM).

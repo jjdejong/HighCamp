@@ -85,7 +85,7 @@ struct RoutePlannerBar: View {
         return "\(summary) Click to add a point; drag a point or the line to change the route; right-click for more."
     }
 
-    /// The grade limit and the climb length that triggers a detour, for the selected profile.
+    /// The grade limit, and how long a stretch steeper than it must be to trigger a detour, for the selected profile.
     /// Labels and values keep a fixed width, so the controls fit beside the map.
     @ViewBuilder
     private var limitControls: some View {
@@ -112,7 +112,7 @@ struct RoutePlannerBar: View {
                 .lineLimit(1)
                 .frame(width: 36, alignment: .leading)
 
-            Text("Min. climb")
+            Text("Steep from")
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .fixedSize()
@@ -121,6 +121,7 @@ struct RoutePlannerBar: View {
                 set: { value in planner.updateSelected { $0.minimumClimbMeters = (value / 50).rounded() * 50 } }
             ), in: 100...1000, step: 50)
             .frame(width: 120)
+            .help("How long, along the route, a stretch steeper than the limit must be before a way round it is sought")
             Text("\(Int(profile.minimumClimbMeters)) m")
                 .monospacedDigit()
                 .lineLimit(1)

@@ -148,39 +148,28 @@ struct SettingsView: View {
                 get: { profile.maxGradePercent != nil },
                 set: { limited in planner.updateSelected { $0.maxGradePercent = limited ? 12 : nil } }
             ))
+            // The rest only matters with a grade limit: it says when and how far to detour around a steep stretch.
             if let limit = profile.maxGradePercent {
-                Slider(value: Binding(
+                valueSlider("Max grade", value: "\(Int(limit))%", Binding(
                     get: { limit },
                     set: { value in planner.updateSelected { $0.maxGradePercent = value.rounded() } }
-                ), in: 5...25, step: 1) {
-                    Text("Max grade")
-                } minimumValueLabel: {
-                    Text("5%")
-                } maximumValueLabel: {
-                    Text("25%")
+                ), in: 5...25, step: 1)
+                valueSlider("Steep stretch from", value: "\(Int(profile.minimumClimbMeters)) m", Binding(
+                    get: { profile.minimumClimbMeters },
+                    set: { value in planner.updateSelected { $0.minimumClimbMeters = (value / 50).rounded() * 50 } }
+                ), in: 100...1000, step: 50)
+                .help("How long, along the route, a stretch steeper than the limit must be before a way round it is sought")
+                valueSlider("Max detour", value: "\(Int(profile.maxDetourPercent))% longer", Binding(
+                    get: { profile.maxDetourPercent },
+                    set: { value in planner.updateSelected { $0.maxDetourPercent = (value / 5).rounded() * 5 } }
+                ), in: 10...150, step: 5)
+                Stepper(value: Binding(
+                    get: { profile.maxPasses },
+                    set: { value in planner.updateSelected { $0.maxPasses = value } }
+                ), in: 1...10) {
+                    LabeledContent("Avoidance passes", value: "\(profile.maxPasses)")
                 }
-                LabeledContent("Max grade", value: "\(Int(limit))%")
             }
-            Slider(value: Binding(
-                get: { profile.maxDetourPercent },
-                set: { value in planner.updateSelected { $0.maxDetourPercent = (value / 5).rounded() * 5 } }
-            ), in: 10...150, step: 5) {
-                Text("Max detour")
-            }
-            LabeledContent("Max detour", value: "\(Int(profile.maxDetourPercent))% longer")
-            Stepper(value: Binding(
-                get: { profile.maxPasses },
-                set: { value in planner.updateSelected { $0.maxPasses = value } }
-            ), in: 1...10) {
-                LabeledContent("Avoidance passes", value: "\(profile.maxPasses)")
-            }
-            Slider(value: Binding(
-                get: { profile.minimumClimbMeters },
-                set: { value in planner.updateSelected { $0.minimumClimbMeters = (value / 50).rounded() * 50 } }
-            ), in: 100...1000, step: 50) {
-                Text("Minimum climb")
-            }
-            LabeledContent("Minimum climb", value: "\(Int(profile.minimumClimbMeters)) m")
             HStack {
                 Button("Add Profile") {
                     planner.addProfile()
@@ -190,13 +179,26 @@ struct SettingsView: View {
                 }
                 .disabled(planner.profiles.count <= 1)
             }
-            Text("A climb only triggers a detour when it is steeper than the limit and at least the minimum climb long. The BRouter profile names come from the profiles2 folder of the BRouter folder.")
+            Text("A detour is sought only for a stretch steeper than the max grade and at least the steep-stretch distance long, measured along the route (not a height). It may make the route at most the max detour longer. The BRouter profile names come from the profiles2 folder of the BRouter folder.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
     }
 
     /// A binding to one field of the selected profile.
+    /// A slider with its value beside it, on one line with its label.
+    private func valueSlider(_ label: String, value: String, _ binding: Binding<Double>, in range: ClosedRange<Double>, step: Double) -> some View {
+        LabeledContent(label) {
+            HStack(spacing: 8) {
+                Slider(value: binding, in: range, step: step)
+                    .labelsHidden()
+                Text(value)
+                    .monospacedDigit()
+                    .frame(width: 84, alignment: .trailing)
+            }
+        }
+    }
+
     private func profileBinding(_ keyPath: WritableKeyPath<RoutingProfile, String>) -> Binding<String> {
         Binding(
             get: { planner.selectedProfile[keyPath: keyPath] },

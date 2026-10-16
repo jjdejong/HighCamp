@@ -474,12 +474,13 @@ struct MapPane: View {
                 content.lines.append(MapLine(id: "steep-\(index)-\(piece)", coordinates: line, color: .orange, rgb: colour, width: 5))
             }
             let percent = Int(section.maxGradePercent.rounded())
+            let average = Int(steep.averages[index].rounded())
             content.pins.append(MapPin(
                 id: "steep-\(index)",
                 coordinate: measure.coordinate(at: (section.startMeters + section.endMeters) / 2) ?? section.center,
                 style: .steep(percent: percent, colour: colour),
                 item: nil,
-                title: "Up to \(percent)% over \(UnitFormat.distance(section.lengthMeters, display.units)) (limit \(Int(steep.limit))%)"
+                title: "\(UnitFormat.distance(section.lengthMeters, display.units)) at \(average)% on average, \(percent)% over its steepest 100 m (limit \(Int(steep.limit))%)"
             ))
         }
         return content

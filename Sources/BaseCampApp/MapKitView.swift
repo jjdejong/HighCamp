@@ -504,6 +504,8 @@ struct MapKitView: NSViewRepresentable {
                 return view
             }
             view.isEnabled = true
+            // Hovering a marker shows what it is: a steep stretch's grades, how far a stop is from the router's ways.
+            view.toolTip = pin.title?.isEmpty == false ? pin.title : nil
             view.displayPriority = .required
             view.zPriority = .defaultUnselected
             let dot = MarkerImage.image(for: pin.style)

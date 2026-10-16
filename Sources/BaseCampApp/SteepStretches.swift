@@ -11,6 +11,8 @@ enum SteepStretches {
         /// The grade limit, in percent.
         let limit: Double
         let sections: [SteepSection]
+        /// Each stretch's average grade, from its start to its end, in percent.
+        let averages: [Double]
         /// The colour they are drawn in, standing out from the line's own.
         let colour: ItemColor
     }
@@ -63,9 +65,13 @@ enum SteepStretches {
         if let cache, cache.key == key {
             return cache.result
         }
-        let sections = GradeAnalysis.steepSections(inProfile: dem ?? own(), maxGradePercent: limit, windowMeters: windowMeters)
+        let heights = dem ?? own()
+        let sections = GradeAnalysis.steepSections(inProfile: heights, maxGradePercent: limit, windowMeters: windowMeters)
             .filter { $0.lengthMeters >= shortestMeters }
-        let result = Result(limit: limit, sections: sections, colour: SteepHighlight.colour(against: line))
+        let averages = sections.map { section in
+            heights.averageGrade(over: section.startMeters...section.endMeters) ?? section.maxGradePercent
+        }
+        let result = Result(limit: limit, sections: sections, averages: averages, colour: SteepHighlight.colour(against: line))
         cache = (key, result)
         return result
     }

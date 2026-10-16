@@ -3,7 +3,7 @@ import BaseCampCore
 import Foundation
 import SwiftUI
 
-/// Settings (⌘,): the folder that holds the map files, shared with QMapShack.
+/// Settings (⌘,): display, map and elevation folders, track DEMs, routing profiles and the router.
 struct SettingsView: View {
     @Environment(MapSettings.self) private var mapSettings
     @Environment(RoutingSettings.self) private var routing
@@ -50,7 +50,7 @@ struct SettingsView: View {
                         .help(qmapshack.path)
                     }
                 }
-                Text("QMapShack keeps its own map folder setting. Set it to the same folder in QMapShack so both apps read the same maps.")
+                Text("The folder of Garmin maps (.img). If QMapShack is installed, the same folder can serve both.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -64,11 +64,6 @@ struct SettingsView: View {
                 HStack {
                     Button("Choose Folder…") {
                         chooseElevationFolder()
-                    }
-                    if let qmapshack = ElevationSettings.qmapshackFolder, qmapshack != elevation.folder {
-                        Button("Use QMapShack's DEM Folder") {
-                            elevation.folder = qmapshack
-                        }
                     }
                 }
                 Picker("Heights from", selection: $elevation.mapHeightsFirst) {

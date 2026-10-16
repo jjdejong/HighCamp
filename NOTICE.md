@@ -33,5 +33,7 @@ which devices it works with.
 - IGN Plan V2 and IGN contour lines: IGN, under the Etalab open licence v2.0.
 - OpenTopoMap: map data © OpenStreetMap contributors (ODbL); rendering © OpenTopoMap (CC-BY-SA).
 - OpenStreetMap: © OpenStreetMap contributors (ODbL).
-- BRouter routing: used over HTTP; the BRouter jar and data are not included.
+- BRouter routing (MIT licence, github.com/abrensch/brouter): not included. When the user asks, HighCamp downloads a
+  BRouter release from GitHub and map data tiles from brouter.de (from OpenStreetMap, © OpenStreetMap contributors,
+  ODbL) into its own folder, and talks to the server over HTTP.
 - libmtp, for USB transfers with the Garmin Edge: LGPL-2.1, linked dynamically.

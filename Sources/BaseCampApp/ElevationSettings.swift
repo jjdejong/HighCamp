@@ -27,9 +27,16 @@ final class ElevationSettings {
 
     init() {
         let defaults = UserDefaults.standard
-        let modelFolder = defaults.string(forKey: "dem.folder").map { URL(fileURLWithPath: $0) }
-            ?? Self.qmapshackFolder
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Developer/BaseCampClone/DEM")
+        let modelFolder: URL
+        if let path = defaults.string(forKey: "dem.folder") {
+            modelFolder = URL(fileURLWithPath: path)
+        } else if let earlier = Self.earlierDefault {
+            // The folder earlier versions used when none was chosen: kept, so updating changes nothing.
+            modelFolder = earlier
+            defaults.set(earlier.path, forKey: "dem.folder")
+        } else {
+            modelFolder = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/HighCamp/DEM")
+        }
         folder = modelFolder
         mapHeightsFirst = defaults.bool(forKey: "dem.mapHeightsFirst")
         tileFolder = defaults.string(forKey: "dem.tileFolder").map { URL(fileURLWithPath: $0) } ?? modelFolder
@@ -48,8 +55,8 @@ final class ElevationSettings {
         )
     }
 
-    /// QMapShack's DEM folder, shared with this app.
-    static var qmapshackFolder: URL? {
+    /// The DEM folder earlier versions used when none was chosen, if it exists. Read once, to keep it.
+    private static var earlierDefault: URL? {
         let folder = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Documents/SynologyDrive/QMapShack/DEM")
         return FileManager.default.fileExists(atPath: folder.path) ? folder : nil

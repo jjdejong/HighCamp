@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Where the map files are. This is the folder QMapShack reads its IMG maps from.
+/// Where the Garmin map files (`.img`) are.
 @MainActor
 @Observable
 final class MapSettings {
@@ -16,12 +16,16 @@ final class MapSettings {
     init() {
         if let path = UserDefaults.standard.string(forKey: Self.defaultsKey) {
             folder = URL(fileURLWithPath: path)
+        } else if let qmapshack = Self.qmapshackFolder {
+            // On first launch, the maps QMapShack shows, if it is installed; kept from then on, whatever QMapShack does.
+            folder = qmapshack
+            UserDefaults.standard.set(qmapshack.path, forKey: Self.defaultsKey)
         } else {
-            folder = Self.qmapshackFolder ?? Self.fallbackFolder
+            folder = Self.defaultFolder
         }
     }
 
-    /// The folder QMapShack is set to use, read from its preferences. Nothing is written there.
+    /// The map folder of QMapShack, if it is installed, read from its preferences. Nothing is written there.
     nonisolated static var qmapshackFolder: URL? {
         let preferences = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Preferences/org.qlandkarte.QMapShack.plist")
@@ -33,8 +37,7 @@ final class MapSettings {
         return URL(fileURLWithPath: first)
     }
 
-    nonisolated static var fallbackFolder: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Developer/BaseCampClone/Maps")
+    nonisolated static var defaultFolder: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/HighCamp/Maps")
     }
 }

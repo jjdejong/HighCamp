@@ -130,6 +130,30 @@ Not done: the stops themselves still have no height in the library (the inspecto
 Giving a stop the height of the router's line at it would change the stop, which `setLeg` uses to spot stale
 answers, so it needs care. Not checked on the device by Claude (never written to it): the user re-sends.
 
+## HighCamp's own BRouter; tunnels and bridges levelled — 2026-10-16 — Opus
+State: done (e9722d9, e6151f0, adca6ef, 90b8014, this commit). Gate: 359 tests, 3 skipped, no DIAG. Seen on the
+user's Mac: BRouter 1.7.9 installed into "BRouter" beside the library, E5_N45 (253 MB) downloaded, own server on
+17778 (Temurin 21 via java_home) routing; Test Route 1's legs 1→2 and 10→11 came back with their bridges and the
+tunnel at 14.9 km, and the 35% steep tag over the tunnel was gone (map picture with `--map-image`).
+User decisions: HighCamp must not rely on QMapShack; tunnel/bridge info by uploading a profile copy (option 1).
+- `BRouterInstall`: release zip from GitHub (pinned 1.7.9: the version the user's segments came with), jar and
+  profiles2 into the folder; tiles from brouter.de/brouter/segments4 on request (Settings › Routing: list, delete,
+  "Download Map Data for the Library's Routes"; inspector: the selected route's missing tiles). Debug option
+  `--install-brouter`. `BRouterServer` starts at launch when local and installed; custom profiles dir must be given
+  relative to profiles2 ("../customprofiles"), BRouter joins them.
+- `RoutingSettings`: no QMapShack preferences; folder default = HighCamp's, address 17778 (QMapShack's server stays
+  on 17777 and is not touched), Java from java_home.
+- Tunnels/bridges: `BRouterProfileText.reportingStructures` adds two assigns in the way context (no cost change);
+  BRouter then lists tunnel=/bridge= in WayTags. `StructureProfiles` uploads the copy (POST /brouter/profile, id kept
+  in defaults `routing.structureProfiles` per server, profile and text hash; forgotten and re-uploaded if routing with
+  it fails). `Structures.stretches` maps message rows to line distances; heights levelled in the geometry, after
+  terrain heights (ElevatedRouteSource), in Elevations from Model and in the track DEM profile; `RouteLeg.structures`
+  (from the first stop), `Route.structureStretches`. Old legs have none until recalculated.
+- Map/DEM folders: stored on first launch from what was used (QMapShack's map folder if installed; the old DEM
+  default), else ~/Documents/HighCamp/Maps and /DEM. "Use QMapShack's DEM Folder" removed.
+- Seen while testing: a debug window that opens behind others draws no MapKit tiles or overlays in window captures;
+  use `--map-image` for pictures.
+
 ## Steep stretches marked on the map and the profile — 2026-10-16 — Opus
 State: done (68e22a3 core, this commit app). Gate: 347 tests, 3 skipped, no DIAG. Seen in the debug app on a copy
 of the user's library (Test Route 1: 9 stretches above 12%).

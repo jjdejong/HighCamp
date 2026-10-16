@@ -13,8 +13,9 @@ HighCamp is an independent project, not made, endorsed or supported by Garmin (s
   tile maps (IGN, OpenTopoMap and others) as well.
 - **Library**: waypoints, routes and tracks in My Collection, organised in lists and nested list folders as in
   BaseCamp; import and export GPX, KML, TCX, FIT and CSV; a list exports as one GPX file named after it.
-- **Planning**: routes from stops, calculated by a BRouter server with routing profiles; steep climbs judged on
-  terrain heights.
+- **Planning**: routes from stops, calculated by HighCamp's own BRouter (installed from Settings, with the map data
+  your routes need) or brouter.de, with routing profiles; steep climbs judged on terrain heights, with tunnels and
+  bridges levelled; steep stretches marked on the map; legs kept straight where the router has no path.
 - **Heights**: elevation profiles and statistics; heights from a folder of elevation models (GDAL) or from the maps
   themselves; high-resolution DEMs gathered along a single track.
 - **Garmin Edge**: sends courses (FIT, laid out as Garmin Connect writes them) and maps; shows the Edge's courses,
@@ -23,7 +24,8 @@ HighCamp is an independent project, not made, endorsed or supported by Garmin (s
 
 ## Building
 
-Needs macOS 14 or later, Swift 5.10 (Xcode or the command-line tools) and two Homebrew libraries:
+Needs macOS 14 or later, Swift 5.10 (Xcode or the command-line tools) and two Homebrew libraries. Routing on this Mac
+also needs a Java runtime (such as Temurin) for BRouter, which HighCamp installs itself:
 
 ```sh
 brew install gdal libmtp

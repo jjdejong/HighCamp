@@ -130,6 +130,19 @@ Not done: the stops themselves still have no height in the library (the inspecto
 Giving a stop the height of the router's line at it would change the stop, which `setLeg` uses to spot stale
 answers, so it needs care. Not checked on the device by Claude (never written to it): the user re-sends.
 
+## Steep stretches marked on the map and the profile — 2026-10-16 — Opus
+State: done (68e22a3 core, this commit app). Gate: 347 tests, 3 skipped, no DIAG. Seen in the debug app on a copy
+of the user's library (Test Route 1: 9 stretches above 12%).
+The old steep marker belonged to the planner's separate plan result and went with it (cc360ea). Now
+`SteepStretches` (app) finds the selected route's or track's stretches above the grade limit: a route's own
+routing profile, else (and for tracks) the profile chosen for planning; none without a limit. Heights are the
+profile's: the track DEM's when shown (`TrackDEMStore.cachedProfile`). Grades over 100 m (40 m with the 5 m DEM
+gave 26 stretches and 40% spikes at hairpins), stretches of 50 m or more.
+- Map: layer `.steep`, the stretch drawn over the line in `SteepHighlight` colour (orange; red on an orange track;
+  yellow on a red line), with a tag of its steepest grade (`MapPin.Style.steep(percent:colour:)`), title gives
+  length and limit. Included in saved pictures.
+- Profile pane and inspector chart: the stretches shaded in the same colour; the pane's header says "9 above 12%".
+
 ## Far stops seen on the map — 2026-10-16 — Opus
 State: done (this and the previous commit). Gate: 344 tests, 3 skipped, no DIAG. The user added points along the
 path but kept no leg straight, and did not see the warnings (low in the stop list).

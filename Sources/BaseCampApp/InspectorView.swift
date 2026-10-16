@@ -759,7 +759,11 @@ struct InspectorView: View {
                         }
                     }
                 }
-                ElevationChart(profile: points, series: shown, pickable: pickable)
+                let steep = shown == .elevation
+                    ? SteepStretches.of(store.selection, store: store, planner: planner, trackDEMs: trackDEMs, fromDEM: fromDEM) : nil
+                ElevationChart(profile: points, series: shown, pickable: pickable,
+                               steep: steep?.sections.map { $0.startMeters...$0.endMeters } ?? [],
+                               steepColour: steep.map { Color(MapRGB($0.colour).nsColor) } ?? .orange)
                 if let selection = store.selection, dem != nil, let info = trackDEMs.info(for: selection, store: store) {
                     Text("Heights from the track DEM, every \(TrackDEMStore.metres(max(2, info.resolution))) along the line")
                         .font(.caption)

@@ -55,6 +55,9 @@ struct ElevationChart: View {
     var height: CGFloat? = 140
     /// At most about this many points are drawn. Charts slows down with many thousand marks.
     var drawLimit = 500
+    /// Stretches steeper than the grade limit, in metres, shaded in `steepColour`.
+    var steep: [ClosedRange<Double>] = []
+    var steepColour: Color = .orange
     @Environment(LibraryStore.self) private var store
     @Environment(DisplaySettings.self) private var display
     /// The distance under the pointer, in the chosen distance unit.
@@ -71,6 +74,17 @@ struct ElevationChart: View {
         let pad = max((highest - lowest) * 0.05, 1)
         let xDomain = UnitFormat.distanceValue(shown.lowerBound, units)...UnitFormat.distanceValue(shown.upperBound, units)
         Chart {
+            ForEach(Array(steep.enumerated()), id: \.offset) { _, stretch in
+                if stretch.overlaps(shown) {
+                    RectangleMark(
+                        xStart: .value("From", UnitFormat.distanceValue(max(stretch.lowerBound, shown.lowerBound), units)),
+                        xEnd: .value("To", UnitFormat.distanceValue(min(stretch.upperBound, shown.upperBound), units)),
+                        yStart: .value("Base", lowest - pad),
+                        yEnd: .value("Top", highest + pad)
+                    )
+                    .foregroundStyle(steepColour.opacity(0.22))
+                }
+            }
             if pickable, let picked = store.profileRange {
                 RectangleMark(
                     xStart: .value("From", UnitFormat.distanceValue(max(picked.lowerBound, shown.lowerBound), units)),

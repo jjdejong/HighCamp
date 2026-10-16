@@ -14,6 +14,9 @@ struct MapPane: View {
     @Environment(MapSettings.self) private var mapSettings
     @Environment(DisplaySettings.self) private var display
     @Environment(GarminMapListStore.self) private var garminMaps
+    @Environment(TrackDEMStore.self) private var trackDEMs
+    /// Shared with the profile: its heights, and so its steep stretches, come from the track DEM.
+    @AppStorage("display.profileFromDEM") private var profileFromDEM = true
     @State private var libraryLayer = LibraryLayerCache()
     /// The visible area and scale, for the place names.
     @State private var viewport: PlaceQuery?
@@ -233,6 +236,7 @@ struct MapPane: View {
             ),
             selectedItems: store.selectedItems, selectedStop: store.selectedStop, build: buildLibraryLayer
         )
+        parts[.steep] = steepLayer
         parts[.measure] = measureLayer
         if let range = store.profileRange, let measure = store.selectedMeasure {
             // Drawn over the selected line, so the stretch picked on the profile can be seen on the map.
@@ -456,6 +460,29 @@ struct MapPane: View {
     /// The pale halo under a selected line: the same path, four points wider, in white. The item keeps its colour.
     private static func selectionHalo(for line: MapLine) -> MapLine {
         MapLine(id: "halo-\(line.id)", coordinates: line.coordinates, color: line.color, rgb: MapRGB(red: 1, green: 1, blue: 1), width: line.width + 4)
+    }
+
+    /// The selected line's stretches above its grade limit, in a colour that stands out from it, each with a tag
+    /// giving its steepest grade.
+    private var steepLayer: MapLayerContent {
+        guard let steep = SteepStretches.of(store.selection, store: store, planner: planner, trackDEMs: trackDEMs, fromDEM: profileFromDEM),
+              let measure = store.selectedMeasure else { return MapLayerContent() }
+        var content = MapLayerContent()
+        let colour = MapRGB(steep.colour)
+        for (index, section) in steep.sections.enumerated() {
+            for (piece, line) in measure.section(section.startMeters...section.endMeters).enumerated() {
+                content.lines.append(MapLine(id: "steep-\(index)-\(piece)", coordinates: line, color: .orange, rgb: colour, width: 5))
+            }
+            let percent = Int(section.maxGradePercent.rounded())
+            content.pins.append(MapPin(
+                id: "steep-\(index)",
+                coordinate: measure.coordinate(at: (section.startMeters + section.endMeters) / 2) ?? section.center,
+                style: .steep(percent: percent, colour: colour),
+                item: nil,
+                title: "Up to \(percent)% over \(UnitFormat.distance(section.lengthMeters, display.units)) (limit \(Int(steep.limit))%)"
+            ))
+        }
+        return content
     }
 
     private var measureLayer: MapLayerContent {

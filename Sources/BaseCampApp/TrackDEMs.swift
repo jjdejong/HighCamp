@@ -151,6 +151,11 @@ final class TrackDEMStore {
         revision += 1
     }
 
+    /// The item's track DEM profile if it has been read already, without reading it: for drawing, which cannot wait.
+    func cachedProfile(for item: LibraryItem, store: LibraryStore) -> [ElevationProfilePoint]? {
+        profiles[ProfileKey(item: item, libraryRevision: store.revision, demRevision: revision)]
+    }
+
     /// Heights every few metres along the item from its track DEM, at the same distances as its profile. Nil
     /// when it has no track DEM.
     func profile(for item: LibraryItem, store: LibraryStore) async -> [ElevationProfilePoint]? {

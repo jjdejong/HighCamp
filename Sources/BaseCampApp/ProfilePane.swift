@@ -10,6 +10,7 @@ struct ProfilePane: View {
     @Environment(DisplaySettings.self) private var display
     @Environment(TrackDEMStore.self) private var trackDEMs
     @Environment(ElevationSettings.self) private var elevation
+    @Environment(RoutePlanner.self) private var planner
     @State private var series = ProfileSeries.elevation
     /// Heights read every few metres from the item's track DEM, when it has one.
     @State private var demProfile: [ElevationProfilePoint]?
@@ -56,7 +57,10 @@ struct ProfilePane: View {
                 header(item, choices: choices, shown: shown, heights: heights, length: points.last?.distanceMeters ?? 0)
                 Divider()
                 if points.count > 1 {
-                    ElevationChart(profile: points, series: shown, pickable: true, domain: domain, height: nil, drawLimit: 2_000)
+                    let steep = shown == .elevation ? steepStretches : nil
+                    ElevationChart(profile: points, series: shown, pickable: true, domain: domain, height: nil, drawLimit: 2_000,
+                                   steep: steep?.sections.map { $0.startMeters...$0.endMeters } ?? [],
+                                   steepColour: steep.map { Color(MapRGB($0.colour).nsColor) } ?? .orange)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(GeometryReader { proxy in
@@ -107,6 +111,7 @@ struct ProfilePane: View {
                     .fixedSize()
                 }
                 demControls
+                steepLegend
                 Spacer(minLength: 8)
                 buttons(item, length: length)
             }
@@ -115,6 +120,28 @@ struct ProfilePane: View {
         .controlSize(.small)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+    }
+
+    /// The selected line's stretches above its grade limit, on the heights this profile shows.
+    private var steepStretches: SteepStretches.Result? {
+        SteepStretches.of(store.selection, store: store, planner: planner, trackDEMs: trackDEMs, fromDEM: fromDEM)
+    }
+
+    /// How many stretches are steeper than the limit, in their colour, as on the map.
+    @ViewBuilder
+    private var steepLegend: some View {
+        if series == .elevation, let steep = steepStretches, !steep.sections.isEmpty {
+            HStack(spacing: 4) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color(MapRGB(steep.colour).nsColor))
+                    .frame(width: 12, height: 8)
+                Text("\(steep.sections.count) above \(Int(steep.limit))%")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .fixedSize()
+            .help("Stretches steeper than the routing profile's grade limit (\(Int(steep.limit))%), shaded here and drawn on the line on the map with their steepest grade")
+        }
     }
 
     /// Where the heights come from: the line's own points, or its track DEM, read every few metres. Without a

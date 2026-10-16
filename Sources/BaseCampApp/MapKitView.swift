@@ -20,7 +20,8 @@ struct MapPin: Equatable {
         /// A waypoint. `symbol` is its GPX symbol name, which picks the glyph drawn in the marker.
         case waypoint(selected: Bool, symbol: String?)
         case via(number: Int)
-        case steep(percent: Int)
+        /// The steepest grade of a stretch above the limit, on a tag in the stretch's colour.
+        case steep(percent: Int, colour: MapRGB)
         case label(String)
         /// The point under the cursor of an elevation profile.
         case cursor
@@ -127,6 +128,8 @@ enum MapLayerKind: Int, CaseIterable {
     case coverage
     /// Waypoints, routes and tracks, and the draggable points of the selected route.
     case library
+    /// The stretches of the selected route or track steeper than its grade limit.
+    case steep
     case measure
     /// The stretch picked on the selected item's profile.
     case profileRange
@@ -722,8 +725,8 @@ enum MarkerImage {
             }
         case .via(let number):
             image = dot(diameter: 18, fill: .systemGreen, label: "\(number)")
-        case .steep:
-            image = dot(diameter: 14, fill: .systemOrange, label: "!")
+        case .steep(let percent, let colour):
+            image = tag("\(percent)%", fill: colour.nsColor)
         case .label(let text):
             image = pill(text)
         case .cursor:
@@ -931,6 +934,27 @@ enum MarkerImage {
                 let size = glyph.size
                 glyph.draw(in: NSRect(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2, width: size.width, height: size.height))
             }
+            return true
+        }
+    }
+
+    /// A small rounded tag with bold white text, ringed in white.
+    private static func tag(_ text: String, fill: NSColor) -> NSImage {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 10, weight: .bold),
+            .foregroundColor: NSColor.white,
+        ]
+        let string = NSAttributedString(string: text, attributes: attributes)
+        let textSize = string.size()
+        let size = NSSize(width: ceil(textSize.width) + 10, height: ceil(textSize.height) + 4)
+        return NSImage(size: size, flipped: false) { rect in
+            let shape = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: size.height / 2 - 1, yRadius: size.height / 2 - 1)
+            fill.setFill()
+            shape.fill()
+            NSColor.white.setStroke()
+            shape.lineWidth = 1.5
+            shape.stroke()
+            string.draw(at: NSPoint(x: (rect.width - textSize.width) / 2, y: (rect.height - textSize.height) / 2))
             return true
         }
     }

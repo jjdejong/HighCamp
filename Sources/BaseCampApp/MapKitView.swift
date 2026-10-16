@@ -111,6 +111,8 @@ struct MapLine: Equatable {
     var dashed = false
     /// The track or route the line draws. Clicking the line selects it.
     var item: LibraryItem?
+    /// Shown beside the pointer while it is over the line, as a steep stretch's grades.
+    var tip: String?
 }
 
 struct MapCircleShape: Equatable {
@@ -285,6 +287,9 @@ struct MapKitView: NSViewRepresentable {
         var mouseMonitor: Any?
         /// Follows the pointer over the selected line, for the profile cursor (see MapRouteEditing.swift).
         var hoverMonitor: Any?
+        /// The label shown beside the pointer over a marker or line that has something to say (see MapHoverTips.swift).
+        var hoverTip: MapTipView?
+        var hoverTipHide: DispatchWorkItem?
         private let locationFinder = LocationFinder()
 
         private var appliedBase: (layer: BaseMapLayer, garmin: GarminMapConfiguration)?
@@ -292,7 +297,7 @@ struct MapKitView: NSViewRepresentable {
         private var contourOverlay: MKTileOverlay?
         private var appliedOpacity: Double?
 
-        private var appliedLayers: [MapLayerKind: MapLayerContent] = [:]
+        private(set) var appliedLayers: [MapLayerKind: MapLayerContent] = [:]
         private var layerOverlays: [MapLayerKind: [MKOverlay]] = [:]
         private var layerPins: [MapLayerKind: [PinAnnotation]] = [:]
         /// The stacking rank of each overlay on the map. Within a level, an overlay always goes above every overlay
@@ -504,9 +509,9 @@ struct MapKitView: NSViewRepresentable {
                 return view
             }
             view.isEnabled = true
-            // Hovering a marker shows what it is: a steep stretch's grades, how far a stop is from the router's ways.
-            // The profile cursor's dot needs none.
-            view.toolTip = pin.style != .cursor && pin.title?.isEmpty == false ? pin.title : nil
+            // Hovering a marker shows what it is in HighCamp's own label (MapHoverTips.swift): a tooltip waits a
+            // second and vanishes whenever MapKit touches the view.
+            view.toolTip = nil
             view.displayPriority = .required
             // Steep stretches' tags stay above the profile cursor's dot and the stops on the line.
             if case .steep = pin.style {
@@ -526,6 +531,7 @@ struct MapKitView: NSViewRepresentable {
         }
 
         func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
+            hideHoverTip()
             reportViewport(mapView)
         }
 

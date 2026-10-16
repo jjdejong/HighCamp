@@ -470,17 +470,19 @@ struct MapPane: View {
         var content = MapLayerContent()
         let colour = MapRGB(steep.colour)
         for (index, section) in steep.sections.enumerated() {
-            for (piece, line) in measure.section(section.startMeters...section.endMeters).enumerated() {
-                content.lines.append(MapLine(id: "steep-\(index)-\(piece)", coordinates: line, color: .orange, rgb: colour, width: 5))
-            }
             let percent = Int(section.maxGradePercent.rounded())
             let average = Int(steep.averages[index].rounded())
+            let text = "\(UnitFormat.distance(section.lengthMeters, display.units)) at \(average)% on average, \(percent)% over its steepest 100 m (limit \(Int(steep.limit))%)"
+            // The stretch's line says the same as its tag, so it is found anywhere along it.
+            for (piece, line) in measure.section(section.startMeters...section.endMeters).enumerated() {
+                content.lines.append(MapLine(id: "steep-\(index)-\(piece)", coordinates: line, color: .orange, rgb: colour, width: 5, tip: text))
+            }
             content.pins.append(MapPin(
                 id: "steep-\(index)",
                 coordinate: measure.coordinate(at: (section.startMeters + section.endMeters) / 2) ?? section.center,
                 style: .steep(percent: percent, colour: colour),
                 item: nil,
-                title: "\(UnitFormat.distance(section.lengthMeters, display.units)) at \(average)% on average, \(percent)% over its steepest 100 m (limit \(Int(steep.limit))%)"
+                title: text
             ))
         }
         return content

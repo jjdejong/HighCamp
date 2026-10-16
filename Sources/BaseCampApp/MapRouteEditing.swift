@@ -44,6 +44,7 @@ extension MapKitView.Coordinator {
             // Option-click is left to the click handler, which extends the route.
             guard !event.modifierFlags.contains(.option), let route = self.parent.editableRoute,
                   let hit = self.hit(at: point, route: route, on: map) else { return event }
+            self.hideHoverTip()
             self.track(hit, route: route, from: point, on: map)
             return nil
         }
@@ -65,28 +66,34 @@ extension MapKitView.Coordinator {
     func installHoverMonitor(on map: MKMapView) {
         map.window?.acceptsMouseMovedEvents = true
         hoverMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self, weak map] event in
-            guard let self, let map, event.window === map.window, let line = self.parent.profileLine else { return event }
+            guard let self, let map, event.window === map.window else { return event }
             map.window?.acceptsMouseMovedEvents = true
             let point = map.convert(event.locationInWindow, from: nil)
-            // On a marker (a steep stretch's tag, a stop), the cursor stays put: its dot would cover the marker and
-            // hide its tooltip.
-            guard map.bounds.contains(point), self.isOverMap(event, map), !Self.isOverMarker(event, map),
+            let overMap = map.bounds.contains(point) && self.isOverMap(event, map)
+            self.updateHoverTip(at: overMap ? point : nil, event: event, on: map)
+            // On a marker (a steep stretch's tag, a stop), the cursor stays put: its dot would cover the marker.
+            guard overMap, let line = self.parent.profileLine, !Self.isOverMarker(event, map),
                   let distance = Self.distance(along: line, at: point, on: map, tolerance: 8) else { return event }
             self.parent.onProfileHover(distance)
             return event
         }
     }
 
-    /// True when the pointer is on a marker that shows a tooltip.
+    /// True when the pointer is on a marker.
     static func isOverMarker(_ event: NSEvent, _ map: MKMapView) -> Bool {
+        marker(at: event, on: map, margin: 0) != nil
+    }
+
+    /// The marker under the pointer, other than names and the profile cursor's dot, within `margin` points of it.
+    static func marker(at event: NSEvent, on map: MKMapView, margin: CGFloat) -> PinAnnotation? {
         for annotation in map.annotations {
             guard let pin = annotation as? PinAnnotation, !pin.style.isName, pin.style != .cursor,
                   let view = map.view(for: annotation), !view.isHidden else { continue }
-            if view.bounds.contains(view.convert(event.locationInWindow, from: nil)) {
-                return true
+            if view.bounds.insetBy(dx: -margin, dy: -margin).contains(view.convert(event.locationInWindow, from: nil)) {
+                return pin
             }
         }
-        return false
+        return nil
     }
 
     /// The distance along `line` of the place nearest to `point`, if the line passes within `tolerance` points.
@@ -142,8 +149,11 @@ extension MapKitView.Coordinator {
     }
 
     func isOverMap(_ event: NSEvent, _ map: MKMapView) -> Bool {
+        // `hitTest` takes a point in the superview's coordinates. The content view is flipped, so its own
+        // coordinates would test the point mirrored top to bottom: over the profile pane for the map's upper part.
         guard let content = map.window?.contentView,
-              var view = content.hitTest(content.convert(event.locationInWindow, from: nil)) else { return false }
+              var view = content.hitTest(content.superview?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow)
+        else { return false }
         while true {
             if view === map { return true }
             guard let parent = view.superview else { return false }

@@ -166,6 +166,8 @@ final class TrackDEMStore {
         }
         let folder = folder(for: item, store: store)
         let step = max(2, info.resolution)
+        // In tunnels and on bridges the model's heights are not the road's.
+        let structures: [ClosedRange<Double>] = if case .route(let id) = item { store.route(id)?.structureStretches ?? [] } else { [] }
         let points = await Task.detached(priority: .userInitiated) { () -> [ElevationProfilePoint] in
             guard let model = try? ElevationModel(folder: folder) else { return [] }
             let measure = LineMeasure(segments: lines)
@@ -174,7 +176,7 @@ final class TrackDEMStore {
                 guard let place = measure.coordinate(at: distance), let height = model.elevation(at: place) else { continue }
                 points.append(ElevationProfilePoint(id: points.count, distanceMeters: distance, value: height, coordinate: place))
             }
-            return points
+            return points.leveled(over: structures)
         }.value
         profiles = [key: points]
         return points

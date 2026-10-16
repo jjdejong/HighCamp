@@ -107,18 +107,33 @@ final class RouteRecalculator {
         guard let server = settings.activeServer else {
             return .failure("The routing server address is not valid.")
         }
-        let client = BRouterClient(baseURL: server, profile: profile.brouterProfile)
         let points = [request.start.coordinate, request.end.coordinate]
+        // A copy of the profile that also reports tunnels and bridges, where terrain heights are not the road's.
+        let folder = settings.engine == .local ? settings.brouterFolder : nil
+        let name = await StructureProfiles.shared.name(for: profile.brouterProfile, server: server, folder: folder)
+        do {
+            return .success(try await calculate(points, with: name, profile: profile, server: server, heights: heights))
+        } catch RouteError.server where name != profile.brouterProfile {
+            // The uploaded copy may be gone (its folder emptied): upload it again next time, and use the profile now.
+            StructureProfiles.shared.forget(server: server)
+            do {
+                return .success(try await calculate(points, with: profile.brouterProfile, profile: profile, server: server, heights: heights))
+            } catch {
+                return .failure(RoutePlanner.message(for: error, server: server))
+            }
+        } catch {
+            return .failure(RoutePlanner.message(for: error, server: server))
+        }
+    }
+
+    private func calculate(_ points: [Coordinate], with name: String, profile: RoutingProfile, server: URL, heights: HeightSources?) async throws -> RouteLeg {
+        let client = BRouterClient(baseURL: server, profile: name)
         // Steep stretches are judged on terrain heights, from one source for the whole leg (never mixed).
         let source: RouteSource = heights.map { heights in
             ElevatedRouteSource(base: client) { await heights.heights(for: $0, mixing: false) }
         } ?? client
-        do {
-            let plan = try await ConstrainedRouter.plan(via: points, profile: profile, source: source)
-            let line = plan.geometry.points.map { RoutePoint(coordinate: $0.coordinate, elevation: $0.elevation) }
-            return .success(.calculated(line: line, from: points[0], to: points[1], profileID: profile.id))
-        } catch {
-            return .failure(RoutePlanner.message(for: error, server: server))
-        }
+        let plan = try await ConstrainedRouter.plan(via: points, profile: profile, source: source)
+        let line = plan.geometry.points.map { RoutePoint(coordinate: $0.coordinate, elevation: $0.elevation) }
+        return .calculated(line: line, from: points[0], to: points[1], profileID: profile.id, structures: plan.geometry.structures)
     }
 }

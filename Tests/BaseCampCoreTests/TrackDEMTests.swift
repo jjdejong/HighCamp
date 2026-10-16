@@ -44,4 +44,44 @@ final class TrackDEMTests: XCTestCase {
         XCTAssertLessThanOrEqual(long.count, 1_001)
         XCTAssertEqual(long.last, 100_000)
     }
+
+    func testATileIsOutlinedByItsCornersWhenKnownElseByItsBox() {
+        let box = tile("a", south: 45.0, west: 5.0)
+        XCTAssertEqual(box.area.outline, [
+            Coordinate(latitude: 45.045, longitude: 5.0), Coordinate(latitude: 45.045, longitude: 5.045),
+            Coordinate(latitude: 45.0, longitude: 5.045), Coordinate(latitude: 45.0, longitude: 5.0),
+        ])
+        let corners = [
+            Coordinate(latitude: 45.05, longitude: 5.0), Coordinate(latitude: 45.046, longitude: 5.06),
+            Coordinate(latitude: 45.0, longitude: 5.056), Coordinate(latitude: 45.004, longitude: 4.996),
+        ]
+        let turned = DEMTileInfo(path: "b", size: 1, modified: nil, north: 45.05, south: 45.0, east: 5.06, west: 4.996,
+                                 resolution: 1, projection: "L93", corners: corners)
+        XCTAssertEqual(turned.area, DEMTileArea(outline: corners, resolution: 1))
+    }
+
+    func testTheCoarsestTilesAreNotOutlinedWhenFinerOnesAreThere() {
+        let areas = [
+            tile("fine", south: 45.0, west: 5.0, resolution: 1).area,
+            tile("five", south: 45.0, west: 5.045, resolution: 5.002).area,
+            tile("eu", south: 40.0, west: 0.0, size: 10, resolution: 25).area,
+            tile("eu2", south: 40.0, west: 10.0, size: 10, resolution: 24.98).area,
+        ]
+        XCTAssertEqual(TrackDEM.outlined(areas).map(\.resolution), [1, 5.002])
+        // One kind of tile only: all are outlined.
+        XCTAssertEqual(TrackDEM.outlined(Array(areas[2...])).count, 2)
+    }
+
+    func testTiersCountTheTilesOfEachResolutionFinestFirst() {
+        let areas = [
+            tile("eu", south: 40.0, west: 0.0, size: 10, resolution: 25).area,
+            tile("a", south: 45.0, west: 5.0, resolution: 5).area,
+            tile("b", south: 45.0, west: 5.045, resolution: 5.01).area,
+            tile("eu2", south: 40.0, west: 10.0, size: 10, resolution: 24.9).area,
+            tile("c", south: 45.0, west: 5.09, resolution: 4.99).area,
+        ]
+        let tiers = TrackDEM.tiers(areas)
+        XCTAssertEqual(tiers.map(\.count), [3, 2])
+        XCTAssertEqual(tiers.map(\.resolution), [4.99, 24.9])
+    }
 }

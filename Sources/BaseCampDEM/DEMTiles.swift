@@ -34,7 +34,8 @@ public enum DEMTileIndex {
             }
             let size = Int64(values?.fileSize ?? 0)
             let modified = values?.contentModificationDate
-            if let old = known[url.path], old.size == size, old.modified == modified {
+            // Entries from before the corners were kept are read again, once.
+            if let old = known[url.path], old.size == size, old.modified == modified, old.corners != nil {
                 result.append(old)
             } else if let tile = read(url, size: size, modified: modified) {
                 result.append(tile)
@@ -74,7 +75,9 @@ public enum DEMTileIndex {
         return DEMTileInfo(
             path: url.path, size: size, modified: modified,
             north: latitudes.max()!, south: latitudes.min()!, east: longitudes.max()!, west: longitudes.min()!,
-            resolution: metres, projection: projection
+            resolution: metres, projection: projection,
+            // Clockwise from north-west: the corners were read north-west, north-east, south-west, south-east.
+            corners: [0, 1, 3, 2].map { Coordinate(latitude: latitudes[$0], longitude: longitudes[$0]) }
         )
     }
 

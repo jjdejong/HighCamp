@@ -16,9 +16,12 @@ public struct DEMTileInfo: Codable, Equatable, Sendable {
     public let resolution: Double
     /// The tile's projection, as GDAL describes it. Tiles are combined only with others of the same projection.
     public let projection: String
+    /// The tile's corners in degrees, clockwise from north-west: a tile in a projection such as Lambert-93 is
+    /// turned against the meridians, so its box is larger than it. Nil in an index written before they were kept.
+    public let corners: [Coordinate]?
 
     public init(path: String, size: Int64, modified: Date?, north: Double, south: Double, east: Double, west: Double,
-                resolution: Double, projection: String) {
+                resolution: Double, projection: String, corners: [Coordinate]? = nil) {
         self.path = path
         self.size = size
         self.modified = modified
@@ -28,6 +31,28 @@ public struct DEMTileInfo: Codable, Equatable, Sendable {
         self.west = west
         self.resolution = resolution
         self.projection = projection
+        self.corners = corners
+    }
+
+    /// The area the tile covers, for drawing it: its corners, or its box when they are not known.
+    public var area: DEMTileArea {
+        let outline = corners ?? [
+            Coordinate(latitude: north, longitude: west), Coordinate(latitude: north, longitude: east),
+            Coordinate(latitude: south, longitude: east), Coordinate(latitude: south, longitude: west),
+        ]
+        return DEMTileArea(outline: outline, resolution: resolution)
+    }
+}
+
+/// Where one tile of a track DEM lies, and how fine it is.
+public struct DEMTileArea: Codable, Equatable, Sendable {
+    public let outline: [Coordinate]
+    /// The pixel size in metres.
+    public let resolution: Double
+
+    public init(outline: [Coordinate], resolution: Double) {
+        self.outline = outline
+        self.resolution = resolution
     }
 }
 
@@ -51,6 +76,28 @@ public enum TrackDEM {
             }
         }
         return chosen.sorted().map { tiles[$0] }.sorted { ($0.resolution, $0.path) < ($1.resolution, $1.path) }
+    }
+
+    /// The tiles grouped by resolution, finest first: tiles whose pixel sizes differ by less than a tenth are one
+    /// kind (IGN's 5 m tiles do not all come out at exactly 5 m). Each group gives its finest resolution.
+    public static func tiers(_ areas: [DEMTileArea]) -> [(resolution: Double, count: Int)] {
+        var tiers: [(resolution: Double, count: Int)] = []
+        for area in areas.sorted(by: { $0.resolution < $1.resolution }) {
+            if let last = tiers.last, area.resolution <= last.resolution * 1.1 {
+                tiers[tiers.count - 1].count += 1
+            } else {
+                tiers.append((area.resolution, 1))
+            }
+        }
+        return tiers
+    }
+
+    /// The tiles worth outlining on the map: all but the coarsest kind when there are finer ones. The coarse
+    /// tiles only fill in beyond the fine ones, and are often far larger than the track (EU-DEM's are 1000 km).
+    public static func outlined(_ areas: [DEMTileArea]) -> [DEMTileArea] {
+        let tiers = tiers(areas)
+        guard tiers.count > 1, let coarsest = tiers.last?.resolution else { return areas }
+        return areas.filter { $0.resolution < coarsest }
     }
 
     /// The line's points, with places added between them so no two are more than `step` metres apart.

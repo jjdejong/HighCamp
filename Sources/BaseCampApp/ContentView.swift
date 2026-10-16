@@ -21,11 +21,33 @@ struct ContentView: View {
 
     /// The profile pane is shown for a selected track or route, unless the user hid it.
     private var showsProfilePane: Bool {
-        guard display.showsProfilePane else { return false }
+        display.showsProfilePane && selectionHasProfile
+    }
+
+    private var selectionHasProfile: Bool {
         switch store.selection {
-        case .track?, .route?: return true
-        default: return false
+        case .track?, .route?: true
+        default: false
         }
+    }
+
+    /// When the user hid the profile pane, a slim bar in its place brings it back.
+    private var hiddenProfileBar: some View {
+        HStack {
+            Button {
+                display.showsProfilePane = true
+            } label: {
+                Label("Show Profile", systemImage: "chevron.up")
+            }
+            .buttonStyle(.borderless)
+            .help("Show the elevation profile under the map (View › Show Profile, ⌥⌘P)")
+            Spacer()
+        }
+        .font(.callout)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(.bar)
+        .overlay(alignment: .top) { Divider() }
     }
 
     var body: some View {
@@ -50,6 +72,8 @@ struct ContentView: View {
                     ProfileResizeHandle(height: $profileHeight)
                     ProfilePane()
                         .frame(height: profileHeight)
+                } else if selectionHasProfile {
+                    hiddenProfileBar
                 }
                 DeviceStatusBar()
             }

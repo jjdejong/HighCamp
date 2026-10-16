@@ -334,7 +334,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G3 | Opus | done | bbfd0a3, 423ba46 | map list sheet; overlays use their finest level; default: first full map on |
 | G0 | Opus | done | | was a decoder bug after all: the y "same sign" flag was read from the x bit when x was signed, so lines zigzagged (contours and roads); fixed 2026-10-13 with a test |
 | G4 | Opus | done | dd8e815, d77e4a1, (this commit) | DEM reader (GPXSee port) and relief shading on the Garmin maps; maps' heights for Elevations from Model, new waypoints and the route recalculator (DEM folder first, setting for maps first); shading in saved pictures and printed reports |
-| D1 | Opus | done | e809ca8, (this commit) | track DEMs from a folder of high-resolution tiles (user request); profile from the track DEM; not yet seen on screen |
+| D1 | Opus | done | e809ca8, (this commit) | track DEMs from a folder of high-resolution tiles (user request); profile from the track DEM, in the pane and the inspector; a bar brings back a hidden profile pane |
 | G5 | Opus | done | (this commit) | closed without code: no overview map in the user's files; Apple Maps fills in when zoomed out (see G5) |
 | G6 | Opus | done | (this commit) | device courses, activities and GPX files in the sidebar and on the map, read-only, Copy to Library; checked with the user's Edge 1040 |
 | G7 | Opus | done | 705fd92, (this commit) | lists in nested list folders, Unlisted Data, BaseCamp's remove/delete choices, new items into the selected list; Smart Lists not done |

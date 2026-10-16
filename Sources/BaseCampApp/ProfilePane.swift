@@ -76,7 +76,7 @@ struct ProfilePane: View {
         .onChange(of: store.selection) { _, _ in
             domain = nil
         }
-        .task(id: DEMRequest(item: store.selection, library: store.revision, dem: trackDEMs.revision)) {
+        .task(id: TrackDEMRequest(item: store.selection, library: store.revision, dem: trackDEMs.revision)) {
             demProfile = nil
             guard let item = store.selection else { return }
             demProfile = await trackDEMs.profile(for: item, store: store)
@@ -177,12 +177,6 @@ struct ProfilePane: View {
             .help("Hide the profile (⌥⌘P)")
         }
         .fixedSize()
-    }
-
-    private struct DEMRequest: Equatable {
-        let item: LibraryItem?
-        let library: Int
-        let dem: Int
     }
 
     /// The values at the cursor on one line, and the size and averages of the picked stretch on the next.

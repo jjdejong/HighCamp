@@ -130,6 +130,14 @@ Not done: the stops themselves still have no height in the library (the inspecto
 Giving a stop the height of the router's line at it would change the stop, which `setLeg` uses to spot stale
 answers, so it needs care. Not checked on the device by Claude (never written to it): the user re-sends.
 
+## Hidden profile pane; inspector profile from the track DEM — 2026-10-16 — Opus
+State: done (this commit). Gate: 332 tests, 3 skipped, no DIAG.
+The user built a track DEM (Test Route 1: 4 IGN 5 m tiles, EU-DEM 25 m beyond) but saw nothing: their profile
+pane was hidden (`display.profilePane` = 0) and the only way back was the toolbar's chart icon or ⌥⌘P.
+- With a track or route selected and the pane hidden, a slim "Show Profile" bar sits under the map.
+- The inspector's profile reads the track DEM as the pane does (`display.profileFromDEM`), says so under the
+  chart, and has "Show Below the Map" in its header while the pane is hidden. `TrackDEMRequest` is shared.
+
 ## Track DEMs: high-resolution profiles from a folder of tiles — 2026-10-14 — Opus
 State: done (e809ca8 core and DEM, this commit app). Gate: 345 tests in four bundles (core 277), 3 skipped, no
 DIAG. Not seen on screen (the user was at the machine); the pipeline was timed on the user's whole DEM folder.
@@ -148,7 +156,7 @@ Python scripts (extract_tiles_for_track.py: hard links of the tiles a GPX crosse
   line's profile, so cursor, picked stretch, delete and split still line up. 13 km across the Vercors: 6,495
   samples in 0.44 s. Replace Elevations from Model uses the track DEM when the item has one.
 - Tiles without a projection are taken as Lambert-93 when the name says LAMB93/L93 or the coordinates fit.
-Not done: the inspector's small profile still uses the points; a track DEM is not removed when its item is
+Not done: a track DEM is not removed when its item is
 deleted (harmless, a few kB of VRT).
 
 ## Sharper Garmin tiles on 1× screens — 2026-10-14 — Opus

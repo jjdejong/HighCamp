@@ -11,10 +11,24 @@ struct InspectorView: View {
     @Environment(RoutePlanner.self) private var planner
     /// The series the profile shows, for an item that has it. Not saved.
     @State private var chartSeries = ProfileSeries.elevation
+    /// Heights read from the selected item's track DEM every few metres, when it has one.
+    @State private var demProfile: [ElevationProfilePoint]?
+    /// Shared with the profile pane: heights from the track DEM rather than the line's own points.
+    @AppStorage("display.profileFromDEM") private var fromDEM = true
     @Environment(RouteRecalculator.self) private var recalculator
     @Environment(RoutingSettings.self) private var routing
 
     var body: some View {
+        content
+            .task(id: TrackDEMRequest(item: store.selection, library: store.revision, dem: trackDEMs.revision)) {
+                demProfile = nil
+                guard let item = store.selection else { return }
+                demProfile = await trackDEMs.profile(for: item, store: store)
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if store.selectedItems.count > 1 {
             multipleSelection
         } else if let selection = store.selection, store.isOnDevice(selection) {
@@ -621,9 +635,10 @@ struct InspectorView: View {
         // The series the item has data for. Elevation is the first; a sensor's line is drawn in its own colour.
         let choices = stats.availableSeries
         let shown = choices.contains(chartSeries) ? chartSeries : (choices.first ?? .elevation)
-        let points = profile(shown)
+        let dem = shown == .elevation && fromDEM ? demProfile.flatMap { $0.count > 1 ? $0 : nil } : nil
+        let points = dem ?? profile(shown)
         if points.count > 1 {
-            Section("Profile") {
+            Section {
                 if choices.count > 1 {
                     Picker("Show", selection: $chartSeries) {
                         ForEach(choices, id: \.self) { series in
@@ -632,6 +647,11 @@ struct InspectorView: View {
                     }
                 }
                 ElevationChart(profile: points, series: shown, pickable: pickable)
+                if let selection = store.selection, dem != nil, let info = trackDEMs.info(for: selection, store: store) {
+                    Text("Heights from the track DEM, every \(Self.metres(max(2, info.resolution))) along the line")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 if pickable {
                     HStack {
                         Button("Delete Selected Points") {
@@ -645,8 +665,25 @@ struct InspectorView: View {
                     }
                     .disabled(store.profileRange == nil)
                 }
+            } header: {
+                HStack {
+                    Text("Profile")
+                    Spacer()
+                    if !display.showsProfilePane {
+                        Button("Show Below the Map") {
+                            display.showsProfilePane = true
+                        }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                        .help("Open the detailed profile under the map (View › Show Profile, ⌥⌘P)")
+                    }
+                }
             }
         }
+    }
+
+    private static func metres(_ value: Double) -> String {
+        value < 10 ? String(format: "%g m", (value * 10).rounded() / 10) : "\(Int(value.rounded())) m"
     }
 
     /// The average and the maximum of one sensor, when the item has readings for it.

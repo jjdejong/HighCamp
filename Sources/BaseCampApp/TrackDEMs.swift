@@ -170,3 +170,10 @@ final class TrackDEMStore {
         try? encoder.encode(StoredIndex(folder: folder.path, tiles: tiles)).write(to: file)
     }
 }
+
+/// What a view's track DEM profile depends on: the item, and changes to the library and to the track DEMs.
+struct TrackDEMRequest: Equatable {
+    let item: LibraryItem?
+    let library: Int
+    let dem: Int
+}

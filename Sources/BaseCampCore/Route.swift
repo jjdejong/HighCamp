@@ -247,8 +247,9 @@ public struct Route: Identifiable, Equatable, Sendable {
         return [before, after].compactMap { $0 }.max()
     }
 
-    /// Beyond this many metres from the router's line, a stop is reported: the router knows no way near it.
-    public static let farFromRouterMeters = 30.0
+    /// Beyond this many metres from the router's line, a stop is reported: the router knows no way near it. A point clicked
+    /// on a road at a usual zoom is well within it.
+    public static let farFromRouterMeters = 20.0
 
     /// Changes a stop's name or kind, which leaves the line as it is.
     public mutating func updateStop(at index: Int, _ change: (inout RouteStop) -> Void) {

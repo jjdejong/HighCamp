@@ -129,6 +129,20 @@ final class BRouterClientTests: XCTestCase {
         XCTAssertEqual(route.durationSeconds, 300)
     }
 
+    func testTwoStopsOnTheSameRouterPointGiveALineOfOnePlace() throws {
+        // BRouter's answer when both stops are nearest to the same point of a way: one point, length 0.
+        let json = #"""
+        {"type":"FeatureCollection","features":[{"type":"Feature","properties":{"track-length":"0","filtered ascend":"0","total-time":"0"},
+        "geometry":{"type":"LineString","coordinates":[[5.669503,45.165251,552.5]]}}]}
+        """#
+        let route = try BRouterClient.parse(Data(json.utf8))
+        XCTAssertEqual(route.points.count, 2)
+        XCTAssertEqual(route.points[0], route.points[1])
+        XCTAssertEqual(route.lengthMeters, 0)
+        let empty = #"{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[]}}]}"#
+        XCTAssertThrowsError(try BRouterClient.parse(Data(empty.utf8)))
+    }
+
     func testMalformedResponseThrows() {
         XCTAssertThrowsError(try BRouterClient.parse(Data("{}".utf8))) { error in
             XCTAssertEqual(error as? RouteError, .malformedResponse)

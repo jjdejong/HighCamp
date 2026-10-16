@@ -110,12 +110,16 @@ public struct BRouterClient: RouteSource {
             throw RouteError.malformedResponse
         }
 
-        let points = coordinates.compactMap { values -> CoursePoint? in
+        var points = coordinates.compactMap { values -> CoursePoint? in
             guard values.count >= 2 else { return nil }
             return CoursePoint(
                 coordinate: Coordinate(latitude: values[1], longitude: values[0]),
                 elevation: values.count >= 3 ? values[2] : nil
             )
+        }
+        // Both stops nearest to the same point of a way: BRouter gives that one point, a line of no length.
+        if points.count == 1 {
+            points.append(points[0])
         }
         guard points.count >= 2 else {
             throw RouteError.malformedResponse

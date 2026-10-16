@@ -332,6 +332,7 @@ struct InspectorView: View {
         colourSection(.route(route.id), color: route.color, defaultColour: MapLineColor.blue)
         editSection(canSplit: false)
         statisticsSections(route.statistics, pickable: false, profile: { route.profile(of: $0) })
+        trackDEMSection(.route(route.id))
     }
 
     @ViewBuilder
@@ -343,6 +344,48 @@ struct InspectorView: View {
         colourSection(.track(track.id), color: track.color, defaultColour: MapLineColor.orange)
         editSection(canSplit: true)
         statisticsSections(track.statistics, pickable: true, profile: { track.profile(of: $0) })
+        trackDEMSection(.track(track.id))
+    }
+
+    /// The item's track DEM: what it holds and when it was made, or a way to make one; progress while it is built.
+    @ViewBuilder
+    private func trackDEMSection(_ item: LibraryItem) -> some View {
+        Section("Track DEM") {
+            if trackDEMs.building == item, let status = trackDEMs.status {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text(status)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let info = trackDEMs.info(for: item, store: store) {
+                LabeledContent("Tiles", value: info.summary)
+                LabeledContent("Corridor", value: "\(Int(info.corridor)) m each side")
+                LabeledContent("Built", value: info.built.formatted(date: .abbreviated, time: .shortened))
+                Text(info.areas == nil
+                     ? "Rebuild it to outline its tiles on the map."
+                     : "Its finer tiles are outlined on the map while this item is selected.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Rebuild") { build(item) }
+                        .disabled(trackDEMs.status != nil)
+                        .help("Gather the tiles along the line again from \(elevation.tileFolder.lastPathComponent), as it is now")
+                    Button("Remove") { trackDEMs.remove(item, store: store) }
+                        .help("Delete the track DEM. The tiles themselves are not touched.")
+                }
+            } else {
+                Text("A DEM of its own from the high-resolution tiles along the line, for an exact profile.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Build Track DEM") { build(item) }
+                    .disabled(trackDEMs.status != nil)
+                    .help("Gather the tiles within \(Int(elevation.corridor)) m of the line from \(elevation.tileFolder.lastPathComponent)")
+            }
+        }
+    }
+
+    private func build(_ item: LibraryItem) {
+        Task { await trackDEMs.build(item, store: store, tileFolder: elevation.tileFolder, corridor: elevation.corridor) }
     }
 
     /// The colour the item is drawn in on the map, and a way back to the default.
@@ -648,7 +691,7 @@ struct InspectorView: View {
                 }
                 ElevationChart(profile: points, series: shown, pickable: pickable)
                 if let selection = store.selection, dem != nil, let info = trackDEMs.info(for: selection, store: store) {
-                    Text("Heights from the track DEM, every \(Self.metres(max(2, info.resolution))) along the line")
+                    Text("Heights from the track DEM, every \(TrackDEMStore.metres(max(2, info.resolution))) along the line")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -680,10 +723,6 @@ struct InspectorView: View {
                 }
             }
         }
-    }
-
-    private static func metres(_ value: Double) -> String {
-        value < 10 ? String(format: "%g m", (value * 10).rounded() / 10) : "\(Int(value.rounded())) m"
     }
 
     /// The average and the maximum of one sensor, when the item has readings for it.

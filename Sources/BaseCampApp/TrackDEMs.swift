@@ -2,6 +2,7 @@ import BaseCampCore
 import BaseCampDEM
 import Foundation
 import Observation
+import SwiftUI
 
 /// High-resolution elevation models made for single tracks and routes from a folder of DEM tiles, as the user's
 /// QMapShack scripts made them by hand: the tiles along the line, gathered into a small DEM of its own. Kept next
@@ -12,10 +13,21 @@ import Observation
 final class TrackDEMStore {
     /// What is being done, for the profile pane to show; nil when idle.
     private(set) var status: String?
+    /// The item whose track DEM is being built.
+    private(set) var building: LibraryItem?
+    /// What the last build made, shown over the map for a few seconds.
+    private(set) var notice: Notice?
     /// Bumped when a track DEM is built or removed, so views look again.
     private(set) var revision = 0
     @ObservationIgnored private var profiles: [ProfileKey: [ElevationProfilePoint]] = [:]
     @ObservationIgnored private var index: (folder: URL, tiles: [DEMTileInfo])?
+    /// The track DEMs read from disk, by item, for this `revision`: views ask on every redraw.
+    @ObservationIgnored private var infos: (revision: Int, byItem: [LibraryItem: Info?]) = (0, [:])
+
+    struct Notice: Equatable {
+        let id = UUID()
+        let text: String
+    }
 
     private struct ProfileKey: Hashable {
         let item: LibraryItem
@@ -31,6 +43,24 @@ final class TrackDEMStore {
         /// The finest pixel size, in metres.
         var resolution: Double
         var corridor: Double
+        /// Where each tile lies and how fine it is, for the map. Nil for a track DEM built before they were kept.
+        var areas: [DEMTileArea]?
+
+        /// The kinds of tile in it, finest first: "4 tiles at 5 m, 2 at 25 m beyond".
+        var summary: String {
+            guard let areas, !areas.isEmpty else {
+                return "\(tiles) tile\(tiles == 1 ? "" : "s"), finest \(TrackDEMStore.metres(resolution))"
+            }
+            return TrackDEM.tiers(areas).enumerated().map { index, tier in
+                let count = index == 0 ? "\(tier.count) tile\(tier.count == 1 ? "" : "s")" : "\(tier.count)"
+                return "\(count) at \(TrackDEMStore.metres(tier.resolution))\(index == 0 ? "" : " beyond")"
+            }.joined(separator: ", ")
+        }
+    }
+
+    /// A pixel size as text: "1 m", "5 m", "25 m".
+    nonisolated static func metres(_ value: Double) -> String {
+        value < 10 ? String(format: "%g m", (value * 10).rounded() / 10) : "\(Int(value.rounded())) m"
     }
 
     nonisolated static let infoFile = "track DEM.json"
@@ -41,10 +71,16 @@ final class TrackDEMStore {
 
     /// The item's track DEM, if it has one.
     func info(for item: LibraryItem, store: LibraryStore) -> Info? {
-        _ = revision
+        if infos.revision != revision {
+            infos = (revision, [:])
+        }
+        if let known = infos.byItem[item] {
+            return known
+        }
         let file = folder(for: item, store: store).appendingPathComponent(Self.infoFile)
-        guard let data = try? Data(contentsOf: file) else { return nil }
-        return try? Self.decoder.decode(Info.self, from: data)
+        let info = (try? Data(contentsOf: file)).flatMap { try? Self.decoder.decode(Info.self, from: $0) }
+        infos.byItem[item] = info
+        return info
     }
 
     /// The folder to read heights from for `item`: its track DEM when it has one.
@@ -60,7 +96,12 @@ final class TrackDEMStore {
         let destination = folder(for: item, store: store)
         let indexFile = store.dataFolder.appendingPathComponent("DEM tile index.json")
         status = "Reading the tiles in \(tileFolder.lastPathComponent)…"
-        defer { status = nil }
+        building = item
+        notice = nil
+        defer {
+            status = nil
+            building = nil
+        }
 
         let previous = index?.folder == tileFolder ? index!.tiles : Self.readIndex(indexFile, folder: tileFolder)
         let tiles = await Task.detached(priority: .userInitiated) { [weak self] in
@@ -73,20 +114,36 @@ final class TrackDEMStore {
         index = (tileFolder, tiles)
         Self.writeIndex(tiles, folder: tileFolder, to: indexFile)
 
-        status = "Building the track DEM…"
+        status = "Building the track DEM for “\(name)”…"
         do {
             let info = try await Task.detached(priority: .userInitiated) {
                 let chosen = TrackDEM.tiles(along: lines, corridor: corridor, from: tiles)
                 try TrackDEMBuilder.build(tiles: chosen, into: destination)
-                let info = Info(name: name, built: Date(), tiles: chosen.count, resolution: chosen.map(\.resolution).min() ?? 0, corridor: corridor)
+                let info = Info(name: name, built: Date(), tiles: chosen.count, resolution: chosen.map(\.resolution).min() ?? 0,
+                                corridor: corridor, areas: chosen.map(\.area))
                 try Self.encoder.encode(info).write(to: destination.appendingPathComponent(Self.infoFile))
                 return info
             }.value
-            _ = info
             revision += 1
+            show(Notice(text: "Track DEM for “\(name)”: \(info.summary), within \(Int(corridor)) m of the line."))
         } catch {
-            store.errorMessage = error.localizedDescription
+            store.errorMessage = "No track DEM for “\(name)”. \(error.localizedDescription)"
         }
+    }
+
+    /// Shows a notice over the map, for a few seconds.
+    private func show(_ new: Notice) {
+        notice = new
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            if self?.notice == new {
+                self?.notice = nil
+            }
+        }
+    }
+
+    func dismissNotice() {
+        notice = nil
     }
 
     func remove(_ item: LibraryItem, store: LibraryStore) {
@@ -176,4 +233,42 @@ struct TrackDEMRequest: Equatable {
     let item: LibraryItem?
     let library: Int
     let dem: Int
+}
+
+/// Over the map: what a track DEM build is doing, then what it made, for a few seconds.
+struct TrackDEMBanner: View {
+    @Environment(TrackDEMStore.self) private var trackDEMs
+
+    var body: some View {
+        if let status = trackDEMs.status {
+            banner {
+                ProgressView().controlSize(.small)
+                Text(status)
+            }
+        } else if let notice = trackDEMs.notice {
+            banner {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text(notice.text)
+                Button {
+                    trackDEMs.dismissNotice()
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.borderless)
+                .help("Close")
+            }
+        }
+    }
+
+    private func banner(@ViewBuilder _ content: () -> some View) -> some View {
+        HStack(spacing: 8, content: content)
+            .font(.callout)
+            .lineLimit(2)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.regularMaterial, in: Capsule())
+            .shadow(color: .black.opacity(0.15), radius: 4, y: 1)
+            .padding(.horizontal, 16)
+    }
 }

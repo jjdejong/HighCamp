@@ -68,6 +68,12 @@ struct BaseCampApp: App {
                             store.zoomToSelection()
                         }
                     }
+                    // `--build-track-dem` frames the map on the selected item and builds its track DEM, for testing.
+                    if CommandLine.arguments.contains("--build-track-dem"), let item = store.selection {
+                        try? await Task.sleep(for: .seconds(2))
+                        store.zoomToSelection()
+                        await trackDEMs.build(item, store: store, tileFolder: elevation.tileFolder, corridor: elevation.corridor)
+                    }
                     // `--profile-range FROM TO` picks that stretch of the selected track's profile, in kilometres, for testing.
                     if let range = Self.launchProfileRange() {
                         store.profileRange = range

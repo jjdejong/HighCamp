@@ -65,6 +65,10 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 MapPane()
                     .frame(minHeight: 200)
+                    .overlay(alignment: .top) {
+                        TrackDEMBanner()
+                            .padding(.top, 52)
+                    }
                 if planner.isActive {
                     RoutePlannerBar()
                 }

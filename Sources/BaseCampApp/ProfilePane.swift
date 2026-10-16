@@ -129,22 +129,18 @@ struct ProfilePane: View {
         } else if let selection = store.selection, let info = trackDEMs.info(for: selection, store: store) {
             Picker("Heights", selection: $fromDEM) {
                 Text("Points").tag(false)
-                Text("DEM \(Self.resolutionText(info.resolution))").tag(true)
+                Text("DEM \(TrackDEMStore.metres(info.resolution))").tag(true)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
-            .help("Heights at the line's own points, or read from its track DEM every few metres (\(info.tiles) tiles within \(Int(info.corridor)) m)")
+            .help("Heights at the line's own points, or read from its track DEM every few metres (\(info.summary), within \(Int(info.corridor)) m)")
         } else if let selection = store.selection {
             Button("Build Track DEM") {
                 Task { await trackDEMs.build(selection, store: store, tileFolder: elevation.tileFolder, corridor: elevation.corridor) }
             }
             .help("Gather the high-resolution tiles along this line from \(elevation.tileFolder.lastPathComponent) into a DEM of its own, for an exact profile")
         }
-    }
-
-    private static func resolutionText(_ metres: Double) -> String {
-        metres < 10 ? String(format: "%g m", (metres * 10).rounded() / 10) : "\(Int(metres.rounded())) m"
     }
 
     private func buttons(_ item: Item, length: Double) -> some View {

@@ -130,6 +130,20 @@ Not done: the stops themselves still have no height in the library (the inspecto
 Giving a stop the height of the router's line at it would change the stop, which `setLeg` uses to spot stale
 answers, so it needs care. Not checked on the device by Claude (never written to it): the user re-sends.
 
+## Track DEMs seen: progress and result, inspector section, tiles on the map — 2026-10-16 — Opus
+State: done (40a8e69 core, this commit app). Gate: 335 tests, 3 skipped, no DIAG. Seen in the debug app on a
+copy of the user's library (`--build-track-dem`, new debug option: frames the selection and builds its DEM).
+- Over the map while building: what is being done; then for 8 s "Track DEM for “X”: 4 tiles at 5 m, 2 at 25 m
+  beyond, within 100 m of the line." (`TrackDEMStore.notice`, `TrackDEMBanner`).
+- Inspector, for library routes and tracks: Track DEM section (tiles by kind, corridor, date, Rebuild, Remove;
+  Build when there is none; progress while built).
+- Map: layer `.trackDEM`, the selected item's tiles tinted indigo without edges (`MapArea`/`AreaOverlay`), all but
+  the coarsest kind when finer ones are there (`TrackDEM.outlined`); not in saved pictures. Edges were tried first
+  and looked like OFM's red roads at tile seams.
+- The tile index now keeps each tile's corners (Lambert-93 tiles are turned about 2° near Grenoble); older entries
+  are read again once. "track DEM.json" keeps the tiles' areas; one built before has none, and the inspector
+  says to rebuild it to see it on the map.
+
 ## Hidden profile pane; inspector profile from the track DEM — 2026-10-16 — Opus
 State: done (this commit). Gate: 332 tests, 3 skipped, no DIAG.
 The user built a track DEM (Test Route 1: 4 IGN 5 m tiles, EU-DEM 25 m beyond) but saw nothing: their profile

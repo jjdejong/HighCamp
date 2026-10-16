@@ -124,6 +124,8 @@ enum MapLayerKind: Int, CaseIterable {
     case places
     /// Coverage outlines of the maps in the map folder, with their names.
     case coverage
+    /// The tiles of the selected item's track DEM.
+    case trackDEM
     /// Waypoints, routes and tracks, and the draggable points of the selected route.
     case library
     case measure
@@ -139,6 +141,13 @@ struct MapLayerContent: Equatable {
     var lines: [MapLine] = []
     var circles: [MapCircleShape] = []
     var footprints: [MapFootprint] = []
+    var areas: [MapArea] = []
+}
+
+/// An area outlined and lightly filled, as a tile of a track DEM.
+struct MapArea: Equatable {
+    let id: String
+    let outline: [Coordinate]
 }
 
 /// Everything drawn on the map above the base map.
@@ -363,6 +372,10 @@ struct MapKitView: NSViewRepresentable {
                 let corners = footprint.corners.map(\.clLocation)
                 overlays.append(FootprintOverlay(coordinates: corners, count: corners.count))
             }
+            for area in content.areas {
+                let corners = area.outline.map(\.clLocation)
+                overlays.append(AreaOverlay(coordinates: corners, count: corners.count))
+            }
             for line in content.lines {
                 let coordinates = line.coordinates.map(\.clLocation)
                 let overlay = LineOverlay(coordinates: coordinates, count: coordinates.count)
@@ -470,6 +483,13 @@ struct MapKitView: NSViewRepresentable {
                 renderer.lineDashPattern = [6, 4]
                 // Outline only: stacked fills would wash out the base map.
                 renderer.fillColor = nil
+                return renderer
+            }
+            if overlay is AreaOverlay, let polygon = overlay as? MKPolygon {
+                let renderer = MKPolygonRenderer(polygon: polygon)
+                // A tint without edges, so neighbouring tiles read as one area and are not taken for roads.
+                renderer.fillColor = NSColor.systemIndigo.withAlphaComponent(0.18)
+                renderer.strokeColor = nil
                 return renderer
             }
             if let circle = overlay as? CircleOverlay {
@@ -635,6 +655,9 @@ final class CircleOverlay: MKCircle {}
 
 /// The coverage outline of one map in the map folder.
 final class FootprintOverlay: MKPolygon {}
+
+/// An area outlined and lightly filled: a tile of a track DEM.
+final class AreaOverlay: MKPolygon {}
 
 /// How a map name is drawn: its image, where the image's centre is from the coordinate (in points, y down), and
 /// which of two overlapping names is kept (the higher priority). The map and saved pictures share it.

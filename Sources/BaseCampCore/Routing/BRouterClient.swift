@@ -27,12 +27,24 @@ public struct RouteGeometry: Equatable, Sendable {
     public var lengthMeters: Double
     public var ascentMeters: Double
     public var durationSeconds: Double?
+    /// The tunnels and bridges, in metres along `points`: known when the router reports them (see
+    /// `BRouterProfileText.reportingStructures`). Heights inside them are drawn straight across.
+    public var structures: [ClosedRange<Double>] = []
 
     public init(points: [CoursePoint], lengthMeters: Double, ascentMeters: Double, durationSeconds: Double? = nil) {
         self.points = points
         self.lengthMeters = lengthMeters
         self.ascentMeters = ascentMeters
         self.durationSeconds = durationSeconds
+    }
+
+    /// The points' heights drawn straight across `structures`.
+    public mutating func levelStructures() {
+        guard !structures.isEmpty else { return }
+        let heights = Structures.level(points.map(\.elevation), at: GradeAnalysis.cumulativeDistances(points), over: structures)
+        for index in points.indices {
+            points[index].elevation = heights[index]
+        }
     }
 }
 
@@ -131,12 +143,17 @@ public struct BRouterClient: RouteSource {
         let length = number("track-length") ?? zip(points, points.dropFirst()).reduce(0) {
             $0 + Geodesy.distance(from: $1.0.coordinate, to: $1.1.coordinate)
         }
-        return RouteGeometry(
+        var route = RouteGeometry(
             points: points,
             lengthMeters: length,
             ascentMeters: number("filtered ascend") ?? 0,
             durationSeconds: number("total-time")
         )
+        if let messages = properties["messages"] as? [[String]] {
+            route.structures = Structures.stretches(messages: messages, points: points)
+            route.levelStructures()
+        }
+        return route
     }
 
     /// The default transport: a plain HTTPS or HTTP GET.

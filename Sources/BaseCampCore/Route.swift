@@ -78,9 +78,11 @@ public struct RouteLeg: Equatable, Codable, Sendable {
     /// begins at the nearest way it can use, so a stop away from any such way leaves a gap. Nil when not known.
     public var startGap: Double?
     public var endGap: Double?
+    /// The tunnels and bridges on the leg, in metres from its first stop along its line, when the router said.
+    public var structures: [ClosedRange<Double>]?
 
     public init(shape: [RoutePoint] = [], method: Method = .direct, profileID: UUID? = nil, needsRecalculation: Bool = false,
-                keepsStraight: Bool = false, startGap: Double? = nil, endGap: Double? = nil) {
+                keepsStraight: Bool = false, startGap: Double? = nil, endGap: Double? = nil, structures: [ClosedRange<Double>]? = nil) {
         self.shape = shape
         self.method = method
         self.profileID = profileID
@@ -88,6 +90,7 @@ public struct RouteLeg: Equatable, Codable, Sendable {
         self.keepsStraight = keepsStraight
         self.startGap = startGap
         self.endGap = endGap
+        self.structures = structures
     }
 
     public init(from decoder: Decoder) throws {
@@ -99,6 +102,7 @@ public struct RouteLeg: Equatable, Codable, Sendable {
         keepsStraight = try values.decodeIfPresent(Bool.self, forKey: .keepsStraight) ?? false
         startGap = try values.decodeIfPresent(Double.self, forKey: .startGap)
         endGap = try values.decodeIfPresent(Double.self, forKey: .endGap)
+        structures = try values.decodeIfPresent([ClosedRange<Double>].self, forKey: .structures)
     }
 }
 
@@ -154,7 +158,8 @@ public struct Route: Identifiable, Equatable, Sendable {
     /// A route planned by the router through `stops`: the planned line is cut at each stop into calculated legs,
     /// and each stop is moved onto the line, where the router put it.
     public static func planned(
-        id: UUID = UUID(), name: String, stops: [RouteStop], line: [RoutePoint], profileID: UUID?, color: ItemColor? = nil
+        id: UUID = UUID(), name: String, stops: [RouteStop], line: [RoutePoint], profileID: UUID?, color: ItemColor? = nil,
+        structures: [ClosedRange<Double>] = []
     ) -> Route {
         guard stops.count >= 2, line.count >= 2 else {
             return Route(id: id, name: name, stops: stops, profileID: profileID, color: color)
@@ -168,9 +173,16 @@ public struct Route: Identifiable, Equatable, Sendable {
             placed[stop].coordinate = line[index].coordinate
             placed[stop].elevation = line[index].elevation
         }
+        // Each leg's share of the tunnels and bridges, from its first stop, which sits on the line.
+        let distances = GradeAnalysis.cumulativeDistances(line.map { CoursePoint(coordinate: $0.coordinate) })
         let legs = zip(indices, indices.dropFirst()).enumerated().map { leg, cut in
-            RouteLeg(shape: cut.0 + 1 < cut.1 ? Array(line[(cut.0 + 1)..<cut.1]) : [], method: .calculated, profileID: profileID,
-                     startGap: gaps[leg], endGap: gaps[leg + 1])
+            let from = distances[cut.0], to = distances[cut.1]
+            let shares = structures.compactMap { stretch -> ClosedRange<Double>? in
+                let lower = max(stretch.lowerBound, from), upper = min(stretch.upperBound, to)
+                return lower < upper ? (lower - from)...(upper - from) : nil
+            }
+            return RouteLeg(shape: cut.0 + 1 < cut.1 ? Array(line[(cut.0 + 1)..<cut.1]) : [], method: .calculated, profileID: profileID,
+                            startGap: gaps[leg], endGap: gaps[leg + 1], structures: structures.isEmpty ? nil : shares)
         }
         return Route(id: id, name: name, stops: placed, legs: legs, profileID: profileID, color: color)
     }
@@ -308,11 +320,14 @@ public struct Route: Identifiable, Equatable, Sendable {
     public func reversed() -> Route {
         var copy = self
         copy.stops = stops.reversed()
-        copy.legs = legs.reversed().map { leg in
+        copy.legs = legs.indices.reversed().map { index in
+            let leg = legs[index]
             var reversed = leg
             reversed.shape = leg.shape.reversed()
             reversed.startGap = leg.endGap
             reversed.endGap = leg.startGap
+            let length = Geodesy.length(of: legLine(index))
+            reversed.structures = leg.structures?.map { (length - $0.upperBound)...(length - $0.lowerBound) }.reversed()
             return reversed
         }
         return copy

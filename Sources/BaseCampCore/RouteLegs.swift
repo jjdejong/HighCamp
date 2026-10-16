@@ -36,13 +36,19 @@ public extension Route {
 public extension RouteLeg {
     /// A leg from the line the router gave between its two stops. The router starts and ends on the nearest road,
     /// so the line's ends are kept as shape points; only points on the stops themselves are dropped.
-    static func calculated(line: [RoutePoint], from start: Coordinate, to end: Coordinate, profileID: UUID?) -> RouteLeg {
-        RouteLeg(
+    /// `structures` are the router's tunnels and bridges in metres along `line`; the leg keeps them from its first
+    /// stop, which is `startGap` before the line's start.
+    static func calculated(line: [RoutePoint], from start: Coordinate, to end: Coordinate, profileID: UUID?,
+                           structures: [ClosedRange<Double>] = []) -> RouteLeg {
+        let startGap = line.first.map { Geodesy.distance(from: start, to: $0.coordinate) }
+        let offset = startGap ?? 0
+        return RouteLeg(
             shape: line.filter { $0.coordinate != start && $0.coordinate != end },
             method: .calculated,
             profileID: profileID,
-            startGap: line.first.map { Geodesy.distance(from: start, to: $0.coordinate) },
-            endGap: line.last.map { Geodesy.distance(from: end, to: $0.coordinate) }
+            startGap: startGap,
+            endGap: line.last.map { Geodesy.distance(from: end, to: $0.coordinate) },
+            structures: structures.isEmpty ? nil : structures.map { ($0.lowerBound + offset)...($0.upperBound + offset) }
         )
     }
 }

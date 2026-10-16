@@ -65,6 +65,7 @@ public extension Route {
                 missing += 1
             }
         }
-        return (replacingPoints(points) ?? self, filled, missing)
+        // Heights from a terrain model are not the road's in tunnels and on bridges.
+        return ((replacingPoints(points) ?? self).levelingStructures(), filled, missing)
     }
 }

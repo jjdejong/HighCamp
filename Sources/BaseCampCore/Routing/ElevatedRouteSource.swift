@@ -26,8 +26,10 @@ public struct ElevatedRouteSource: RouteSource {
         for index in route.points.indices {
             route.points[index].elevation = values[index]
         }
+        // The terrain is not the road in tunnels and on bridges.
+        route.levelStructures()
         // The ascent follows the new heights, counted the same way as the ride statistics.
-        let found = values.compactMap { $0 }
+        let found = route.points.compactMap(\.elevation)
         route.ascentMeters = ActivityStatistics.climb(found, threshold: ActivityStatistics.elevationNoise)?.ascent ?? 0
         return route
     }

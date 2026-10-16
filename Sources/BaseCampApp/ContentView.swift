@@ -292,6 +292,9 @@ struct ContentView: View {
         } message: { file in
             Text("Garmin/NewFiles already has \(file.fileName), not yet taken in by the Edge. The new file is copied and checked before the old one is deleted.")
         }
+        .task(id: StopNamingRequest(revision: store.revision, maps: stopNamingMaps)) {
+            await StopNamer.shared.nameStops(in: store, maps: stopNamingMaps)
+        }
         .onChange(of: device.contents) { _, contents in
             store.device = contents
         }
@@ -314,6 +317,11 @@ struct ContentView: View {
             }
             #endif
         }
+    }
+
+    /// The Garmin maps route stops are named from: those in use, overlays aside.
+    private var stopNamingMaps: [URL] {
+        mapLayers.garminConfiguration(garminMaps).layers.filter { !$0.isOverlay }.map(\.url)
     }
 
     private var deviceDeletionIsPresented: Binding<Bool> {
@@ -397,4 +405,10 @@ struct ProfileResizeHandle: View {
         )
         .help("Drag to resize the profile")
     }
+}
+
+/// When route stops are looked at again for names: after each change to the library, or to the maps.
+private struct StopNamingRequest: Equatable {
+    let revision: Int
+    let maps: [URL]
 }

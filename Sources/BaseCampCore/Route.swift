@@ -23,13 +23,17 @@ public struct RouteStop: Identifiable, Equatable, Codable, Sendable {
     public var elevation: Double?
     /// A shaping point only steers the route; a via point (false) is also announced on the device.
     public var isShaping: Bool
+    /// The name was taken from the map (`StopNames`), not typed: it goes when the stop moves, and a new one is found.
+    public var hasMapName: Bool
 
-    public init(id: UUID = UUID(), name: String? = nil, coordinate: Coordinate, elevation: Double? = nil, isShaping: Bool = false) {
+    public init(id: UUID = UUID(), name: String? = nil, coordinate: Coordinate, elevation: Double? = nil, isShaping: Bool = false,
+                hasMapName: Bool = false) {
         self.id = id
         self.name = name
         self.coordinate = coordinate
         self.elevation = elevation
         self.isShaping = isShaping
+        self.hasMapName = hasMapName
     }
 
     public init(from decoder: Decoder) throws {
@@ -39,6 +43,12 @@ public struct RouteStop: Identifiable, Equatable, Codable, Sendable {
         coordinate = try values.decode(Coordinate.self, forKey: .coordinate)
         elevation = try values.decodeIfPresent(Double.self, forKey: .elevation)
         isShaping = try values.decodeIfPresent(Bool.self, forKey: .isShaping) ?? false
+        hasMapName = try values.decodeIfPresent(Bool.self, forKey: .hasMapName) ?? false
+    }
+
+    /// No name yet: one may be taken from the map.
+    public var needsName: Bool {
+        name?.isEmpty ?? true
     }
 
     var point: RoutePoint {
@@ -207,6 +217,11 @@ public struct Route: Identifiable, Equatable, Sendable {
         guard stops.indices.contains(index) else { return }
         stops[index].coordinate = coordinate
         stops[index].elevation = nil
+        // A name from the map was for where the stop was.
+        if stops[index].hasMapName {
+            stops[index].name = nil
+            stops[index].hasMapName = false
+        }
         invalidateLegs(around: index)
     }
 

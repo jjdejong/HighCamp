@@ -1147,7 +1147,39 @@ final class LibraryStore {
         edit("Rename Point", coalesceKey: "route-stop-name-\(stop)") { library in
             guard let routeIndex = library.routes.firstIndex(where: { $0.id == route }),
                   let index = library.routes[routeIndex].stops.firstIndex(where: { $0.id == stop }) else { return }
-            library.routes[routeIndex].updateStop(at: index) { $0.name = name.isEmpty ? nil : name }
+            library.routes[routeIndex].updateStop(at: index) { stop in
+                stop.name = name.isEmpty ? nil : name
+                stop.hasMapName = false
+            }
+        }
+    }
+
+    /// One stop's name read from the map, for the place the stop was at.
+    struct MapStopName {
+        let route: UUID
+        let stop: UUID
+        let coordinate: Coordinate
+        let name: String
+    }
+
+    /// Gives stops without a name the names read from the map (see `StopNamer`), as part of the step that added or
+    /// moved them: undo takes back both. A stop that moved or was named in the meantime is left alone.
+    func applyMapStopNames(_ names: [MapStopName]) {
+        let changed = history.amend { library in
+            for found in names {
+                guard let routeIndex = library.routes.firstIndex(where: { $0.id == found.route }),
+                      let index = library.routes[routeIndex].stops.firstIndex(where: { $0.id == found.stop }),
+                      library.routes[routeIndex].stops[index].coordinate == found.coordinate,
+                      library.routes[routeIndex].stops[index].needsName else { continue }
+                library.routes[routeIndex].updateStop(at: index) { stop in
+                    stop.name = found.name
+                    stop.hasMapName = true
+                }
+            }
+        }
+        if changed {
+            revision += 1
+            save()
         }
     }
 

@@ -505,9 +505,15 @@ struct MapKitView: NSViewRepresentable {
             }
             view.isEnabled = true
             // Hovering a marker shows what it is: a steep stretch's grades, how far a stop is from the router's ways.
-            view.toolTip = pin.title?.isEmpty == false ? pin.title : nil
+            // The profile cursor's dot needs none.
+            view.toolTip = pin.style != .cursor && pin.title?.isEmpty == false ? pin.title : nil
             view.displayPriority = .required
-            view.zPriority = .defaultUnselected
+            // Steep stretches' tags stay above the profile cursor's dot and the stops on the line.
+            if case .steep = pin.style {
+                view.zPriority = .max
+            } else {
+                view.zPriority = .defaultUnselected
+            }
             let dot = MarkerImage.image(for: pin.style)
             let image = MarkerImage.image(for: pin.style, label: pin.showsLabel ? pin.title : nil)
             view.image = image

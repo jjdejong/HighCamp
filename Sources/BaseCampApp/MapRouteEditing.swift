@@ -68,11 +68,25 @@ extension MapKitView.Coordinator {
             guard let self, let map, event.window === map.window, let line = self.parent.profileLine else { return event }
             map.window?.acceptsMouseMovedEvents = true
             let point = map.convert(event.locationInWindow, from: nil)
-            guard map.bounds.contains(point), self.isOverMap(event, map),
+            // On a marker (a steep stretch's tag, a stop), the cursor stays put: its dot would cover the marker and
+            // hide its tooltip.
+            guard map.bounds.contains(point), self.isOverMap(event, map), !Self.isOverMarker(event, map),
                   let distance = Self.distance(along: line, at: point, on: map, tolerance: 8) else { return event }
             self.parent.onProfileHover(distance)
             return event
         }
+    }
+
+    /// True when the pointer is on a marker that shows a tooltip.
+    static func isOverMarker(_ event: NSEvent, _ map: MKMapView) -> Bool {
+        for annotation in map.annotations {
+            guard let pin = annotation as? PinAnnotation, !pin.style.isName, pin.style != .cursor,
+                  let view = map.view(for: annotation), !view.isHidden else { continue }
+            if view.bounds.contains(view.convert(event.locationInWindow, from: nil)) {
+                return true
+            }
+        }
+        return false
     }
 
     /// The distance along `line` of the place nearest to `point`, if the line passes within `tolerance` points.

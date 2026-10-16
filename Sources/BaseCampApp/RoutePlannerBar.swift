@@ -85,24 +85,20 @@ struct RoutePlannerBar: View {
         return "\(summary) Click to add a point; drag a point or the line to change the route; right-click for more."
     }
 
-    /// The grade limit, and how long a stretch steeper than it must be to trigger a detour, for the selected profile.
-    /// Labels and values keep a fixed width, so the controls fit beside the map.
+    /// Which climbs are marked as steep, and whether HighCamp routes round the long ones itself (from how far along
+    /// the route), for the selected profile. Labels and values keep a fixed width, so the controls fit beside the map.
     @ViewBuilder
     private var limitControls: some View {
         let profile = planner.selectedProfile
-        Toggle("Limit grade", isOn: Binding(
+        Toggle("Mark steeper than", isOn: Binding(
             get: { profile.maxGradePercent != nil },
-            set: { limited in
-                planner.updateSelected { $0.maxGradePercent = limited ? 12 : nil }
+            set: { marked in
+                planner.updateSelected { $0.maxGradePercent = marked ? 12 : nil }
             }
         ))
         .toggleStyle(.checkbox)
         .fixedSize()
         if let limit = profile.maxGradePercent {
-            Text("Max grade")
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .fixedSize()
             Slider(value: Binding(
                 get: { limit },
                 set: { value in planner.updateSelected { $0.maxGradePercent = value.rounded() } }
@@ -113,20 +109,25 @@ struct RoutePlannerBar: View {
                 .lineLimit(1)
                 .frame(width: 36, alignment: .leading)
 
-            Text("Steep from")
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .fixedSize()
-            Slider(value: Binding(
-                get: { profile.minimumClimbMeters },
-                set: { value in planner.updateSelected { $0.minimumClimbMeters = (value / 50).rounded() * 50 } }
-            ), in: 100...1000, step: 50)
-            .frame(width: 120)
-            .help("How long, along the route, a stretch steeper than the limit must be before a way round it is sought")
-            Text("\(Int(profile.minimumClimbMeters)) m")
-                .monospacedDigit()
-                .lineLimit(1)
-                .frame(width: 64, alignment: .leading)
+            Toggle("Detour from", isOn: Binding(
+                get: { profile.detoursSteepStretches },
+                set: { on in planner.updateSelected { $0.detoursSteepStretches = on } }
+            ))
+            .toggleStyle(.checkbox)
+            .fixedSize()
+            .help("Route round steep stretches at least this long, measured along the route")
+            if profile.detoursSteepStretches {
+                Slider(value: Binding(
+                    get: { profile.minimumClimbMeters },
+                    set: { value in planner.updateSelected { $0.minimumClimbMeters = (value / 50).rounded() * 50 } }
+                ), in: 100...1000, step: 50)
+                .frame(width: 120)
+                .help("How long, along the route, a steep stretch must be before a way round it is sought")
+                Text("\(Int(profile.minimumClimbMeters)) m")
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .frame(width: 64, alignment: .leading)
+            }
         }
     }
 

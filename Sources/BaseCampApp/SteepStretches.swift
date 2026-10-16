@@ -1,14 +1,14 @@
 import BaseCampCore
 import Foundation
 
-/// The stretches of the selected route or track steeper than its grade limit, which the router accepted (too short
-/// to detour round, or no way round them), for the map and the profile to mark. A route's limit is its routing
+/// The stretches of the selected route or track steeper than its profile's threshold, for the map and the profile to
+/// mark, so the user can go round them (or that HighCamp's detours could not avoid, when the profile asks for them). A route's limit is its routing
 /// profile's; a track's is the profile chosen for planning. Read on the heights the profile shows: the track DEM's
 /// when it has one and the profile shows it.
 @MainActor
 enum SteepStretches {
     struct Result: Equatable {
-        /// The grade limit, in percent.
+        /// The threshold, in percent.
         let limit: Double
         let sections: [SteepSection]
         /// Each stretch's average grade, from its start to its end, in percent.

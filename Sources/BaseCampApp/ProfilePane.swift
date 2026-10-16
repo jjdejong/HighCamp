@@ -140,7 +140,7 @@ struct ProfilePane: View {
                     .lineLimit(1)
             }
             .fixedSize()
-            .help("Stretches steeper than the routing profile's grade limit (\(Int(steep.limit))%), shaded here and drawn on the line on the map with their steepest grade")
+            .help("Stretches steeper than the routing profile's threshold (\(Int(steep.limit))%), shaded here and drawn on the line on the map with their steepest grade")
         }
     }
 

@@ -472,7 +472,7 @@ struct MapPane: View {
         for (index, section) in steep.sections.enumerated() {
             let percent = Int(section.maxGradePercent.rounded())
             let average = Int(steep.averages[index].rounded())
-            let text = "\(UnitFormat.distance(section.lengthMeters, display.units)) at \(average)% on average, \(percent)% over its steepest 100 m (limit \(Int(steep.limit))%)"
+            let text = "\(UnitFormat.distance(section.lengthMeters, display.units)) at \(average)% on average, \(percent)% over its steepest 100 m (marked above \(Int(steep.limit))%)"
             // The stretch's line says the same as its tag, so it is found anywhere along it.
             for (piece, line) in measure.section(section.startMeters...section.endMeters).enumerated() {
                 content.lines.append(MapLine(id: "steep-\(index)-\(piece)", coordinates: line, color: .orange, rgb: colour, width: 5, tip: text))

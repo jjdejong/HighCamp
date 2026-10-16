@@ -13,7 +13,7 @@ public struct ConstrainedRoutePlan: Equatable, Sendable {
 }
 
 public enum ConstrainedRouter {
-    /// Routes through `via`, then routes around climbs steeper than the profile allows.
+    /// Routes through `via`, then, when the profile asks for it, routes around climbs steeper than its threshold.
     ///
     /// Each pass puts a circle over every steep section and asks the router again. A candidate is kept
     /// only when it has less steep road and does not exceed the detour limit. The best route found is
@@ -25,7 +25,7 @@ public enum ConstrainedRouter {
         progress: @Sendable (String) -> Void = { _ in }
     ) async throws -> ConstrainedRoutePlan {
         let direct = try await source.route(via: points, nogos: [])
-        guard let maxGrade = profile.maxGradePercent else {
+        guard let maxGrade = profile.maxGradePercent, profile.detoursSteepStretches else {
             return ConstrainedRoutePlan(
                 geometry: direct,
                 remainingSteepSections: [],

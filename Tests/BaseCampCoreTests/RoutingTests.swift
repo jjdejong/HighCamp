@@ -241,7 +241,7 @@ final class ConstrainedRouterTests: XCTestCase {
 
     func testAvoidsSteepClimbWhenDetourIsAcceptable() async throws {
         let router = FakeRouter(direct: steepDirect(), detour: flatDetour())
-        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, maxDetourPercent: 50)
+        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, detoursSteepStretches: true, maxDetourPercent: 50)
 
         let plan = try await ConstrainedRouter.plan(via: via, profile: profile, source: router)
 
@@ -253,7 +253,7 @@ final class ConstrainedRouterTests: XCTestCase {
 
     func testKeepsSteepRouteWhenDetourIsTooLong() async throws {
         let router = FakeRouter(direct: steepDirect(), detour: flatDetour())
-        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, maxDetourPercent: 20)
+        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, detoursSteepStretches: true, maxDetourPercent: 20)
 
         let plan = try await ConstrainedRouter.plan(via: via, profile: profile, source: router)
 
@@ -263,7 +263,7 @@ final class ConstrainedRouterTests: XCTestCase {
 
     func testKeepsSteepRouteWhenRouterCannotAvoidIt() async throws {
         let router = FakeRouter(direct: steepDirect(), detour: flatDetour(), refuseWhenAvoiding: true)
-        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12)
+        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, detoursSteepStretches: true)
 
         let plan = try await ConstrainedRouter.plan(via: via, profile: profile, source: router)
 
@@ -282,11 +282,21 @@ final class ConstrainedRouterTests: XCTestCase {
         XCTAssertEqual(plan.remainingSteepSections, [])
     }
 
+    func testSteepStretchesAreOnlyShownUnlessDetoursAreAskedFor() async throws {
+        let router = FakeRouter(direct: steepDirect(), detour: flatDetour())
+        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12)
+
+        let plan = try await ConstrainedRouter.plan(via: via, profile: profile, source: router)
+
+        XCTAssertEqual(plan.passes, 0)
+        XCTAssertEqual(plan.geometry, steepDirect())
+    }
+
     func testShortClimbDoesNotTriggerDetour() async throws {
         // A 200 m climb is below the default 300 m trigger, so the direct route is kept.
         let direct = geometry(northLine(lengthMeters: 1000, height: steepClimbHeight))
         let router = FakeRouter(direct: direct, detour: flatDetour())
-        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12)
+        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, detoursSteepStretches: true)
 
         let plan = try await ConstrainedRouter.plan(via: via, profile: profile, source: router)
 
@@ -298,7 +308,7 @@ final class ConstrainedRouterTests: XCTestCase {
     func testTriggerDistanceCanBeLowered() async throws {
         let direct = geometry(northLine(lengthMeters: 1000, height: steepClimbHeight))
         let router = FakeRouter(direct: direct, detour: flatDetour())
-        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, minimumClimbMeters: 100)
+        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, detoursSteepStretches: true, minimumClimbMeters: 100)
 
         let plan = try await ConstrainedRouter.plan(via: via, profile: profile, source: router)
 
@@ -308,7 +318,7 @@ final class ConstrainedRouterTests: XCTestCase {
 
     func testLooserLimitAcceptsTheSameClimb() async throws {
         let router = FakeRouter(direct: steepDirect(), detour: flatDetour())
-        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 16)
+        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 16, detoursSteepStretches: true)
 
         let plan = try await ConstrainedRouter.plan(via: via, profile: profile, source: router)
 
@@ -377,7 +387,7 @@ final class ElevatedRouteSourceTests: XCTestCase {
                 coordinate.longitude < 5.005 ? terrainHeight(coordinate) : 300
             }
         }
-        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, maxDetourPercent: 50)
+        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, detoursSteepStretches: true, maxDetourPercent: 50)
 
         let plan = try await ConstrainedRouter.plan(via: via, profile: profile, source: source)
 
@@ -398,6 +408,8 @@ final class RoutingProfileCodingTests: XCTestCase {
 
         XCTAssertEqual(profile.maxGradePercent, 12)
         XCTAssertEqual(profile.minimumClimbMeters, 300)
+        // Saved before detours became a choice: steep stretches are shown, not routed round.
+        XCTAssertFalse(profile.detoursSteepStretches)
     }
 
     func testTheTriggerSurvivesASaveAndLoad() throws {

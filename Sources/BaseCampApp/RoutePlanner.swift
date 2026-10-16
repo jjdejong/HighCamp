@@ -10,6 +10,7 @@ import Observation
 final class RoutePlanner {
     private static let profilesKey = "routing.profiles"
     private static let selectedKey = "routing.selectedProfile"
+    private static let softClimbingKey = "routing.softClimbingAdded"
 
     /// True while the route tool bar is shown and map clicks add stops.
     var isActive = false {
@@ -30,7 +31,15 @@ final class RoutePlanner {
         if let data = UserDefaults.standard.data(forKey: Self.profilesKey),
            let saved = try? JSONDecoder().decode([RoutingProfile].self, from: data), !saved.isEmpty {
             loaded = saved
+            // Once: profiles saved before BRouter's climbing cost was offered take the gentle one the defaults
+            // have, as the user asked ("Use the Profile's Values" in Settings removes it).
+            if !UserDefaults.standard.bool(forKey: Self.softClimbingKey) {
+                for index in loaded.indices where loaded[index].brouterProfile == "mtb" && loaded[index].brouterOptions["hills"] == nil {
+                    loaded[index].brouterOptions.merge(RoutingProfile.softClimbing) { old, _ in old }
+                }
+            }
         }
+        UserDefaults.standard.set(true, forKey: Self.softClimbingKey)
         let selected = UserDefaults.standard.string(forKey: Self.selectedKey).flatMap(UUID.init(uuidString:))
         profiles = loaded
         selectedProfileID = selected ?? loaded[0].id
@@ -57,6 +66,7 @@ final class RoutePlanner {
             name: source.name + " copy",
             brouterProfile: source.brouterProfile,
             maxGradePercent: source.maxGradePercent,
+            detoursSteepStretches: source.detoursSteepStretches,
             maxDetourPercent: source.maxDetourPercent,
             maxPasses: source.maxPasses,
             minimumClimbMeters: source.minimumClimbMeters,
@@ -102,7 +112,7 @@ final class RoutePlanner {
         case .missingSegments:
             "BRouter has no map data for this area. Download it from the route's inspector, or in Settings › Routing."
         case .noRoute:
-            "No route was found with these points and limits. Move a point, or raise the grade limit."
+            "No route was found with these points and limits. Move a point, or allow more in the routing profile."
         case .server(let code, let text):
             "BRouter answered with an error (\(code)). \(text)"
         case .malformedResponse:

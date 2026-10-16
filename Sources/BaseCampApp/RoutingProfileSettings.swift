@@ -60,41 +60,49 @@ struct RoutingProfileSettings: View {
         brouterSettings(profile)
     }
 
-    // MARK: Grade limit
+    // MARK: Steep stretches
 
-    /// HighCamp's own limit: BRouter weighs climbing but cannot refuse a grade, so steep stretches it keeps are
-    /// routed round afterwards.
+    /// Stretches steeper than the threshold are marked on the map and the profile, for the user to go round by
+    /// moving the route. HighCamp can also route round the long ones itself.
     @ViewBuilder
     private func gradeLimit(_ profile: RoutingProfile) -> some View {
-        Section("Grade limit") {
-            Toggle("Limit grade", isOn: Binding(
+        Section("Steep stretches") {
+            Toggle("Mark steep stretches", isOn: Binding(
                 get: { planner.selectedProfile.maxGradePercent != nil },
-                set: { limited in planner.updateSelected { $0.maxGradePercent = limited ? 12 : nil } }
+                set: { marked in planner.updateSelected { $0.maxGradePercent = marked ? 12 : nil } }
             ))
             .toggleStyle(.checkbox)
-            // The rest only matters with a grade limit: it says when and how far to detour around a steep stretch.
             if let limit = profile.maxGradePercent {
-                valueSlider("Max grade", value: "\(Int(limit))%", Binding(
+                valueSlider("Steeper than", value: "\(Int(limit))%", Binding(
                     get: { limit },
                     set: { value in planner.updateSelected { $0.maxGradePercent = value.rounded() } }
                 ), in: 5...25, step: 1)
-                valueSlider("Steep stretch from", value: "\(Int(profile.minimumClimbMeters)) m", Binding(
-                    get: { profile.minimumClimbMeters },
-                    set: { value in planner.updateSelected { $0.minimumClimbMeters = (value / 50).rounded() * 50 } }
-                ), in: 100...1000, step: 50)
-                .help("How long, along the route, a stretch steeper than the limit must be before a way round it is sought")
-                valueSlider("Max detour", value: "\(Int(profile.maxDetourPercent))% longer", Binding(
-                    get: { profile.maxDetourPercent },
-                    set: { value in planner.updateSelected { $0.maxDetourPercent = (value / 5).rounded() * 5 } }
-                ), in: 10...150, step: 5)
-                Stepper(value: Binding(
-                    get: { profile.maxPasses },
-                    set: { value in planner.updateSelected { $0.maxPasses = value } }
-                ), in: 1...10) {
-                    LabeledContent("Avoidance passes", value: "\(profile.maxPasses)")
+                Toggle("Detour round them automatically", isOn: Binding(
+                    get: { planner.selectedProfile.detoursSteepStretches },
+                    set: { on in planner.updateSelected { $0.detoursSteepStretches = on } }
+                ))
+                .toggleStyle(.checkbox)
+                if profile.detoursSteepStretches {
+                    valueSlider("Detour from", value: "\(Int(profile.minimumClimbMeters)) m", Binding(
+                        get: { profile.minimumClimbMeters },
+                        set: { value in planner.updateSelected { $0.minimumClimbMeters = (value / 50).rounded() * 50 } }
+                    ), in: 100...1000, step: 50)
+                    .help("How long, along the route, a steep stretch must be before a way round it is sought")
+                    valueSlider("Max detour", value: "\(Int(profile.maxDetourPercent))% longer", Binding(
+                        get: { profile.maxDetourPercent },
+                        set: { value in planner.updateSelected { $0.maxDetourPercent = (value / 5).rounded() * 5 } }
+                    ), in: 10...150, step: 5)
+                    Stepper(value: Binding(
+                        get: { profile.maxPasses },
+                        set: { value in planner.updateSelected { $0.maxPasses = value } }
+                    ), in: 1...10) {
+                        LabeledContent("Avoidance passes", value: "\(profile.maxPasses)")
+                    }
                 }
             }
-            Text("BRouter cannot refuse a grade. HighCamp looks for a way round each stretch steeper than the max grade and at least the steep-stretch distance long, measured along the route (not a height), that makes the route at most the max detour longer.")
+            Text(profile.detoursSteepStretches
+                 ? "HighCamp looks for a way round each steep stretch at least the detour distance long, measured along the route (not a height), that makes the route at most the max detour longer. Those it cannot avoid stay marked."
+                 : "Steep stretches are marked on the map and the profile; drag the route to go round them. BRouter's own climbing cost (Climbs, below) already prefers gentler ways without refusing steep ones.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

@@ -17,6 +17,7 @@ final class LiveBRouterTests: XCTestCase {
             name: "live",
             brouterProfile: env["BROUTER_PROFILE"] ?? "mtb",
             maxGradePercent: Double(env["BROUTER_MAX_GRADE"] ?? "12"),
+            detoursSteepStretches: true,
             maxDetourPercent: Double(env["BROUTER_MAX_DETOUR"] ?? "50") ?? 50
         )
         let client = BRouterClient(baseURL: URL(string: "http://127.0.0.1:17777")!, profile: profile.brouterProfile)

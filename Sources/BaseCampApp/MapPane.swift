@@ -411,8 +411,12 @@ struct MapPane: View {
                 },
             ]
         case .leg(let route, let leg, let coordinate):
+            let straight = store.route(route)?.legs[safe: leg]?.keepsStraight ?? false
             return [
                 MapMenuItem(title: "Insert Point Here") { store.insertRouteStop(route, at: leg + 1, coordinate: coordinate) },
+                MapMenuItem(title: straight ? "Route This Leg" : "Keep This Leg Straight") {
+                    store.setRouteLegsStraight(route, legs: [leg], straight: !straight)
+                },
             ]
         case .map(let coordinate):
             var items = [

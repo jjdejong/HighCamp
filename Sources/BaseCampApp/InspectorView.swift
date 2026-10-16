@@ -502,10 +502,12 @@ struct InspectorView: View {
                                         .fill(stop.id == store.selectedStop ? Color.accentColor.opacity(0.18) : .clear)
                                 )
                                 .id(stop.id)
+                            if let gap = route.routerGap(atStop: index), gap > Route.farFromRouterMeters {
+                                farFromRouterWarning(gap, stop: index, route: route)
+                                    .padding(.leading, 28)
+                            }
                             if index < route.legs.count {
-                                Text(legDescription(route.legs[index], failure: recalculator.failure(route: route, leg: index)))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                legRow(route, leg: index)
                                     .padding(.leading, 28)
                             }
                         }
@@ -573,6 +575,51 @@ struct InspectorView: View {
             }
             .padding(.leading, 24)
         }
+    }
+
+    /// How a leg was made, and a way to keep it straight (as for a path the router does not know) or route it again.
+    private func legRow(_ route: Route, leg index: Int) -> some View {
+        let leg = route.legs[index]
+        return HStack(spacing: 6) {
+            Text(legDescription(leg, failure: recalculator.failure(route: route, leg: index)))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            if leg.keepsStraight {
+                Button("Route It") {
+                    store.setRouteLegsStraight(route.id, legs: [index], straight: false)
+                }
+                .help(route.profileID == nil
+                      ? "Let the router calculate this leg once the route has a routing profile"
+                      : "Let the router calculate this leg again")
+            } else {
+                Button("Keep Straight") {
+                    store.setRouteLegsStraight(route.id, legs: [index], straight: true)
+                }
+                .help("Draw this leg as a straight line, never recalculated: for a path the router does not know, add points along it")
+            }
+        }
+        .font(.caption)
+        .buttonStyle(.link)
+    }
+
+    /// A stop the router could not reach: it starts from the nearest way it knows, so the route goes there and back
+    /// (or, for a route planned through it, the stop was moved there).
+    private func farFromRouterWarning(_ gap: Double, stop index: Int, route: Route) -> some View {
+        let legs = [index - 1, index].filter { route.legs.indices.contains($0) && !route.legs[$0].keepsStraight }
+        return VStack(alignment: .leading, spacing: 2) {
+            Label {
+                Text("\(UnitFormat.distance(gap, display.units)) from the nearest way the router knows. A path here is missing from its data.")
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            }
+            Button(legs.count > 1 ? "Keep Both Legs Straight" : "Keep the Leg Straight") {
+                store.setRouteLegsStraight(route.id, legs: legs, straight: true)
+            }
+            .buttonStyle(.link)
+            .help("Straight lines to and from this point, never recalculated. Add points along the path to follow it.")
+        }
+        .font(.caption)
     }
 
     /// How a leg was made: straight, calculated with a named profile, imported, or waiting for recalculation.

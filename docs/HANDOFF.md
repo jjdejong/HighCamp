@@ -130,6 +130,23 @@ Not done: the stops themselves still have no height in the library (the inspecto
 Giving a stop the height of the router's line at it would change the stop, which `setLeg` uses to spot stale
 answers, so it needs care. Not checked on the device by Claude (never written to it): the user re-sends.
 
+## Straight legs, and stops far from the router's ways — 2026-10-16 — Opus
+State: done (cec49af core, this commit app). Gate: 343 tests, 3 skipped, no DIAG. Seen in the debug app on a
+copy of the user's library.
+Cause of the user's report: three stops on a dashed path near Saint-Nizier (45.1662 N, 5.6696 E). BRouter
+(segments of 2026-05-31) snaps them 48 and 86 m away, even with the "shortest" profile, so the leg goes there
+and back from the road. On the OFM map the line is type 0x10101 (not routable in Garmin terms; 564 such lines
+round Grenoble, some named "CHEMIN DE ..."). So the path is missing from, or not usable in, OSM as BRouter
+reads it. The user was given the openstreetmap.org query link to check.
+- `RouteLeg.keepsStraight`: never sent to the router, stays straight when its stops move, both halves of a split
+  stay straight; `Route.setLegStraight`. Inspector: each leg has Keep Straight / Route It; map context menu on
+  a leg: Keep This Leg Straight / Route This Leg.
+- `RouteLeg.startGap`/`endGap`: how far the router's line starts and ends from the stops (for a planned route,
+  how far each stop was moved onto the line). `Route.routerGap(atStop:)`; over 30 m the stop list warns and
+  offers to keep the legs beside the stop straight. Legs calculated before this have no gaps (no warning
+  until recalculated).
+- The user's profile "Mountain bike, max 12%" has a 10% limit in their settings; told them.
+
 ## Track DEM tint taken off the map — 2026-10-16 — Opus
 State: done (this commit). Gate: 334 tests, 3 skipped, no DIAG. The user found the indigo tint spoilt the map:
 the `.trackDEM` layer, `MapArea`/`AreaOverlay` and `TrackDEM.outlined` are gone. The tiles' corners stay in the

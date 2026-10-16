@@ -1160,6 +1160,17 @@ final class LibraryStore {
         }
     }
 
+    /// Keeps legs of a route straight (true), never sent to the router, as for a path missing from its data; or
+    /// hands them back to the router (false), which recalculates them with the route's profile.
+    func setRouteLegsStraight(_ route: UUID, legs: [Int], straight: Bool) {
+        edit(straight ? "Keep Leg Straight" : "Route Leg") { library in
+            guard let routeIndex = library.routes.firstIndex(where: { $0.id == route }) else { return }
+            for leg in legs {
+                library.routes[routeIndex].setLegStraight(at: leg, straight)
+            }
+        }
+    }
+
     /// Sets the routing profile a route's changed legs are recalculated with. Nothing is recalculated by this.
     func setRouteProfile(_ route: UUID, profileID: UUID?) {
         edit("Change Routing") { library in

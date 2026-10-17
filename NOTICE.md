@@ -27,6 +27,13 @@ which devices it works with.
   `src/map/hillshading.cpp`. Because GPXSee is GPL-3.0 only, the program as a whole is distributed under
   version 3 of the GPL; the rest of the code stays available under version 3 or later.
 
+- The table of BaseCamp's waypoint symbol numbers, `Sources/BaseCampCore/MapSourceSymbols.swift`, is GPSBabel's
+  (`garmin_icon_tables.h`), Copyright (C) 2003-2007 Robert Lipe, licensed under the GNU General Public License
+  version 2 or later.
+- The reader of BaseCamp's own library, `Sources/BaseCampCore/BaseCampDatabase.swift`, was written from the layout of
+  the user's own BaseCamp files, with GPSBabel's description of MapSource's GDB format as a guide. No Garmin code was
+  used.
+
 ## Map and data sources
 
 - Apple Maps (MapKit), used under Apple's terms.

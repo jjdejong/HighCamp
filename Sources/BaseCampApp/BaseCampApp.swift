@@ -480,6 +480,9 @@ struct BaseCampCommands: Commands {
                 store.showImportPanel()
             }
             .keyboardShortcut("o")
+            Button("Import BaseCamp Library…") {
+                store.showBaseCampImportPanel()
+            }
 
             Menu("Export") {
                 ForEach(LibraryStore.ExportFormat.allCases) { format in

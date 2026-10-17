@@ -20,6 +20,11 @@ enum GarminColour {
         palette.first { $0.name == name }.map { ItemColor(hex: $0.hex) }
     }
 
+    /// The colour at a place in the palette, counting from 0 (Black). Nil past its end, as for Transparent.
+    static func color(at index: Int) -> ItemColor? {
+        palette.indices.contains(index) ? ItemColor(hex: palette[index].hex) : nil
+    }
+
     /// The palette name nearest to a colour, by distance in red, green and blue.
     static func name(nearest color: ItemColor) -> String {
         func distance(_ hex: UInt32) -> Double {

@@ -265,6 +265,47 @@ final class LibraryStore {
         fitCamera()
     }
 
+    /// Imports BaseCamp's own library, with its lists and list folders, as one step. `url` is a `.bclibrary`, BaseCamp's
+    /// Database folder, or the version folder in it. The files are read in the background and never written.
+    func importBaseCampLibrary(_ url: URL) {
+        guard let folder = BaseCampDatabase.databaseFolder(for: url) else {
+            errorMessage = "No BaseCamp library in \(url.lastPathComponent). Choose a .bclibrary folder, or BaseCamp's Database folder."
+            return
+        }
+        Task {
+            let read = await Task.detached(priority: .userInitiated) { Result { try BaseCampDatabase.read(folder) } }.value
+            switch read {
+            case .success(let contents):
+                let library = contents.library
+                edit("Import BaseCamp Library") { $0.mergeWithLists(library) }
+                fitCamera()
+                var summary = "Imported from BaseCamp: \(library.waypoints.count) waypoints, \(library.routes.count) routes and "
+                    + "\(library.tracks.count) tracks, in \(library.collections.count) lists and \(library.folders.count) folders."
+                if contents.unreadable > 0 {
+                    summary += " \(contents.unreadable) \(contents.unreadable == 1 ? "item" : "items") could not be read."
+                }
+                errorMessage = summary
+            case .failure(let error):
+                errorMessage = "Could not import the BaseCamp library. \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func showBaseCampImportPanel() {
+        let panel = NSOpenPanel()
+        panel.message = "Choose BaseCamp's library: a .bclibrary folder, or BaseCamp's Database folder."
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.treatsFilePackagesAsDirectories = true
+        let own = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Garmin/BaseCamp/Database")
+        if FileManager.default.fileExists(atPath: own.path) {
+            panel.directoryURL = own
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        importBaseCampLibrary(url)
+    }
+
     func showImportPanel() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = importTypes

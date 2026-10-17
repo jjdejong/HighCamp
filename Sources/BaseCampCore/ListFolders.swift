@@ -90,6 +90,24 @@ public extension Library {
 
     // MARK: Changes
 
+    /// Adds every item, list and folder of `other`, as when BaseCamp's library is imported. A list or folder whose
+    /// name is taken at the top of this library is numbered ("Vercors 2"); those inside `other`'s folders keep theirs.
+    mutating func mergeWithLists(_ other: Library) {
+        merge(other)
+        for var folder in other.folders {
+            if folder.parentID == nil {
+                folder.name = freeName(folder.name, in: nil, folder: true)
+            }
+            folders.append(folder)
+        }
+        for var list in other.collections {
+            if list.folderID == nil {
+                list.name = freeName(list.name, in: nil, folder: false)
+            }
+            collections.append(list)
+        }
+    }
+
     /// Adds a list named "New List" (numbered if taken) to a folder, and returns it.
     @discardableResult
     mutating func createList(in folder: UUID?, name: String = "New List", items: [CollectionItem] = []) -> UUID {

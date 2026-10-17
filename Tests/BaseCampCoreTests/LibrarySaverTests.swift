@@ -166,7 +166,7 @@ final class LibrarySaverTests: XCTestCase {
 
         let names = backupNames()
         XCTAssertEqual(names.count, 1)
-        let backup = try XCTUnwrap(names.first.map { backupFolder.appendingPathComponent($0) })
+        let backup = try XCTUnwrap(names.first.map { backupFolder.appendingPathComponent($0).appendingPathComponent("Library.json") })
         XCTAssertEqual(try LibraryFile.load(from: backup), library("A"))
 
         saver.schedule(library("C"))
@@ -209,6 +209,26 @@ final class LibrarySaverTests: XCTestCase {
         XCTAssertTrue(names.contains("Library-20200104-000000.json"))
         XCTAssertFalse(names.contains("Library-20200103-000000.json"))
         XCTAssertFalse(names.contains("Library-20200101-000000.json"))
+    }
+
+    func testBackupsKeepTheLinesAndOldBackupFilesAndFoldersArePrunedTogether() throws {
+        let lined = Library(tracks: [Track(name: "Ride", segments: [[TrackPoint(coordinate: Coordinate(latitude: 45, longitude: 6))]])])
+        try LibraryFile.save(lined, to: fileURL)
+        try FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
+        try "{}".write(to: backupFolder.appendingPathComponent("Library-20200101-000000.json"), atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(at: backupFolder.appendingPathComponent("Library-20200102-000000"),
+                                                withIntermediateDirectories: true)
+        let saver = makeSaver(idle: 60, kept: 2)
+
+        saver.schedule(library("B"))
+        try saver.flush()
+
+        let names = backupNames()
+        XCTAssertEqual(names.count, 2)
+        XCTAssertTrue(names.contains("Library-20200102-000000"))
+        let newest = try XCTUnwrap(names.first { !$0.hasPrefix("Library-2020") })
+        XCTAssertEqual(try LibraryFile.load(from: backupFolder.appendingPathComponent(newest).appendingPathComponent("Library.json")), lined)
+        XCTAssertEqual(try LibraryFile.load(from: fileURL), library("B"))
     }
 
     func testTheWrittenFileIsCompactAndLoadsBack() throws {

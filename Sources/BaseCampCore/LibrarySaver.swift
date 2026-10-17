@@ -2,7 +2,7 @@ import Foundation
 
 /// Saves the library in the background. A change is written once things have been quiet for `idleDelay`, and at the
 /// latest `maximumDelay` after the first unsaved change, so a long edit is still saved about once a second. Before
-/// writing, the file is copied to a `Backups` folder next to it (see `backUpIfDue`).
+/// writing, the file and its lines are copied to a `Backups` folder next to it (see `backUpIfDue`).
 ///
 /// All state is used only on `queue`, which is what makes it safe to share the saver between threads.
 public final class LibrarySaver: @unchecked Sendable {
@@ -35,6 +35,7 @@ public final class LibrarySaver: @unchecked Sendable {
     private var reportedBackupFailure = false
     private var checkedBackupThisSession = false
     private var writeCount = 0
+    private var linesWritten = LibraryFile.LinesWritten()
 
     private static let stampFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -126,12 +127,13 @@ public final class LibrarySaver: @unchecked Sendable {
                 onError?(BackupError(underlying: error))
             }
         }
-        try LibraryFile.save(library, to: fileURL)
+        try LibraryFile.save(library, to: fileURL, written: &linesWritten)
         writeCount += 1
     }
 
-    /// Copies the file to `Backups/` before the first write of a session, and again before a write when the newest
-    /// backup is older than `backupInterval`. The newest `keptBackups` are kept. Nothing outside `Backups/` is touched.
+    /// Copies the file and its lines to a folder in `Backups/` before the first write of a session, and again before a
+    /// write when the newest backup is older than `backupInterval`. The newest `keptBackups` are kept. Nothing outside
+    /// `Backups/` is touched.
     private func backUpIfDue() throws {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
         let existing = backups()
@@ -140,21 +142,21 @@ public final class LibrarySaver: @unchecked Sendable {
         guard due else { return }
         checkedBackupThisSession = true
 
-        try FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
-        let target = backupFolder.appendingPathComponent("Library-\(Self.stampFormatter.string(from: Date())).json")
+        let target = backupFolder.appendingPathComponent("Library-\(Self.stampFormatter.string(from: Date()))")
         try? FileManager.default.removeItem(at: target)
-        try FileManager.default.copyItem(at: fileURL, to: target)
+        try LibraryFile.copy(fileURL, into: target)
         for old in backups().dropFirst(keptBackups) {
             try? FileManager.default.removeItem(at: old.url)
         }
     }
 
-    /// The backups in `Backups/`, newest first, from their names: `Library-yyyyMMdd-HHmmss.json`.
+    /// The backups in `Backups/`, newest first, from their names: folders `Library-yyyyMMdd-HHmmss`, and files
+    /// `Library-yyyyMMdd-HHmmss.json` from before the lines were kept apart.
     private func backups() -> [(url: URL, date: Date)] {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: backupFolder.path)) ?? []
         return names.compactMap { name -> (url: URL, date: Date)? in
-            guard name.hasPrefix("Library-"), name.hasSuffix(".json") else { return nil }
-            let stamp = name.dropFirst("Library-".count).dropLast(".json".count)
+            guard name.hasPrefix("Library-") else { return nil }
+            let stamp = name.dropFirst("Library-".count).replacingOccurrences(of: ".json", with: "")
             guard let date = Self.stampFormatter.date(from: String(stamp)) else { return nil }
             return (backupFolder.appendingPathComponent(name), date)
         }

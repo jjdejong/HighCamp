@@ -210,6 +210,18 @@ public struct Route: Identifiable, Equatable, Sendable {
         return result
     }
 
+    /// The legs' shapes, which the library file keeps apart from the route (see `LibraryLines`). Setting it with the
+    /// wrong number of shapes changes nothing.
+    var legShapes: [[RoutePoint]] {
+        get { legs.map(\.shape) }
+        set {
+            guard newValue.count == legs.count else { return }
+            for index in legs.indices {
+                legs[index].shape = newValue[index]
+            }
+        }
+    }
+
     // MARK: Editing stops
 
     /// Moves a stop. The legs on either side no longer reach it, so they become straight, waiting for the router.

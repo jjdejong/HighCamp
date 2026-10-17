@@ -142,7 +142,8 @@ final class LibraryStore {
             let stamp = Int(Date().timeIntervalSince1970)
             let backup = fileURL.deletingLastPathComponent()
                 .appendingPathComponent("Library-unreadable-\(stamp).json")
-            try? FileManager.default.moveItem(at: fileURL, to: backup)
+            // Its lines go with it, or the next save would remove them as no longer used.
+            try? LibraryFile.move(fileURL, to: backup)
             errorMessage = "The saved library could not be read and was moved to \(backup.lastPathComponent). \(error.localizedDescription)"
         }
     }

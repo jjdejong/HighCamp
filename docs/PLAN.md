@@ -339,7 +339,8 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | G6 | Opus | done | (this commit) | device courses, activities and GPX files in the sidebar and on the map, read-only, Copy to Library; checked with the user's Edge 1040 |
 | G7 | Opus | done | 705fd92, (this commit) | lists in nested list folders, Unlisted Data, BaseCamp's remove/delete choices, new items into the selected list; Smart Lists not done |
 | BC1 | Opus | done | a059357 | File > Import BaseCamp Library: waypoints, tracks, routes (stops as via points, BaseCamp's line kept), lists and list folders; smart lists and track notes left out |
-| BC2 | Opus | done | (this commit) | library file v3: track points and route leg shapes in "Library Lines", a file per item, written only when changed; backups are folders. BaseCamp library: file 135 → 0.9 MB, save 2.5 → 0.02 s, read 2.5 → 0.06 s (release) |
+| BC2 | Opus | done | ada6f51 | library file v3: track points and route leg shapes in "Library Lines", a file per item, written only when changed; backups are folders. BaseCamp library: file 135 → 0.9 MB, save 2.5 → 0.02 s, read 2.5 → 0.06 s (release) |
+| IC1 | Opus | done | (this commit) | app icon: the user's picture (Artwork/AppIcon-source.png) on the macOS icon grid (Artwork/AppIcon.png); make-app-bundle.sh builds AppIcon.icns from it |
 | C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |
 | C5 | Haiku | reviewed | 2a26c42 | accepted; table next to the list; `--sidebar table` hook (debug) |
 | C7 | Haiku | reviewed | bc1a6cc, 69350e5 | accepted; follow-up C7b |

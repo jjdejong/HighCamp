@@ -30,6 +30,10 @@ which devices it works with.
 - The table of BaseCamp's waypoint symbol numbers, `Sources/BaseCampCore/MapSourceSymbols.swift`, is GPSBabel's
   (`garmin_icon_tables.h`), Copyright (C) 2003-2007 Robert Lipe, licensed under the GNU General Public License
   version 2 or later.
+- How Garmin devices are found and their folders read (`Sources/BaseCampMTP/GarminUSB.swift`, `DeviceTracker.swift`
+  and the folder walk in `MTPConnection.swift`) follows the author's own macOS device access in QMapShack
+  (`CDeviceAccessLibMtp.cpp`, `CDeviceWatcherMac.cpp`), licensed under the GNU General Public License version 3 or
+  later. The code was written anew in Swift.
 - The reader of BaseCamp's own library, `Sources/BaseCampCore/BaseCampDatabase.swift`, was written from the layout of
   the user's own BaseCamp files, with GPSBabel's description of MapSource's GDB format as a guide. No Garmin code was
   used.
@@ -44,3 +48,4 @@ which devices it works with.
   BRouter release from GitHub and map data tiles from brouter.de (from OpenStreetMap, © OpenStreetMap contributors,
   ODbL) into its own folder, and talks to the server over HTTP.
 - libmtp, for USB transfers with the Garmin Edge: LGPL-2.1, linked dynamically.
+- libusb, which finds Garmin devices as they are plugged in (and which libmtp uses): LGPL-2.1, linked dynamically.

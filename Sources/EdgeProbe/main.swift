@@ -15,12 +15,31 @@ let paths: [(path: [String], listAll: Bool)] = [
     (["Garmin", "CustomMaps"], true),
 ]
 
+// `EdgeProbe watch SECONDS` prints Garmin USB devices as they are plugged in and out, for SECONDS. It opens nothing.
+if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "watch", let seconds = Double(CommandLine.arguments[2]) {
+    let watcher = GarminUSBWatcher { event in
+        switch event {
+        case .arrived(let usb, let present):
+            print(String(format: "%@ bus %d address %d, %04x:%04x", present ? "Present" : "Arrived", usb.bus, usb.address, usb.vendorID, usb.productID))
+        case .left(let usb):
+            print(String(format: "Left bus %d address %d, %04x:%04x", usb.bus, usb.address, usb.vendorID, usb.productID))
+        }
+    }
+    guard let watcher else {
+        print("USB hotplug is not available")
+        exit(1)
+    }
+    Thread.sleep(forTimeInterval: seconds)
+    watcher.stop()
+    exit(0)
+}
+
 // `EdgeProbe load FOLDER` reads the device as the app does when it connects: its storages, then every file in
 // Garmin/Courses, Garmin/Activities and Garmin/NewFiles, one piece of work each, into FOLDER, with the time taken.
 // It reads from the device and writes only the local copies.
 if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "load" {
     let folder = URL(fileURLWithPath: CommandLine.arguments[2])
-    let device = MTPDevice()
+    let device = MTPDevice { try MTPConnection.openFirstGarmin() }
     let semaphore = DispatchSemaphore(value: 0)
     Task {
         do {
@@ -60,7 +79,7 @@ if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "load" {
 // `EdgeProbe maps` lists the .img maps in Garmin/ with their size and kind. Read-only.
 if CommandLine.arguments.count == 2, CommandLine.arguments[1] == "maps" {
     do {
-        let device = try MTPConnection.openFirstDevice()
+        let device = try MTPConnection.openFirstGarmin()
         let storageID = try device.storages().first?.id ?? 0
         let files = try device.entries(in: ["Garmin"], storageID: storageID).filter { !$0.isFolder }
         let names = Set(files.map { $0.name.lowercased() })
@@ -80,7 +99,7 @@ if CommandLine.arguments.count == 2, CommandLine.arguments[1] == "maps" {
 if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "delete-custom" {
     let name = CommandLine.arguments[2]
     do {
-        let device = try MTPConnection.openFirstDevice()
+        let device = try MTPConnection.openFirstGarmin()
         let storageID = try device.storages().first?.id ?? 0
         let files = try device.entries(in: ["Garmin"], storageID: storageID).filter { !$0.isFolder }
         let names = Set(files.map { $0.name.lowercased() })
@@ -106,7 +125,7 @@ if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "delete-custom"
 if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "delete-course" {
     let name = CommandLine.arguments[2]
     do {
-        let device = try MTPConnection.openFirstDevice()
+        let device = try MTPConnection.openFirstGarmin()
         let storageID = try device.storages().first?.id ?? 0
         let files = try device.entries(in: ["Garmin", "Courses"], storageID: storageID).filter { !$0.isFolder }
         guard let course = files.first(where: { $0.name == name }) else {
@@ -126,7 +145,7 @@ if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "delete-course"
 if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "list" {
     let path = CommandLine.arguments[2].split(separator: "/").map(String.init)
     do {
-        let device = try MTPConnection.openFirstDevice()
+        let device = try MTPConnection.openFirstGarmin()
         let storageID = try device.storages().first?.id ?? 0
         for entry in try device.entries(in: path, storageID: storageID).sorted(by: { $0.name < $1.name }) {
             print("\(entry.isFolder ? "dir " : "file") \(entry.name) (\(entry.size) bytes)")
@@ -144,7 +163,7 @@ if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "fetch" {
     var path = CommandLine.arguments[2].split(separator: "/").map(String.init)
     let name = path.removeLast()
     do {
-        let device = try MTPConnection.openFirstDevice()
+        let device = try MTPConnection.openFirstGarmin()
         let storageID = try device.storages().first?.id ?? 0
         guard let file = try device.entries(in: path, storageID: storageID).first(where: { !$0.isFolder && $0.name == name }) else {
             print("Not found: \(CommandLine.arguments[2])")
@@ -163,7 +182,7 @@ if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "fetch" {
 // It reads from the device and writes only the local copy.
 if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "fetch-smallest" {
     do {
-        let device = try MTPConnection.openFirstDevice()
+        let device = try MTPConnection.openFirstGarmin()
         let storageID = try device.storages().first?.id ?? 0
         let files = try device.entries(in: ["Garmin", "Activities"], storageID: storageID)
             .filter { !$0.isFolder }
@@ -186,7 +205,7 @@ if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "fetch-smallest
 if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "fetch-course" {
     let name = CommandLine.arguments[2]
     do {
-        let device = try MTPConnection.openFirstDevice()
+        let device = try MTPConnection.openFirstGarmin()
         let storageID = try device.storages().first?.id ?? 0
         let files = try device.entries(in: ["Garmin", "Courses"], storageID: storageID).filter { !$0.isFolder }
         guard let course = files.first(where: { $0.name == name }) else {
@@ -203,7 +222,7 @@ if CommandLine.arguments.count == 4, CommandLine.arguments[1] == "fetch-course" 
 }
 
 do {
-    let device = try MTPConnection.openFirstDevice()
+    let device = try MTPConnection.openFirstGarmin()
     for storage in try device.storages() {
         print("Storage \(storage.id): \(storage.name), \(storage.freeBytes) of \(storage.capacityBytes) bytes free")
         for (path, listAll) in paths {

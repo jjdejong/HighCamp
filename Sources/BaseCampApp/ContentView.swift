@@ -301,7 +301,7 @@ struct ContentView: View {
         .onAppear {
             // Copies of the device's files are kept next to the library, so a device connected again is quick to show.
             device.cacheFolder = store.dataFolder.appendingPathComponent("Device Files")
-            device.refresh()
+            device.start()
             #if DEBUG
             // `--show settings` opens the Settings window at launch, for testing.
             if BaseCampApp.launchValue("--show") == "settings" {

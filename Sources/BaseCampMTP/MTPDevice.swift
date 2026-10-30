@@ -8,7 +8,7 @@ public actor MTPDevice {
     private let queue = DispatchSerialQueue(label: "BaseCampMTP.device")
     public nonisolated var unownedExecutor: UnownedSerialExecutor { queue.asUnownedSerialExecutor() }
 
-    private let open: @Sendable () throws -> any MTPLink
+    private var open: (@Sendable () throws -> any MTPLink)?
     private let idleTimeout: Duration
     private var link: (any MTPLink)?
     private var storages: [MTPStorage]?
@@ -17,7 +17,7 @@ public actor MTPDevice {
 
     public init(
         idleTimeout: Duration = .seconds(10),
-        open: @escaping @Sendable () throws -> any MTPLink = { try MTPConnection.openFirstDevice() }
+        open: (@Sendable () throws -> any MTPLink)? = nil
     ) {
         self.idleTimeout = idleTimeout
         self.open = open
@@ -52,6 +52,13 @@ public actor MTPDevice {
         }
     }
 
+    /// Sets how the next connection is opened, such as `{ try MTPConnection.open(address) }` for the device plugged
+    /// in there, and closes the current one. With nil, work fails with `MTPError.noDeviceAttached`.
+    public func use(_ open: (@Sendable () throws -> any MTPLink)?) {
+        close()
+        self.open = open
+    }
+
     /// Closes the connection now. The next piece of work opens a new one.
     public func close() {
         link = nil
@@ -68,6 +75,7 @@ public actor MTPDevice {
 
     private func connection() throws -> any MTPLink {
         if let link { return link }
+        guard let open else { throw MTPError.noDeviceAttached }
         let opened = try open()
         link = opened
         return opened

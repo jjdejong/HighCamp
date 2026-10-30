@@ -31,7 +31,7 @@ struct PendingGPX: Equatable {
     let data: Data
 }
 
-/// Looks for an MTP device, reports what it finds, sends courses to it and reads activities from it.
+/// Watches for a Garmin device over USB, reports what it finds, sends courses to it and reads activities from it.
 /// All device work goes through one `MTPDevice`, so only one libmtp connection exists and nothing overlaps.
 @MainActor
 @Observable
@@ -64,6 +64,12 @@ final class DeviceStore {
     var cacheFolder: URL?
     private var contentsTask: Task<Void, Never>?
     @ObservationIgnored private let device = MTPDevice()
+    @ObservationIgnored private var watcher: GarminUSBWatcher?
+    @ObservationIgnored private var tracker = DeviceTracker()
+    /// The device open now, under the serial the tracker gave it.
+    @ObservationIgnored private var opened: (address: USBDeviceAddress, serial: Int)?
+    @ObservationIgnored private var opening = false
+    @ObservationIgnored private var wakeTask: Task<Void, Never>?
 
     /// Free space on the device's first storage, if known.
     var freeBytes: UInt64? {
@@ -78,7 +84,29 @@ final class DeviceStore {
         return false
     }
 
+    /// Starts watching for Garmin devices. One already plugged in is opened at once, one plugged in later once it
+    /// has settled (see `DeviceTracker`). Only one device is opened at a time; another waits until it is unplugged.
+    func start() {
+        guard watcher == nil else { return }
+        state = .disconnected
+        // The main queue keeps the events in order.
+        watcher = GarminUSBWatcher { event in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { [weak self] in self?.handle(event) }
+            }
+        }
+        if watcher == nil {
+            state = .failed("USB devices cannot be watched: libusb has no hotplug support here.")
+        }
+    }
+
+    /// Reads the open device's status and contents again. With no device open, tries the ones given up again.
     func refresh() {
+        guard opened != nil else {
+            tracker.retryGivenUp(now: .now)
+            update()
+            return
+        }
         refreshTask?.cancel()
         state = .searching
         let device = device
@@ -87,20 +115,89 @@ final class DeviceStore {
             do {
                 let status = try await device.status()
                 result = .connected(name: DeviceStore.displayName(for: status.identity), storages: status.storages)
-            } catch MTPError.noDeviceAttached {
-                result = .disconnected
             } catch {
                 result = .failed(error.localizedDescription)
             }
             if !Task.isCancelled {
-                state = result
-                if case .connected(let name, _) = result {
-                    loadContents(deviceName: name)
-                } else {
-                    contentsTask?.cancel()
-                    contents = DeviceContents()
-                }
+                show(result)
             }
+        }
+    }
+
+    private func handle(_ event: GarminUSBWatcher.Event) {
+        switch event {
+        case .arrived(let address, let present):
+            tracker.arrived(address, present: present, now: .now)
+        case .left(let address):
+            tracker.left(address)
+            if opened?.address == address {
+                opened = nil
+                refreshTask?.cancel()
+                show(.disconnected)
+                let device = device
+                Task { await device.use(nil) }
+            }
+        }
+        update()
+    }
+
+    /// Opens the next device that is due, or looks again when one will be, and shows where things stand.
+    private func update() {
+        wakeTask?.cancel()
+        guard opened == nil, !opening else { return }
+        if let due = tracker.due(now: .now) {
+            open(due)
+            return
+        }
+        if let next = tracker.nextAttempt(after: .now) {
+            wakeTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(max(0, next.timeIntervalSinceNow)))
+                if !Task.isCancelled { self?.update() }
+            }
+        }
+        if tracker.isEmpty {
+            state = .disconnected
+        } else if tracker.isWaiting {
+            state = .searching
+        } else {
+            state = .failed("The Garmin device could not be opened. If Garmin Express or another app is using it, quit that app, then click Refresh.")
+        }
+    }
+
+    private func open(_ plugged: DeviceTracker.Plugged) {
+        opening = true
+        state = .searching
+        let device = device
+        let address = plugged.address
+        Task {
+            await device.use { try MTPConnection.open(address) }
+            var status: (identity: MTPDeviceIdentity, storages: [MTPStorage])?
+            do {
+                status = try await device.status()
+            } catch {}
+            // It may have been unplugged meanwhile.
+            let stillPlugged = tracker.serial(of: address) == plugged.serial
+            if let status, stillPlugged {
+                tracker.opened(address, serial: plugged.serial)
+                opened = (address, plugged.serial)
+                show(.connected(name: DeviceStore.displayName(for: status.identity), storages: status.storages))
+            } else {
+                await device.use(nil)
+                tracker.failed(address, serial: plugged.serial, now: .now)
+            }
+            opening = false
+            update()
+        }
+    }
+
+    /// Shows the device's state, and reads its contents once it is connected.
+    private func show(_ newState: DeviceState) {
+        state = newState
+        if case .connected(let name, _) = newState {
+            loadContents(deviceName: name)
+        } else {
+            contentsTask?.cancel()
+            contents = DeviceContents()
         }
     }
 
@@ -370,8 +467,6 @@ extension MTPError: LocalizedError {
         switch self {
         case .noDeviceAttached:
             "No MTP device is attached over USB."
-        case .detectFailed(let code):
-            "The USB scan failed (libmtp code \(code))."
         case .openFailed:
             "The device was found but could not be opened. Unplug and replug it."
         case .folderNotFound(let path):

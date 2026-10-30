@@ -262,9 +262,13 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
   names match ignoring case; the storages are read when the connection opens and by `status()`, not for each piece of
   work. `EdgeProbe load` times a read like the app's: on the Edge 1040, 117 files (34 MB), listing 0.92 → 0.67 s,
   in all 5.2 → 4.9 s; the transfer itself is most of it.
-- 2, finding the device: Garmin USB devices (vendor 0x091e) through libusb hotplug, never
-  `LIBMTP_Detect_Raw_Devices()`, which opens every unknown USB device; opened 3 s after they appear (a booting Edge
-  shows up for a moment), failures retried after 2.5, 5, 10, 20 and 40 s.
+- 2, finding the device: Garmin USB devices (vendor 0x091e) through libusb hotplug (`GarminUSBWatcher`), never
+  `LIBMTP_Detect_Raw_Devices()`, which opens every unknown USB device; `MTPConnection.open(_:)` opens the one device,
+  with libmtp's flags for it or after `LIBMTP_Check_Specific_Device()`. `DeviceTracker` decides when: a device
+  already plugged in at launch at once, a new one 3 s after it appears (a booting Edge shows up for a moment),
+  failures retried after 2.5, 5, 10, 20 and 40 s, then given up until it is plugged in again or Refresh is clicked.
+  One device is open at a time. The status bar follows plugging in and out; Refresh reads the open device again.
+  The command-line tools open the first Garmin device the same way; `EdgeProbe watch` prints plug events.
 - 3, memory cards: every storage with a Garmin folder.
 
 ## Phase C: features (Haiku after Opus has set the shape)
@@ -355,7 +359,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | BC1 | Opus | done | a059357 | File > Import BaseCamp Library: waypoints, tracks, routes (stops as via points, BaseCamp's line kept), lists and list folders; smart lists and track notes left out |
 | BC2 | Opus | done | ada6f51 | library file v3: track points and route leg shapes in "Library Lines", a file per item, written only when changed; backups are folders. BaseCamp library: file 135 → 0.9 MB, save 2.5 → 0.02 s, read 2.5 → 0.06 s (release) |
 | IC1 | Opus | done | 34617e4 | app icon: the user's picture (Artwork/AppIcon-source.png) on the macOS icon grid (Artwork/AppIcon.png); make-app-bundle.sh builds AppIcon.icns from it |
-| G8 | Opus | in progress | (this commit) | 1 of 3: listings checked, remembered, matched ignoring case (see G8) |
+| G8 | Opus | in progress | 72ffe44, (this commit) | 2 of 3: listings checked and remembered; the device found by USB hotplug, Garmin only (see G8) |
 | C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |
 | C5 | Haiku | reviewed | 2a26c42 | accepted; table next to the list; `--sidebar table` hook (debug) |
 | C7 | Haiku | reviewed | bc1a6cc, 69350e5 | accepted; follow-up C7b |

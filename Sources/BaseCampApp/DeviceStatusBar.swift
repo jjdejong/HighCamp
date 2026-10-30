@@ -15,7 +15,7 @@ struct DeviceStatusBar: View {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
             .labelStyle(.iconOnly)
-            .help("Look for the device again")
+            .help("Read the device again, or try again to open one that could not be opened")
             .disabled(device.state == .searching)
         }
         .font(.callout)
@@ -30,7 +30,7 @@ struct DeviceStatusBar: View {
         case .searching:
             ProgressView()
                 .controlSize(.small)
-            Text("Looking for a Garmin device…")
+            Text("Reading the Garmin device…")
                 .foregroundStyle(.secondary)
         case .disconnected:
             Image(systemName: "cable.connector.slash")

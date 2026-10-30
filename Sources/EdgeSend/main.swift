@@ -19,7 +19,7 @@ let fileURL = URL(fileURLWithPath: arguments[1])
 let folder = arguments[2].split(separator: "/").map(String.init)
 
 do {
-    let device = try MTPConnection.openFirstDevice()
+    let device = try MTPConnection.openFirstGarmin()
     guard let storage = try device.storages().first else {
         print("FAILED: the device reports no storage")
         exit(1)

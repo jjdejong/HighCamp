@@ -24,7 +24,13 @@ let package = Package(
             pkgConfig: "libmtp",
             providers: [.brew(["libmtp"])]
         ),
-        .target(name: "BaseCampMTP", dependencies: ["CLibMTP"]),
+        // libusb, installed with libmtp, which uses it. Finds Garmin devices without opening any other.
+        .systemLibrary(
+            name: "CLibUSB",
+            pkgConfig: "libusb-1.0",
+            providers: [.brew(["libusb"])]
+        ),
+        .target(name: "BaseCampMTP", dependencies: ["CLibMTP", "CLibUSB"]),
         .testTarget(name: "BaseCampMTPTests", dependencies: ["BaseCampMTP"]),
 
         // GDAL, installed with `brew install gdal`. Reads the elevation models (DEM) that QMapShack uses.

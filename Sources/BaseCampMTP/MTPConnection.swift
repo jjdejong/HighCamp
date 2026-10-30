@@ -3,7 +3,6 @@ import Foundation
 
 public enum MTPError: Error, Equatable {
     case noDeviceAttached
-    case detectFailed(code: UInt32)
     case openFailed
     case folderNotFound(String)
     case operationFailed(String)
@@ -71,32 +70,59 @@ public final class MTPConnection: MTPLink {
         LIBMTP_Release_Device(device)
     }
 
-    /// Opens the first MTP device attached over USB.
-    public static func openFirstDevice() throws -> MTPConnection {
-        LIBMTP_Init()
-        var rawDevices: UnsafeMutablePointer<LIBMTP_raw_device_t>?
-        var count: Int32 = 0
-        let status = LIBMTP_Detect_Raw_Devices(&rawDevices, &count)
-        if status == LIBMTP_ERROR_NO_DEVICE_ATTACHED {
-            throw MTPError.noDeviceAttached
-        }
-        guard status == LIBMTP_ERROR_NONE, let rawDevices, count > 0 else {
-            throw MTPError.detectFailed(code: status.rawValue)
-        }
-        // Copy the descriptor strings out before the raw device list is freed.
-        let entry = rawDevices.pointee.device_entry
-        let identity = MTPDeviceIdentity(
-            vendor: entry.vendor.map { String(cString: $0) } ?? "",
-            product: entry.product.map { String(cString: $0) } ?? "",
-            vendorID: entry.vendor_id,
-            productID: entry.product_id
-        )
-        defer { free(rawDevices) }
+    private static let initialized: Void = LIBMTP_Init()
 
-        guard let device = LIBMTP_Open_Raw_Device_Uncached(rawDevices) else {
+    /// Opens the MTP device plugged in at `usb`, and no other. Its flags come from libmtp's table of devices; a
+    /// device missing from the table is first asked whether it speaks MTP at all.
+    public static func open(_ usb: USBDeviceAddress) throws -> MTPConnection {
+        _ = initialized
+        var raw = LIBMTP_raw_device_t()
+        raw.bus_location = UInt32(usb.bus)
+        raw.devnum = usb.address
+        raw.device_entry.vendor_id = usb.vendorID
+        raw.device_entry.product_id = usb.productID
+        var table: UnsafeMutablePointer<LIBMTP_device_entry_t>?
+        var count: Int32 = 0
+        var known: LIBMTP_device_entry_t?
+        if LIBMTP_Get_Supported_Devices_List(&table, &count) == 0, let table {
+            known = UnsafeBufferPointer(start: table, count: Int(count))
+                .first { $0.vendor_id == usb.vendorID && $0.product_id == usb.productID }
+        }
+        if let known {
+            raw.device_entry = known
+        } else if LIBMTP_Check_Specific_Device(Int32(usb.bus), Int32(usb.address)) == 0 {
             throw MTPError.openFailed
         }
+        guard let device = LIBMTP_Open_Raw_Device_Uncached(&raw) else {
+            throw MTPError.openFailed
+        }
+        // A device still starting up reports no storage yet.
+        guard device.pointee.storage != nil else {
+            LIBMTP_Release_Device(device)
+            throw MTPError.openFailed
+        }
+        let identity = MTPDeviceIdentity(
+            vendor: known?.vendor.map { String(cString: $0) } ?? owned(LIBMTP_Get_Manufacturername(device)),
+            product: known?.product.map { String(cString: $0) } ?? owned(LIBMTP_Get_Modelname(device)),
+            vendorID: usb.vendorID,
+            productID: usb.productID
+        )
         return MTPConnection(device: device, identity: identity)
+    }
+
+    /// Opens the first Garmin device plugged in, for the command-line tools.
+    public static func openFirstGarmin() throws -> MTPConnection {
+        guard let usb = GarminUSB.devices().first else {
+            throw MTPError.noDeviceAttached
+        }
+        return try open(usb)
+    }
+
+    /// A string libmtp allocated for the caller, freed.
+    private static func owned(_ pointer: UnsafeMutablePointer<CChar>?) -> String {
+        guard let pointer else { return "" }
+        defer { free(pointer) }
+        return String(cString: pointer)
     }
 
     /// Storage areas on the device, such as internal memory and an SD card.

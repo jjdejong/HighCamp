@@ -28,10 +28,10 @@ enum SteepStretches {
 
     private static var cache: (key: Key, result: Result)?
 
-    /// Grades are measured over this much of the line, longer than the router's 40 m: a few metres of a fine DEM
-    /// read along a line that cuts a hairpin's corner would otherwise show steep spikes. Stretches closer together
+    /// Grades are measured over this much of the line, as the router's detour passes measure them: shorter, the
+    /// elevation model's errors and a line cutting a hairpin's corner show steep spikes. Stretches closer together
     /// than this are one.
-    static let windowMeters = 100.0
+    static let windowMeters = GradeAnalysis.defaultWindowMeters
     /// Shorter stretches are left out.
     static let shortestMeters = 50.0
 

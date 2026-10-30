@@ -16,8 +16,14 @@ public struct SteepSection: Equatable, Sendable {
 }
 
 public enum GradeAnalysis {
-    /// Grades are measured over this much route, so single noisy height samples do not count.
-    public static let defaultWindowMeters = 40.0
+    /// Grades are measured over this much route, so that height errors do not count as climbs: elevation models
+    /// read along a line show bumps of 50 to 100 m that the way does not have. On the track "Wix Tranquille option
+    /// descente", which the user knows to be regular, the steepest grade read over 40 m was 30%, over 100 m 22%,
+    /// over 150 m 17%; the climb straight up beside it still read 36% over 150 m, with 1.3 km above 20%.
+    public static let defaultWindowMeters = 150.0
+    /// A stretch found steep over the window reaches as far as the grade over this much route stays steep, so that
+    /// it starts and ends where the climb does: over the long window it would start late and end early.
+    static let edgeWindowMeters = 40.0
 
     /// Road and trail grades above this are height errors (bridges, tunnels, cliff edges in the terrain
     /// model), not climbs. They are ignored rather than sent to the router as steep sections.
@@ -56,6 +62,7 @@ public enum GradeAnalysis {
     ) -> [SteepSection] {
         let grades = uphillGrades(points, distances: distances, windowMeters: windowMeters)
         guard !grades.isEmpty else { return [] }
+        let edges = uphillGrades(points, distances: distances, windowMeters: min(windowMeters, edgeWindowMeters))
 
         // Group consecutive steep points into runs.
         var runs: [(start: Int, end: Int, maxGrade: Double)] = []
@@ -76,6 +83,18 @@ public enum GradeAnalysis {
         }
         if let run = current {
             runs.append(run)
+        }
+
+        // Each run reaches as far as the climb stays steep over the short window.
+        runs = runs.map { run in
+            var run = run
+            while run.start > 0 && edges[run.start - 1] > maxGradePercent {
+                run.start -= 1
+            }
+            while run.end < edges.count - 1 && edges[run.end + 1] > maxGradePercent {
+                run.end += 1
+            }
+            return run
         }
 
         // Runs closer together than one window are one climb.

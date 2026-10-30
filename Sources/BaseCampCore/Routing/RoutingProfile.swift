@@ -20,7 +20,8 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
     /// Shorter steep stretches are accepted as they are.
     public var minimumClimbMeters: Double
     /// Climbs steeper than this, in percent, are refused whatever the detour: BRouter's `uphillmaxslope`, at a cost
-    /// so high that any way round is taken. Where there is none, the route still goes up. Nil: no such limit.
+    /// so high that any way round is taken. Where there is none, the route still goes up; with a grade limit, short
+    /// ramps get through (see `GentleClimbRouteSource`). Nil: no such limit.
     public var maxClimbPercent: Double?
     /// The BRouter profile's settings changed for this profile (see `BRouterParameters`), sent with each request.
     /// Settings left at the profile's own value are not kept. True is 1, false 0.

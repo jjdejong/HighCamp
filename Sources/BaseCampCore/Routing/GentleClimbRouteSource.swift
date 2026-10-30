@@ -23,11 +23,16 @@ public struct GentleClimbRouteSource: RouteSource {
     private let profile: RoutingProfile
     private let maxGradePercent: Double
 
-    /// Nil for a profile without a grade limit, or with a climbing limit (`maxClimbPercent`): counting climbing from
-    /// below the limit weakens BRouter's maximum slope. Over the user's 29 legs of 30 October (152 km), the maximum
-    /// slope alone kept the steepest 50 m to 24%, and with this too let 30% through.
+    /// Nil for a profile without a grade limit.
+    ///
+    /// With a climbing limit (`maxClimbPercent`) too, short ramps over it get through: BRouter weighs a slope on its
+    /// elevation buffer, which counting climbing from just below the grade limit changes. The user wants it so: on
+    /// Route 180 the climbing limit alone took 5.6 km of paved road (9.4 km), and with this too the track they meant,
+    /// "Wix Tranquille option descente" (8.3 km), whose six ramps over 20% are 50 to 90 m long, the steepest 28%.
+    /// Long steep climbs are still refused: over the user's 29 legs of 30 October (152 km), the steepest 50 m fell
+    /// from 61% to 30%, and the length over 20% from 17.6 to 6.0 km.
     public init?(profile: RoutingProfile, source: @escaping Source) {
-        guard let maxGrade = profile.maxGradePercent, profile.maxClimbPercent == nil else { return nil }
+        guard let maxGrade = profile.maxGradePercent else { return nil }
         self.source = source
         self.profile = profile
         maxGradePercent = maxGrade

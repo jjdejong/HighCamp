@@ -40,11 +40,11 @@ final class GentleClimbRouteSourceTests: XCTestCase {
             .route(via: points, nogos: [])
     }
 
-    func testAProfileWithoutAGradeLimitOrWithAClimbingLimitHasNone() {
+    func testOnlyAProfileWithAGradeLimitHasOne() {
         let fixed: GentleClimbRouteSource.Source = { _ in Fixed(length: 1, ascent: 0, fails: false) }
         XCTAssertNil(GentleClimbRouteSource(profile: RoutingProfile(name: "Flat", brouterProfile: "trekking"), source: fixed))
         let refusing = RoutingProfile(name: "MTB", brouterProfile: "mtb", maxGradePercent: 12, maxClimbPercent: 20)
-        XCTAssertNil(GentleClimbRouteSource(profile: refusing, source: fixed))
+        XCTAssertNotNil(GentleClimbRouteSource(profile: refusing, source: fixed))
     }
 
     func testSwitchbacksMayTakeTheLengthTheClimbNeedsAtTheLimit() async throws {

@@ -6,6 +6,8 @@ final class GentleClimbRouteSourceTests: XCTestCase {
     private final class Router: @unchecked Sendable {
         var lengths: [Double: Double]
         var failing: Set<Double> = []
+        /// The height the route without the climbing cost gains.
+        var ascent = 0.0
         private(set) var asked: [[String: Double]] = []
 
         init(lengths: [Double: Double]) {
@@ -14,25 +16,45 @@ final class GentleClimbRouteSourceTests: XCTestCase {
 
         func source(_ options: [String: Double]) -> RouteSource {
             asked.append(options)
-            return Fixed(length: lengths[options["uphillcost"] ?? 0], fails: failing.contains(options["uphillcost"] ?? 0))
+            let strength = options["uphillcost"] ?? 0
+            return Fixed(length: lengths[strength], ascent: strength == 0 ? ascent : 0, fails: failing.contains(strength))
         }
     }
 
     private struct Fixed: RouteSource {
         let length: Double?
+        let ascent: Double
         let fails: Bool
 
         func route(via points: [Coordinate], nogos: [NoGo]) async throws -> RouteGeometry {
             guard let length, !fails else { throw RouteError.noRoute("none") }
-            return RouteGeometry(points: [], lengthMeters: length, ascentMeters: 0)
+            return RouteGeometry(points: [], lengthMeters: length, ascentMeters: ascent)
         }
     }
 
     private let points = [Coordinate(latitude: 45.17, longitude: 5.55), Coordinate(latitude: 45.2, longitude: 5.59)]
 
     private func route(_ router: Router, maxGrade: Double = 12, maxDetour: Double = 50) async throws -> RouteGeometry {
-        try await GentleClimbRouteSource(maxGradePercent: maxGrade, maxDetourPercent: maxDetour) { router.source($0) }
+        let profile = RoutingProfile(name: "MTB", brouterProfile: "mtb", maxGradePercent: maxGrade, maxDetourPercent: maxDetour)
+        return try await XCTUnwrap(GentleClimbRouteSource(profile: profile) { router.source($0) })
             .route(via: points, nogos: [])
+    }
+
+    func testAProfileWithoutAGradeLimitOrWithAClimbingLimitHasNone() {
+        let fixed: GentleClimbRouteSource.Source = { _ in Fixed(length: 1, ascent: 0, fails: false) }
+        XCTAssertNil(GentleClimbRouteSource(profile: RoutingProfile(name: "Flat", brouterProfile: "trekking"), source: fixed))
+        let refusing = RoutingProfile(name: "MTB", brouterProfile: "mtb", maxGradePercent: 12, maxClimbPercent: 20)
+        XCTAssertNil(GentleClimbRouteSource(profile: refusing, source: fixed))
+    }
+
+    func testSwitchbacksMayTakeTheLengthTheClimbNeedsAtTheLimit() async throws {
+        // Route 180's second leg: 4361 m straight up 449 m, 8311 m by the switchbacks; 50% alone allows 6542 m.
+        let router = Router(lengths: [0: 4361, 1000: 8311, 600: 8311, 300: 6567])
+        router.ascent = 449
+        let route = try await route(router)
+        XCTAssertEqual(route.lengthMeters, 8311)
+        let profile = RoutingProfile(name: "MTB", brouterProfile: "mtb", maxGradePercent: 12, maxDetourPercent: 50)
+        XCTAssertEqual(profile.longestDetour(directMeters: 4361, ascentMeters: 449), 4361 * 1.5 + 449 / 0.12, accuracy: 0.01)
     }
 
     func testClimbingIsCountedFromJustBelowTheLimit() {

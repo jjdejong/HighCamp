@@ -79,5 +79,17 @@ final class BRouterParameterTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(RoutingProfile.self, from: JSONEncoder().encode(profile)).brouterOptions, ["iswet": 1])
         let old = #"{"id":"6A1F0C3E-0001-4B2E-9C11-000000000001","name":"Old","brouterProfile":"mtb"}"#
         XCTAssertEqual(try JSONDecoder().decode(RoutingProfile.self, from: Data(old.utf8)).brouterOptions, [:])
+        XCTAssertNil(try JSONDecoder().decode(RoutingProfile.self, from: Data(old.utf8)).maxClimbPercent)
+    }
+
+    func testAClimbingLimitIsSentAsBRoutersMaximumSlope() throws {
+        var profile = RoutingProfile(name: "MTB", brouterProfile: "mtb", maxClimbPercent: 20, brouterOptions: ["hills": 1])
+        XCTAssertEqual(profile.requestOptions, ["uphillmaxslope": 20, "uphillmaxslopecost": 100_000, "hills": 1])
+        profile.brouterOptions["uphillmaxslopecost"] = 500
+        XCTAssertEqual(profile.requestOptions["uphillmaxslopecost"], 500, "a setting chosen for the profile wins")
+        profile.maxClimbPercent = nil
+        XCTAssertEqual(profile.requestOptions, ["hills": 1, "uphillmaxslopecost": 500])
+        XCTAssertEqual(try JSONDecoder().decode(RoutingProfile.self, from: JSONEncoder().encode(RoutingProfile(name: "A", brouterProfile: "mtb", maxClimbPercent: 18))).maxClimbPercent, 18)
+        XCTAssertEqual(RoutingProfile.defaults.filter { $0.maxGradePercent != nil }.map(\.maxClimbPercent), [20, 20])
     }
 }

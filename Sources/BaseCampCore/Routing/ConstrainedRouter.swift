@@ -34,7 +34,7 @@ public enum ConstrainedRouter {
             )
         }
 
-        let longestAllowed = direct.lengthMeters * (1 + profile.maxDetourPercent / 100)
+        let longestAllowed = profile.longestDetour(directMeters: direct.lengthMeters, ascentMeters: direct.ascentMeters)
         var best = direct
         var bestSteep = triggering(
             GradeAnalysis.steepSections(in: direct.points, maxGradePercent: maxGrade),

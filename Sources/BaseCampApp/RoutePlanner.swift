@@ -11,6 +11,7 @@ final class RoutePlanner {
     private static let profilesKey = "routing.profiles"
     private static let selectedKey = "routing.selectedProfile"
     private static let softClimbingSavedKey = "routing.softClimbingSaved"
+    private static let maxClimbKey = "routing.maxClimbAdded"
 
     /// True while the route tool bar is shown and map clicks add stops.
     var isActive = false {
@@ -38,11 +39,18 @@ final class RoutePlanner {
                 for index in loaded.indices where loaded[index].brouterProfile == "mtb" && loaded[index].brouterOptions["hills"] == nil {
                     loaded[index].brouterOptions.merge(RoutingProfile.softClimbing) { old, _ in old }
                 }
-                if loaded != saved, let data = try? JSONEncoder().encode(loaded) {
-                    UserDefaults.standard.set(data, forKey: Self.profilesKey)
+            }
+            // Once: mountain-bike profiles with a grade limit refuse climbs over 20%, as the user asked.
+            if !UserDefaults.standard.bool(forKey: Self.maxClimbKey) {
+                for index in loaded.indices where loaded[index].brouterProfile == "mtb" && loaded[index].maxGradePercent != nil {
+                    loaded[index].maxClimbPercent = loaded[index].maxClimbPercent ?? RoutingProfile.defaultMaxClimbPercent
                 }
             }
+            if loaded != saved, let data = try? JSONEncoder().encode(loaded) {
+                UserDefaults.standard.set(data, forKey: Self.profilesKey)
+            }
         }
+        UserDefaults.standard.set(true, forKey: Self.maxClimbKey)
         UserDefaults.standard.set(true, forKey: Self.softClimbingSavedKey)
         let selected = UserDefaults.standard.string(forKey: Self.selectedKey).flatMap(UUID.init(uuidString:))
         profiles = loaded
@@ -74,6 +82,7 @@ final class RoutePlanner {
             maxDetourPercent: source.maxDetourPercent,
             maxPasses: source.maxPasses,
             minimumClimbMeters: source.minimumClimbMeters,
+            maxClimbPercent: source.maxClimbPercent,
             brouterOptions: source.brouterOptions
         )
         profiles.append(copy)

@@ -19,6 +19,9 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
     /// A climb only triggers a detour when it is at least this long, in metres, above the grade limit.
     /// Shorter steep stretches are accepted as they are.
     public var minimumClimbMeters: Double
+    /// Climbs steeper than this, in percent, are refused whatever the detour: BRouter's `uphillmaxslope`, at a cost
+    /// so high that any way round is taken. Where there is none, the route still goes up. Nil: no such limit.
+    public var maxClimbPercent: Double?
     /// The BRouter profile's settings changed for this profile (see `BRouterParameters`), sent with each request.
     /// Settings left at the profile's own value are not kept. True is 1, false 0.
     public var brouterOptions: [String: Double]
@@ -34,6 +37,7 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
         maxDetourPercent: Double = 50,
         maxPasses: Int = 4,
         minimumClimbMeters: Double = RoutingProfile.defaultMinimumClimbMeters,
+        maxClimbPercent: Double? = nil,
         brouterOptions: [String: Double] = [:]
     ) {
         self.id = id
@@ -44,11 +48,12 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
         self.maxDetourPercent = maxDetourPercent
         self.maxPasses = maxPasses
         self.minimumClimbMeters = minimumClimbMeters
+        self.maxClimbPercent = maxClimbPercent
         self.brouterOptions = brouterOptions
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, brouterProfile, maxGradePercent, detoursSteepStretches, maxDetourPercent, maxPasses, minimumClimbMeters, brouterOptions
+        case id, name, brouterProfile, maxGradePercent, detoursSteepStretches, maxDetourPercent, maxPasses, minimumClimbMeters, maxClimbPercent, brouterOptions
     }
 
     /// Profiles saved before a setting existed still load, with that setting's default.
@@ -63,7 +68,32 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
         maxPasses = try values.decodeIfPresent(Int.self, forKey: .maxPasses) ?? 4
         minimumClimbMeters = try values.decodeIfPresent(Double.self, forKey: .minimumClimbMeters)
             ?? RoutingProfile.defaultMinimumClimbMeters
+        maxClimbPercent = try values.decodeIfPresent(Double.self, forKey: .maxClimbPercent)
         brouterOptions = try values.decodeIfPresent([String: Double].self, forKey: .brouterOptions) ?? [:]
+    }
+
+    /// The climbing limit mountain-bike profiles with a grade limit take.
+    public static let defaultMaxClimbPercent = 20.0
+    /// What BRouter charges for each metre climbed beyond `maxClimbPercent`: on Route 180's second leg, 1000 still
+    /// took 34% where 100000 kept to 23% (BRouter's own heights, over 50 m).
+    static let refusedClimbCost = 100_000.0
+
+    /// The settings sent with each request: the climbing limit, then the BRouter settings chosen for the profile,
+    /// which win.
+    public var requestOptions: [String: Double] {
+        var options: [String: Double] = [:]
+        if let maxClimbPercent {
+            options = ["uphillmaxslope": maxClimbPercent, "uphillmaxslopecost": Self.refusedClimbCost]
+        }
+        return options.merging(brouterOptions) { _, own in own }
+    }
+
+    /// The longest a route may be when it goes round steep climbs, against the route straight through: longer by
+    /// `maxDetourPercent`, and by the length a climb of `ascentMeters` takes at the grade limit, as switchbacks
+    /// need: a road climbing 450 m at 12% is 3.7 km long however short the way straight up.
+    public func longestDetour(directMeters: Double, ascentMeters: Double) -> Double {
+        let climb = maxGradePercent.map { ascentMeters / ($0 / 100) } ?? 0
+        return directMeters * (1 + maxDetourPercent / 100) + climb
     }
 
     /// BRouter's mtb profile counts no climbing by default (`hills` 0). With 1 each metre climbed beyond 3% costs a
@@ -77,6 +107,7 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
             name: "Mountain bike, max 12%",
             brouterProfile: "mtb",
             maxGradePercent: 12,
+            maxClimbPercent: RoutingProfile.defaultMaxClimbPercent,
             brouterOptions: RoutingProfile.softClimbing
         ),
         RoutingProfile(
@@ -84,6 +115,7 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
             name: "Mountain bike, max 15%",
             brouterProfile: "mtb",
             maxGradePercent: 15,
+            maxClimbPercent: RoutingProfile.defaultMaxClimbPercent,
             brouterOptions: RoutingProfile.softClimbing
         ),
         RoutingProfile(

@@ -667,8 +667,7 @@ final class LibraryStore {
         var found: [DeviceFileRef] = []
         for group in device.groups {
             for item in group.items where items.contains(item) {
-                if let name = group.files[item] {
-                    let file = DeviceFileRef(kind: group.kind, name: name)
+                if let file = group.files[item] {
                     if !found.contains(file) { found.append(file) }
                 }
             }
@@ -679,7 +678,7 @@ final class LibraryStore {
     /// The items read from a device file: what deleting it takes away.
     func deviceItems(in file: DeviceFileRef) -> [LibraryItem] {
         guard let group = device.groups.first(where: { $0.kind == file.kind }) else { return [] }
-        return group.items.filter { group.files[$0] == file.name }
+        return group.items.filter { group.files[$0] == file }
     }
 
     /// Asks to delete the files of the selected device items from the device. Saved locations are left out: they

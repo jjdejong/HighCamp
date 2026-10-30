@@ -1,10 +1,14 @@
 import BaseCampCore
+import BaseCampMTP
 import Foundation
 
 /// A map file on the Edge and how it got there.
 struct DeviceMap: Identifiable, Equatable, Sendable {
     let file: DeviceFile
     let kind: DeviceMapKind
+    /// The storage it is on, and whether that is the device's main one, where maps are sent; else a memory card.
+    let storage: MTPStorage
+    let onMainStorage: Bool
 
     var id: UInt32 { file.id }
 

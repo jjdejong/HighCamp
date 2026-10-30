@@ -128,7 +128,7 @@ struct MapsSheet: View {
                         .foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(map.file.name)
-                        Text(map.kindLabel)
+                        Text(deviceMaps.contains { !$0.onMainStorage } ? "\(map.kindLabel), \(map.storage.name)" : map.kindLabel)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -224,7 +224,8 @@ struct MapsSheet: View {
     // MARK: Sending
 
     private func alreadyOnDevice(_ map: MapFile) -> Bool {
-        deviceMaps.contains { $0.file.name.caseInsensitiveCompare(map.name) == .orderedSame }
+        // Maps are sent to the main storage; a memory card may hold one of the same name.
+        deviceMaps.contains { $0.onMainStorage && $0.file.name.caseInsensitiveCompare(map.name) == .orderedSame }
     }
 
     private func doesNotFit(_ map: MapFile) -> Bool {

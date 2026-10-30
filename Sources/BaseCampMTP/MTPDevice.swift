@@ -34,18 +34,25 @@ public actor MTPDevice {
         }
     }
 
-    /// Runs `work` with the connection and the device's first storage. Work runs to the end before the next starts.
-    /// The storages are read when the connection opens and by `status()`, not for each piece of work.
+    /// Runs `work` with the connection and the device's main storage (see `garminStorages`). Work runs to the end
+    /// before the next starts. The storages are read when the connection opens and by `status()`, not for each
+    /// piece of work.
     public func perform<T>(_ work: (any MTPLink, MTPStorage) throws -> T) throws -> T {
+        try performOnStorages { link, storages in try work(link, storages[0]) }
+    }
+
+    /// Runs `work` with the connection and every storage with a Garmin folder, the main one first, such as the
+    /// internal storage and a memory card.
+    public func performOnStorages<T>(_ work: (any MTPLink, [MTPStorage]) throws -> T) throws -> T {
         generation += 1
         defer { scheduleIdleClose() }
         do {
             let link = try connection()
             let storages = try storages ?? readStorages(link)
-            guard let storage = storages.first else {
+            guard !storages.isEmpty else {
                 throw MTPError.operationFailed("The device reports no storage.")
             }
-            return try work(link, storage)
+            return try work(link, storages)
         } catch {
             if !Self.isLogical(error) { close() }
             throw error
@@ -66,9 +73,24 @@ public actor MTPDevice {
     }
 
     private func readStorages(_ link: any MTPLink) throws -> [MTPStorage] {
-        let read = try link.storages()
+        let read = Self.garminStorages(try link.storages(), link)
         storages = read
         return read
+    }
+
+    /// The storages with a Garmin folder, the one whose Garmin folder holds GarminDevice.xml first: the device's
+    /// own, where courses and activities are, while a memory card holds maps and files too. A device with no Garmin
+    /// folder anywhere keeps all its storages. As the QMapShack device access on macOS does.
+    static func garminStorages(_ storages: [MTPStorage], _ link: any MTPLink) -> [MTPStorage] {
+        var main: [MTPStorage] = []
+        var others: [MTPStorage] = []
+        for storage in storages {
+            guard let garmin = try? link.entries(in: ["Garmin"], storageID: storage.id) else { continue }
+            let described = garmin.contains { !$0.isFolder && MTPTransfers.sameName($0.name, "GarminDevice.xml") }
+            if described { main.append(storage) } else { others.append(storage) }
+        }
+        let found = main + others
+        return found.isEmpty ? storages : found
     }
 
     var isOpen: Bool { link != nil }

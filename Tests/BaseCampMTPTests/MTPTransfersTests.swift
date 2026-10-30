@@ -63,12 +63,20 @@ final class FakeLink: MTPLink, @unchecked Sendable {
         enter()
         storageReads += 1
         if failStorages { throw MTPError.operationFailed("USB gone") }
-        return [MTPStorage(id: 1, name: "Internal", freeBytes: free, capacityBytes: 1 << 32)]
+        let own = MTPStorage(id: 1, name: "Internal", freeBytes: free, capacityBytes: 1 << 32)
+        guard card != nil else { return [own] }
+        let card = MTPStorage(id: 2, name: "Card", freeBytes: free, capacityBytes: 1 << 32)
+        return cardListedFirst ? [card, own] : [own, card]
     }
+
+    /// A memory card, storage 2, with its folders by path. Only listing reaches it.
+    var card: [[String]: [File]]?
+    var cardListedFirst = false
 
     func entries(in path: [String], storageID: UInt32) throws -> [MTPEntry] {
         enter()
-        guard let files = folders[path] else { throw MTPError.folderNotFound("/" + path.joined(separator: "/")) }
+        let storage = storageID == 2 ? card ?? [:] : folders
+        guard let files = storage[path] else { throw MTPError.folderNotFound("/" + path.joined(separator: "/")) }
         return files.map { MTPEntry(id: $0.id, name: $0.name, size: UInt64($0.data.count), isFolder: false) }
     }
 
@@ -317,6 +325,34 @@ final class MTPDeviceTests: XCTestCase {
         XCTAssertEqual(opener.links[0].storageReads, 1)
         _ = try await device.status()
         XCTAssertEqual(opener.links[0].storageReads, 2)
+    }
+
+    func testStoragesWithAGarminFolderComeMainFirst() async throws {
+        let link = FakeLink()
+        link.add("GarminDevice.xml", data: Data(), in: ["Garmin"])
+        link.card = [["Garmin"]: []]
+        link.cardListedFirst = true
+        XCTAssertEqual(MTPDevice.garminStorages(try link.storages(), link).map(\.id), [1, 2])
+
+        let device = MTPDevice(idleTimeout: .seconds(30)) { link }
+        let main = try await device.perform { _, storage in storage.id }
+        XCTAssertEqual(main, 1)
+        let all = try await device.performOnStorages { _, storages in storages.map(\.id) }
+        XCTAssertEqual(all, [1, 2])
+    }
+
+    func testAStorageWithoutAGarminFolderIsLeftOut() throws {
+        let link = FakeLink()
+        link.card = [["DCIM"]: []]
+        link.cardListedFirst = true
+        XCTAssertEqual(MTPDevice.garminStorages(try link.storages(), link).map(\.id), [1])
+    }
+
+    func testWithNoGarminFolderAnywhereEveryStorageIsKept() throws {
+        let link = FakeLink()
+        link.folders = [:]
+        link.card = [:]
+        XCTAssertEqual(MTPDevice.garminStorages(try link.storages(), link).map(\.id), [1, 2])
     }
 
     func testARequestErrorKeepsTheConnection() async throws {

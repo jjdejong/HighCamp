@@ -27,12 +27,14 @@ struct DeviceContents: Equatable {
     }
 }
 
-/// A file on the device: its folder and name.
+/// A file on the device: its storage, folder and name.
 struct DeviceFileRef: Hashable, Identifiable {
     let kind: DeviceGroup.Kind
     let name: String
+    /// The storage it is on, such as the internal storage or a memory card.
+    let storage: UInt32
 
-    var id: String { "\(kind.rawValue)/\(name)" }
+    var id: String { "\(storage)/\(kind.rawValue)/\(name)" }
 }
 
 /// One folder of the device and the items read from it.
@@ -79,7 +81,7 @@ struct DeviceGroup: Identifiable, Equatable {
     let kind: Kind
     var library = Library()
     /// The file on the device each item was read from. A GPX file can hold several items.
-    var files: [LibraryItem: String] = [:]
+    var files: [LibraryItem: DeviceFileRef] = [:]
 
     var id: String { kind.rawValue }
 
@@ -90,10 +92,12 @@ struct DeviceGroup: Identifiable, Equatable {
 }
 
 enum DeviceFileReader {
-    /// The items in one file from the device, with ids that stay the same each time the file is read.
-    static func items(in data: Data, file name: String, kind: DeviceGroup.Kind) -> Library {
+    /// The items in one file from the device, with ids that stay the same each time the file is read. `card` is set
+    /// for a file on a storage other than the main one, such as a memory card, to tell it from a file of the same name
+    /// on the main storage.
+    static func items(in data: Data, file name: String, kind: DeviceGroup.Kind, card: UInt32? = nil) -> Library {
         let stem = (name as NSString).deletingPathExtension
-        let key = "\(kind.rawValue)/\(name)"
+        let key = (card.map { "\($0)/" } ?? "") + "\(kind.rawValue)/\(name)"
         switch kind {
         case .courses, .activities:
             guard var track = try? FITActivity.read(data, name: stem), track.pointCount > 0 else { return Library() }

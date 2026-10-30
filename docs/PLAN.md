@@ -269,7 +269,13 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
   failures retried after 2.5, 5, 10, 20 and 40 s, then given up until it is plugged in again or Refresh is clicked.
   One device is open at a time. The status bar follows plugging in and out; Refresh reads the open device again.
   The command-line tools open the first Garmin device the same way; `EdgeProbe watch` prints plug events.
-- 3, memory cards: every storage with a Garmin folder.
+- 3, memory cards: `MTPDevice` keeps the storages with a Garmin folder, the one with Garmin/GarminDevice.xml first
+  (the main one); `perform` gives the main one, `performOnStorages` all. Courses, activities, GPX files and maps are
+  read from each, and deleted from the one they are on; sends go to the main one. A card's file copies are kept in
+  "<kind>-<storage id>". Checked with the Edge 1040 (one storage, GarminDevice.xml on it); no device with a card
+  was at hand, so the card is checked with the fake device only.
+- Not taken from QMapShack: transfers through file descriptors (HighCamp reads each upload back instead), and
+  stopping a transfer when the app quits.
 
 ## Phase C: features (Haiku after Opus has set the shape)
 
@@ -359,7 +365,7 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | BC1 | Opus | done | a059357 | File > Import BaseCamp Library: waypoints, tracks, routes (stops as via points, BaseCamp's line kept), lists and list folders; smart lists and track notes left out |
 | BC2 | Opus | done | ada6f51 | library file v3: track points and route leg shapes in "Library Lines", a file per item, written only when changed; backups are folders. BaseCamp library: file 135 → 0.9 MB, save 2.5 → 0.02 s, read 2.5 → 0.06 s (release) |
 | IC1 | Opus | done | 34617e4 | app icon: the user's picture (Artwork/AppIcon-source.png) on the macOS icon grid (Artwork/AppIcon.png); make-app-bundle.sh builds AppIcon.icns from it |
-| G8 | Opus | in progress | 72ffe44, (this commit) | 2 of 3: listings checked and remembered; the device found by USB hotplug, Garmin only (see G8) |
+| G8 | Opus | done | 72ffe44, efb2515, (this commit) | listings checked and remembered; the device found by USB hotplug, Garmin only; every storage with a Garmin folder (see G8) |
 | C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |
 | C5 | Haiku | reviewed | 2a26c42 | accepted; table next to the list; `--sidebar table` hook (debug) |
 | C7 | Haiku | reviewed | bc1a6cc, 69350e5 | accepted; follow-up C7b |

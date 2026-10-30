@@ -209,27 +209,32 @@ final class DeviceStore {
         let device = device
         let folder = cacheFolder.appendingPathComponent(deviceName)
         contentsTask = Task {
-            let listed: [(kind: DeviceGroup.Kind, files: [MTPEntry])]
+            // Each kind's folder on each storage with a Garmin folder: the main one, then a memory card.
+            let listed: [(kind: DeviceGroup.Kind, storage: UInt32, card: Bool, files: [MTPEntry])]
             do {
-                listed = try await device.perform { link, storage in
-                    DeviceGroup.Kind.allCases.map { kind in
-                        // A device without the folder (no GPX files, say) has nothing of that kind.
-                        let entries = (try? link.entries(in: kind.folder, storageID: storage.id)) ?? []
-                        let files = entries
-                            .filter { !$0.isFolder && ($0.name as NSString).pathExtension.lowercased() == kind.fileExtension }
-                            .sorted { kind == .activities ? $0.name > $1.name : $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-                        return (kind, files)
+                listed = try await device.performOnStorages { link, storages in
+                    storages.enumerated().flatMap { place, storage in
+                        DeviceGroup.Kind.allCases.map { kind in
+                            // A device without the folder (no GPX files, say) has nothing of that kind.
+                            let entries = (try? link.entries(in: kind.folder, storageID: storage.id)) ?? []
+                            let files = entries
+                                .filter { !$0.isFolder && ($0.name as NSString).pathExtension.lowercased() == kind.fileExtension }
+                                .sorted { kind == .activities ? $0.name > $1.name : $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+                            return (kind, storage.id, place > 0, files)
+                        }
                     }
                 }
             } catch {
                 return
             }
-            var groups = listed.map { DeviceGroup(kind: $0.kind) }
+            var groups = DeviceGroup.Kind.allCases.map { DeviceGroup(kind: $0) }
             let total = listed.reduce(0) { $0 + $1.files.count }
             var done = 0
             contents = DeviceContents(deviceName: deviceName, groups: groups, progress: (0, total))
-            for (index, entry) in listed.enumerated() {
-                let local = folder.appendingPathComponent(entry.kind.rawValue)
+            for entry in listed {
+                guard let index = groups.firstIndex(where: { $0.kind == entry.kind }) else { continue }
+                // A memory card's copies are kept apart from the main storage's.
+                let local = folder.appendingPathComponent(entry.kind.rawValue + (entry.card ? "-\(entry.storage)" : ""))
                 try? FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
                 Self.removeCopies(in: local, except: Set(entry.files.map(\.name)))
                 for file in entry.files {
@@ -245,14 +250,15 @@ final class DeviceStore {
                         }
                     }
                     let kind = entry.kind
+                    let card = entry.card ? entry.storage : nil
                     let items = await Task.detached(priority: .utility) {
-                        (try? Data(contentsOf: copy)).map { DeviceFileReader.items(in: $0, file: file.name, kind: kind) } ?? Library()
+                        (try? Data(contentsOf: copy)).map { DeviceFileReader.items(in: $0, file: file.name, kind: kind, card: card) } ?? Library()
                     }.value
                     groups[index].library.waypoints += items.waypoints
                     groups[index].library.routes += items.routes
                     groups[index].library.tracks += items.tracks
                     for item in DeviceGroup(kind: kind, library: items).items {
-                        groups[index].files[item] = file.name
+                        groups[index].files[item] = DeviceFileRef(kind: kind, name: file.name, storage: entry.storage)
                     }
                     done += 1
                     // Published every few files, so the sidebar fills in without redrawing for each one.
@@ -282,11 +288,11 @@ final class DeviceStore {
         guard isConnected, mapTransfer == nil, !files.isEmpty else { return }
         defer { refresh() }
         let device = device
-        try await device.perform { link, storage in
+        try await device.perform { link, _ in
             for file in files {
-                let entries = try link.entries(in: file.kind.folder, storageID: storage.id)
+                let entries = try link.entries(in: file.kind.folder, storageID: file.storage)
                 guard let entry = entries.first(where: { !$0.isFolder && $0.name == file.name }) else { continue }
-                try MTPTransfers.delete(link, entryID: entry.id, named: entry.name, in: file.kind.folder, storageID: storage.id)
+                try MTPTransfers.delete(link, entryID: entry.id, named: entry.name, in: file.kind.folder, storageID: file.storage)
             }
         }
     }
@@ -372,20 +378,27 @@ final class DeviceStore {
         }
     }
 
-    /// Every map on the device, sorted by name. Lists names and sizes only.
+    /// Every map on the device, on its main storage and on a memory card, sorted by name. Lists names and sizes only.
     func deviceMaps() async throws -> [DeviceMap] {
-        try await device.perform { link, storage in
-            let files = try link.entries(in: DeviceStore.mapsFolder, storageID: storage.id).filter { !$0.isFolder }
-            let names = Set(files.map { $0.name.lowercased() })
-            return files
-                .filter { $0.name.lowercased().hasSuffix(".img") }
-                .map { entry in
-                    DeviceMap(
-                        file: DeviceFile(id: entry.id, name: entry.name, size: entry.size),
-                        kind: DeviceMapKind.classify(name: entry.name, siblings: names)
-                    )
-                }
-                .sorted { $0.file.name.localizedStandardCompare($1.file.name) == .orderedAscending }
+        try await device.performOnStorages { link, storages in
+            try storages.enumerated().flatMap { place, storage in
+                // A memory card without a Garmin folder of maps has none.
+                let entries = place == 0 ? try link.entries(in: DeviceStore.mapsFolder, storageID: storage.id)
+                    : (try? link.entries(in: DeviceStore.mapsFolder, storageID: storage.id)) ?? []
+                let files = entries.filter { !$0.isFolder }
+                let names = Set(files.map { $0.name.lowercased() })
+                return files
+                    .filter { $0.name.lowercased().hasSuffix(".img") }
+                    .map { entry in
+                        DeviceMap(
+                            file: DeviceFile(id: entry.id, name: entry.name, size: entry.size),
+                            kind: DeviceMapKind.classify(name: entry.name, siblings: names),
+                            storage: storage,
+                            onMainStorage: place == 0
+                        )
+                    }
+            }
+            .sorted { $0.file.name.localizedStandardCompare($1.file.name) == .orderedAscending }
         }
     }
 
@@ -426,8 +439,8 @@ final class DeviceStore {
     /// Deletes a custom map from the device. Built-in and licensed maps are never deleted.
     func deleteMap(_ map: DeviceMap) async throws {
         guard map.kind.canDelete, mapTransfer == nil else { return }
-        try await device.perform { link, storage in
-            try MTPTransfers.delete(link, entryID: map.file.id, named: map.file.name, in: DeviceStore.mapsFolder, storageID: storage.id)
+        try await device.perform { link, _ in
+            try MTPTransfers.delete(link, entryID: map.file.id, named: map.file.name, in: DeviceStore.mapsFolder, storageID: map.storage.id)
         }
         refresh()
     }

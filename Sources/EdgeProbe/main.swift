@@ -15,6 +15,48 @@ let paths: [(path: [String], listAll: Bool)] = [
     (["Garmin", "CustomMaps"], true),
 ]
 
+// `EdgeProbe load FOLDER` reads the device as the app does when it connects: its storages, then every file in
+// Garmin/Courses, Garmin/Activities and Garmin/NewFiles, one piece of work each, into FOLDER, with the time taken.
+// It reads from the device and writes only the local copies.
+if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "load" {
+    let folder = URL(fileURLWithPath: CommandLine.arguments[2])
+    let device = MTPDevice()
+    let semaphore = DispatchSemaphore(value: 0)
+    Task {
+        do {
+            let start = Date()
+            let status = try await device.status()
+            print("Opened \(status.identity.product) in \(String(format: "%.2f", Date().timeIntervalSince(start))) s")
+            let listed = try await device.perform { link, storage in
+                try [["Garmin", "Courses"], ["Garmin", "Activities"], ["Garmin", "NewFiles"]].map { path in
+                    (path, try link.entries(in: path, storageID: storage.id).filter { !$0.isFolder })
+                }
+            }
+            print("Listed in \(String(format: "%.2f", Date().timeIntervalSince(start))) s")
+            var bytes: UInt64 = 0
+            var count = 0
+            for (path, files) in listed {
+                let local = folder.appendingPathComponent(path.joined(separator: "-"))
+                try FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
+                for file in files {
+                    try await device.perform { link, _ in
+                        try link.download(entryID: file.id, to: local.appendingPathComponent(file.name))
+                    }
+                    bytes += file.size
+                    count += 1
+                }
+            }
+            let seconds = Date().timeIntervalSince(start)
+            print("Read \(count) files, \(bytes) bytes, in \(String(format: "%.2f", seconds)) s")
+        } catch {
+            print("Could not load: \(error)")
+        }
+        semaphore.signal()
+    }
+    semaphore.wait()
+    exit(0)
+}
+
 // `EdgeProbe maps` lists the .img maps in Garmin/ with their size and kind. Read-only.
 if CommandLine.arguments.count == 2, CommandLine.arguments[1] == "maps" {
     do {

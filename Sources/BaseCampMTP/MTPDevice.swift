@@ -11,6 +11,7 @@ public actor MTPDevice {
     private let open: @Sendable () throws -> any MTPLink
     private let idleTimeout: Duration
     private var link: (any MTPLink)?
+    private var storages: [MTPStorage]?
     /// Counts pieces of work, so an idle close only happens when nothing ran since it was scheduled.
     private var generation = 0
 
@@ -27,19 +28,21 @@ public actor MTPDevice {
     public func status() throws -> (identity: MTPDeviceIdentity, storages: [MTPStorage]) {
         let reused = link != nil
         do {
-            return try perform { link, _ in (link.identity, try link.storages()) }
+            return try perform { link, _ in (link.identity, try readStorages(link)) }
         } catch where reused && !Self.isLogical(error) {
-            return try perform { link, _ in (link.identity, try link.storages()) }
+            return try perform { link, _ in (link.identity, try readStorages(link)) }
         }
     }
 
     /// Runs `work` with the connection and the device's first storage. Work runs to the end before the next starts.
+    /// The storages are read when the connection opens and by `status()`, not for each piece of work.
     public func perform<T>(_ work: (any MTPLink, MTPStorage) throws -> T) throws -> T {
         generation += 1
         defer { scheduleIdleClose() }
         do {
             let link = try connection()
-            guard let storage = try link.storages().first else {
+            let storages = try storages ?? readStorages(link)
+            guard let storage = storages.first else {
                 throw MTPError.operationFailed("The device reports no storage.")
             }
             return try work(link, storage)
@@ -52,6 +55,13 @@ public actor MTPDevice {
     /// Closes the connection now. The next piece of work opens a new one.
     public func close() {
         link = nil
+        storages = nil
+    }
+
+    private func readStorages(_ link: any MTPLink) throws -> [MTPStorage] {
+        let read = try link.storages()
+        storages = read
+        return read
     }
 
     var isOpen: Bool { link != nil }

@@ -29,7 +29,7 @@ public enum MTPTransfers {
 
     /// Sends a local file into `path` under `name`, then checks it on the device.
     ///
-    /// Refuses to overwrite a file with the same name, and refuses a file that does not fit in the free space.
+    /// Refuses to overwrite a file with the same name (ignoring case, as the device does), and refuses a file that does not fit in the free space.
     /// The device contents decide success, not libmtp's status. When the upload fails, is cancelled or does not
     /// match the local file, whatever arrived on the device under `name` is deleted.
     public static func upload(
@@ -41,7 +41,7 @@ public enum MTPTransfers {
         progress: ((UInt64, UInt64) -> Bool)? = nil
     ) throws {
         let existing = try link.entries(in: path, storageID: storageID)
-        guard !existing.contains(where: { !$0.isFolder && $0.name == name }) else {
+        guard !existing.contains(where: { !$0.isFolder && sameName($0.name, name) }) else {
             throw MTPError.alreadyExists(name: name, folder: display(path))
         }
         let size = try fileSize(localFile)
@@ -67,7 +67,7 @@ public enum MTPTransfers {
         }
 
         // From here on, a file under `name` is ours: the name was free before the send.
-        let remote = try link.entries(in: path, storageID: storageID).first { !$0.isFolder && $0.name == name }
+        let remote = try link.entries(in: path, storageID: storageID).first { !$0.isFolder && sameName($0.name, name) }
         if cancelled {
             if let remote { _ = link.deleteObject(remote.id) }
             throw MTPError.cancelled
@@ -108,13 +108,13 @@ public enum MTPTransfers {
     /// MTP renames are not used, because devices differ in whether they allow them. Uploads twice, which suits
     /// small files such as courses. Without an old file this is a plain upload.
     public static func replace(_ link: MTPLink, localFile: URL, in path: [String], named name: String, storageID: UInt32) throws {
-        guard let old = try link.entries(in: path, storageID: storageID).first(where: { !$0.isFolder && $0.name == name }) else {
+        guard let old = try link.entries(in: path, storageID: storageID).first(where: { !$0.isFolder && sameName($0.name, name) }) else {
             try upload(link, localFile: localFile, to: path, as: name, storageID: storageID)
             return
         }
         let temporary = temporaryName(for: name)
         try upload(link, localFile: localFile, to: path, as: temporary, storageID: storageID)
-        let staged = try link.entries(in: path, storageID: storageID).first { !$0.isFolder && $0.name == temporary }
+        let staged = try link.entries(in: path, storageID: storageID).first { !$0.isFolder && sameName($0.name, temporary) }
 
         do {
             try delete(link, entryID: old.id, named: name, in: path, storageID: storageID)
@@ -142,6 +142,11 @@ public enum MTPTransfers {
         }
     }
 
+    /// Whether two file names are the same on the device, whose storage ignores case.
+    static func sameName(_ a: String, _ b: String) -> Bool {
+        a.caseInsensitiveCompare(b) == .orderedSame
+    }
+
     /// The name a replacement is staged under. It does not end in `.fit`, so the Edge does not list it as a course.
     static func temporaryName(for name: String) -> String {
         "\(name).\(UUID().uuidString.prefix(8)).tmp"
@@ -149,7 +154,7 @@ public enum MTPTransfers {
 
     private static func removeLeftover(_ link: MTPLink, named name: String, in path: [String], storageID: UInt32) {
         guard let entries = try? link.entries(in: path, storageID: storageID),
-              let leftover = entries.first(where: { !$0.isFolder && $0.name == name }) else { return }
+              let leftover = entries.first(where: { !$0.isFolder && sameName($0.name, name) }) else { return }
         _ = link.deleteObject(leftover.id)
     }
 

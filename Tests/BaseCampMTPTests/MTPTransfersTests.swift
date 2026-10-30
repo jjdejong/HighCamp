@@ -57,8 +57,11 @@ final class FakeLink: MTPLink, @unchecked Sendable {
         folders[path]?.first { $0.name == name }
     }
 
+    private(set) var storageReads = 0
+
     func storages() throws -> [MTPStorage] {
         enter()
+        storageReads += 1
         if failStorages { throw MTPError.operationFailed("USB gone") }
         return [MTPStorage(id: 1, name: "Internal", freeBytes: free, capacityBytes: 1 << 32)]
     }
@@ -190,6 +193,15 @@ final class MTPTransfersTests: XCTestCase {
         XCTAssertTrue(link.sentNames.isEmpty)
     }
 
+    func testAnExistingFileIsFoundIgnoringCase() {
+        let link = FakeLink()
+        link.add("ride.FIT", data: Data("old".utf8), in: courses)
+        XCTAssertThrowsError(try MTPTransfers.upload(link, localFile: local, to: courses, as: "Ride.fit", storageID: 1)) {
+            XCTAssertEqual($0 as? MTPError, .alreadyExists(name: "Ride.fit", folder: "/Garmin/Courses"))
+        }
+        XCTAssertTrue(link.sentNames.isEmpty)
+    }
+
     func testAFileThatDoesNotFitIsNotSent() {
         let link = FakeLink()
         link.free = MTPTransfers.spaceMargin + UInt64(content.count) - 1
@@ -286,15 +298,25 @@ final class MTPDeviceTests: XCTestCase {
         let opener = Opener()
         let device = MTPDevice(idleTimeout: .seconds(30)) { try opener.open() }
         _ = try await device.status()
-        opener.links[0].failStorages = true
         do {
-            _ = try await device.perform { _, _ in 0 }
+            _ = try await device.perform { _, _ in throw MTPError.operationFailed("USB gone") }
             XCTFail("expected an error")
         } catch {}
         let open = await device.isOpen
         XCTAssertFalse(open)
         _ = try await device.status()
         XCTAssertEqual(opener.count, 2)
+    }
+
+    func testStoragesAreReadOncePerConnectionAndByStatus() async throws {
+        let opener = Opener()
+        let device = MTPDevice(idleTimeout: .seconds(30)) { try opener.open() }
+        for _ in 0..<5 {
+            _ = try await device.perform { _, storage in storage.id }
+        }
+        XCTAssertEqual(opener.links[0].storageReads, 1)
+        _ = try await device.status()
+        XCTAssertEqual(opener.links[0].storageReads, 2)
     }
 
     func testARequestErrorKeepsTheConnection() async throws {

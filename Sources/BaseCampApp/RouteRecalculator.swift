@@ -127,7 +127,13 @@ final class RouteRecalculator {
     }
 
     private func calculate(_ points: [Coordinate], with name: String, profile: RoutingProfile, server: URL, heights: HeightSources?) async throws -> RouteLeg {
-        let client = BRouterClient(baseURL: server, profile: name, options: profile.brouterOptions)
+        var client: RouteSource = BRouterClient(baseURL: server, profile: name, options: profile.brouterOptions)
+        // With a grade limit, BRouter is asked to keep off steeper climbs; settings the user chose for the profile win.
+        if let maxGrade = profile.maxGradePercent {
+            client = GentleClimbRouteSource(maxGradePercent: maxGrade, maxDetourPercent: profile.maxDetourPercent) { options in
+                BRouterClient(baseURL: server, profile: name, options: profile.brouterOptions.merging(options) { own, _ in own })
+            }
+        }
         // Steep stretches are judged on terrain heights, from one source for the whole leg (never mixed).
         let source: RouteSource = heights.map { heights in
             ElevatedRouteSource(base: client) { await heights.heights(for: $0, mixing: false) }

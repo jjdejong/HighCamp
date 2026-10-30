@@ -366,7 +366,8 @@ on other base maps. Compare each step with BaseCamp showing the same area (obser
 | BC2 | Opus | done | ada6f51 | library file v3: track points and route leg shapes in "Library Lines", a file per item, written only when changed; backups are folders. BaseCamp library: file 135 → 0.9 MB, save 2.5 → 0.02 s, read 2.5 → 0.06 s (release) |
 | IC1 | Opus | done | 34617e4 | app icon: the user's picture (Artwork/AppIcon-source.png) on the macOS icon grid (Artwork/AppIcon.png); make-app-bundle.sh builds AppIcon.icns from it |
 | G8 | Opus | done | 72ffe44, efb2515, 08efab3 | listings checked and remembered; the device found by USB hotplug, Garmin only; every storage with a Garmin folder (see G8) |
-| BR1 | Opus | done | (this commit) | user report: BRouter "gone". A BRouter left by a killed test run held the port, so HighCamp's own could not start. Now Java runs under a shell that ends it when HighCamp's process is gone, and a BRouter already answering at the local address is used |
+| BR1 | Opus | done | 0cbf127 | user report: BRouter "gone". A BRouter left by a killed test run held the port, so HighCamp's own could not start. Now Java runs under a shell that ends it when HighCamp's process is gone, and a BRouter already answering at the local address is used |
+| BR2 | Opus | done | (this commit) | user report: the 12% profile took the shortest way, up to 35%. The 'hills 1' step for saved profiles was never saved (done again, saved); and a profile with a grade limit now asks BRouter to count climbing from 2% below the limit (uphillcost 1000, 600, 300, the strongest within the detour limit). On the user's 26 legs of the day: above 12% 17.3 → 9.5 to 7.0 km, steepest 46 → 37 to 23% |
 | C3 | Haiku | reviewed | 2b4a79c, 5d80925, c454ae4 | accepted; follow-ups C3b, C3c |
 | C5 | Haiku | reviewed | 2a26c42 | accepted; table next to the list; `--sidebar table` hook (debug) |
 | C7 | Haiku | reviewed | bc1a6cc, 69350e5 | accepted; follow-up C7b |

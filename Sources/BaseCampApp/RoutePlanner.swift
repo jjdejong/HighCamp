@@ -10,7 +10,7 @@ import Observation
 final class RoutePlanner {
     private static let profilesKey = "routing.profiles"
     private static let selectedKey = "routing.selectedProfile"
-    private static let softClimbingKey = "routing.softClimbingAdded"
+    private static let softClimbingSavedKey = "routing.softClimbingSaved"
 
     /// True while the route tool bar is shown and map clicks add stops.
     var isActive = false {
@@ -32,14 +32,18 @@ final class RoutePlanner {
            let saved = try? JSONDecoder().decode([RoutingProfile].self, from: data), !saved.isEmpty {
             loaded = saved
             // Once: profiles saved before BRouter's climbing cost was offered take the gentle one the defaults
-            // have, as the user asked ("Use the Profile's Values" in Settings removes it).
-            if !UserDefaults.standard.bool(forKey: Self.softClimbingKey) {
+            // have, as the user asked ("Use the Profile's Values" in Settings removes it). The first version of
+            // this step did not save the profiles, so it is done once more under a second key.
+            if !UserDefaults.standard.bool(forKey: Self.softClimbingSavedKey) {
                 for index in loaded.indices where loaded[index].brouterProfile == "mtb" && loaded[index].brouterOptions["hills"] == nil {
                     loaded[index].brouterOptions.merge(RoutingProfile.softClimbing) { old, _ in old }
                 }
+                if loaded != saved, let data = try? JSONEncoder().encode(loaded) {
+                    UserDefaults.standard.set(data, forKey: Self.profilesKey)
+                }
             }
         }
-        UserDefaults.standard.set(true, forKey: Self.softClimbingKey)
+        UserDefaults.standard.set(true, forKey: Self.softClimbingSavedKey)
         let selected = UserDefaults.standard.string(forKey: Self.selectedKey).flatMap(UUID.init(uuidString:))
         profiles = loaded
         selectedProfileID = selected ?? loaded[0].id

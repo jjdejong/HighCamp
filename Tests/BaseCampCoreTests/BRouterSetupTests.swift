@@ -39,4 +39,34 @@ final class BRouterSetupTests: XCTestCase {
         // A profile without a node context gets the lines at its end.
         XCTAssertTrue(BRouterProfileText.reportingStructures("---context:way\nassign x = 1\n").hasSuffix("bridge=yes\n"))
     }
+
+    func testMountainBikeRoutesCountAsCycleRoutes() {
+        // As in BRouter's mtb profile, where the assignment spans lines and the next one is indented.
+        let mtb = """
+        ---context:way
+        assign any_cycleroute
+          switch not use_proposed_cycleroutes
+            or route_bicycle_icn=yes route_bicycle_lcn=yes
+            or route_bicycle_icn=yes|proposed route_bicycle_lcn=yes|proposed
+
+          assign nodeaccessgranted or any_cycleroute any_cn
+        ---context:node
+        """
+        let copy = BRouterProfileText.countingMountainBikeRoutes(mtb)
+        let lines = copy.components(separatedBy: "\n")
+        XCTAssertEqual(lines[1], "assign highcamp_bike_route")
+        let added = lines.firstIndex { $0.hasPrefix("assign any_cycleroute") }!
+        XCTAssertEqual(lines[added], "assign any_cycleroute or highcamp_bike_route highcamp_mtb_route")
+        XCTAssertTrue(lines[added - 1].hasPrefix("assign highcamp_mtb_route or route_mtb_=yes or route_mtb_lcn=yes"))
+        XCTAssertTrue(lines[added - 1].hasSuffix("route_mtb_mtb=yes route_bicycle_mtb=yes"))
+        XCTAssertGreaterThan(added, lines.firstIndex { $0.contains("route_bicycle_lcn=yes|proposed") }!, "after the whole old assignment")
+        XCTAssertLessThan(added, lines.firstIndex { $0.contains("assign nodeaccessgranted") }!, "before its first use")
+
+        // As in the trekking profile, with "=".
+        let trekking = "assign any_cycleroute =\n  if a then true\n  else false\n\nassign nodeaccessgranted =\n"
+        XCTAssertTrue(BRouterProfileText.countingMountainBikeRoutes(trekking).hasPrefix("assign highcamp_bike_route =\n  if a then true"))
+
+        let hiking = "---context:way\nassign x = 1\n"
+        XCTAssertEqual(BRouterProfileText.countingMountainBikeRoutes(hiking), hiking)
+    }
 }

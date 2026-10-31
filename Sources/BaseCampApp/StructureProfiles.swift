@@ -2,8 +2,8 @@ import BaseCampCore
 import CryptoKit
 import Foundation
 
-/// The profile names to ask BRouter for: a copy of each profile that also reports tunnels and bridges
-/// (`BRouterProfileText.reportingStructures`), uploaded once to each server and kept there, or the profile itself
+/// The profile names to ask BRouter for: a copy of each profile that also reports tunnels and bridges and counts
+/// mountain-bike routes as cycle routes (`BRouterProfileText.highCampCopy`), uploaded once to each server and kept there, or the profile itself
 /// when that cannot be done. BRouter keeps uploaded profiles in its `customprofiles` folder (HighCamp's own server:
 /// in HighCamp's BRouter folder).
 @MainActor
@@ -22,7 +22,7 @@ final class StructureProfiles {
     /// reads, if it is on this Mac; otherwise the profile is fetched from the server.
     func name(for profile: String, server: URL, folder: URL?) async -> String {
         guard let text = await Self.text(of: profile, server: server, folder: folder) else { return profile }
-        let copy = BRouterProfileText.reportingStructures(text)
+        let copy = BRouterProfileText.highCampCopy(text)
         let key = Self.key(server: server, profile: profile, text: copy)
         if let id = ids[key] {
             return id

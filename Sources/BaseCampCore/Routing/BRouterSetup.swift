@@ -40,4 +40,40 @@ public enum BRouterProfileText {
         }
         return profile + (profile.hasSuffix("\n") ? "" : "\n") + lines
     }
+
+    /// The tags BRouter's map data gives the ways of mountain-bike routes (OSM route=mtb relations, by network).
+    static let mountainBikeRouteTags = [
+        "route_mtb_", "route_mtb_lcn", "route_mtb_rcn", "route_mtb_ncn", "route_mtb_mtb", "route_bicycle_mtb",
+    ]
+
+    /// The profile with mountain-bike routes counted as cycle routes, so that they are preferred as these are (its
+    /// `cycleroutes_pref`, "Prefer cycle routes" in HighCamp). BRouter's bicycle profiles read only the cycle
+    /// networks (`route_bicycle_icn` to `lcn`), not mountain-bike routes. The profile's own `any_cycleroute` is
+    /// renamed and then assigned again with them. A profile without `any_cycleroute` is returned as it is.
+    public static func countingMountainBikeRoutes(_ profile: String) -> String {
+        var lines = profile.components(separatedBy: "\n")
+        func words(_ line: String) -> [Substring] { line.split(whereSeparator: \.isWhitespace) }
+        guard let start = lines.firstIndex(where: { words($0).prefix(2) == ["assign", "any_cycleroute"] }) else { return profile }
+        lines[start] = lines[start].replacingOccurrences(of: "any_cycleroute", with: "highcamp_bike_route")
+        // The assignment runs on until the next one, or the next context.
+        let next = lines[(start + 1)...].firstIndex { line in
+            words(line).first == "assign" || line.trimmingCharacters(in: .whitespaces).hasPrefix("---context")
+        } ?? lines.endIndex
+        let tags = mountainBikeRouteTags.map { "\($0)=yes" }
+        // BRouter's "or" takes two operands: "or a or b c".
+        let any = (tags.dropLast().map { "or \($0)" } + [tags.last!]).joined(separator: " ")
+        lines.insert(contentsOf: [
+            "# Added by HighCamp: mountain-bike routes count as cycle routes.",
+            "assign highcamp_mtb_route \(any)",
+            "assign any_cycleroute or highcamp_bike_route highcamp_mtb_route",
+            "",
+        ], at: next)
+        return lines.joined(separator: "\n")
+    }
+
+    /// The copy of a profile HighCamp routes with: reporting tunnels and bridges, and counting mountain-bike routes as
+    /// cycle routes.
+    public static func highCampCopy(_ profile: String) -> String {
+        countingMountainBikeRoutes(reportingStructures(profile))
+    }
 }

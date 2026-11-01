@@ -80,6 +80,7 @@ final class RoutePlanner {
             maxGradePercent: source.maxGradePercent,
             detoursSteepStretches: source.detoursSteepStretches,
             maxDetourPercent: source.maxDetourPercent,
+            minimumDetourMeters: source.minimumDetourMeters,
             maxPasses: source.maxPasses,
             minimumClimbMeters: source.minimumClimbMeters,
             maxClimbPercent: source.maxClimbPercent,

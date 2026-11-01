@@ -253,7 +253,8 @@ final class ConstrainedRouterTests: XCTestCase {
 
     func testKeepsSteepRouteWhenDetourIsTooLong() async throws {
         let router = FakeRouter(direct: steepDirect(), detour: flatDetour())
-        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, detoursSteepStretches: true, maxDetourPercent: 20)
+        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, detoursSteepStretches: true, maxDetourPercent: 20,
+                                     minimumDetourMeters: 0)
 
         let plan = try await ConstrainedRouter.plan(via: via, profile: profile, source: router)
 
@@ -339,6 +340,22 @@ final class ConstrainedRouterTests: XCTestCase {
 
         XCTAssertEqual(plan.geometry, roadRound)
         XCTAssertEqual(plan.remainingSteepSections.count, 1)
+    }
+
+    func testAShortLegMayAlwaysGoRoundByTheMinimumDetour() async throws {
+        // Stops put either side of a hairpin, 150 m apart: a steep cut straight up, and the road round, 900 m.
+        let cut = geometry(northLine(lengthMeters: 150) { d in 300 + 0.25 * d })
+        let road = geometry(northLine(lengthMeters: 900) { d in 300 + 0.0417 * d })
+        let close = [Coordinate(latitude: 45, longitude: 5), Coordinate(latitude: 45 + 150 / 111_320, longitude: 5)]
+        var profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, detoursSteepStretches: true,
+                                     maxDetourPercent: 50, minimumDetourMeters: 0, minimumClimbMeters: 50)
+        // 50% and the climb at 12% allow 150 * 1.5 + 37.5 / 0.12 = 538 m, short of the road.
+        var plan = try await ConstrainedRouter.plan(via: close, profile: profile, source: FakeRouter(direct: cut, detour: road))
+        XCTAssertEqual(plan.geometry, cut)
+        profile.minimumDetourMeters = 1000
+        plan = try await ConstrainedRouter.plan(via: close, profile: profile, source: FakeRouter(direct: cut, detour: road))
+        XCTAssertEqual(plan.geometry, road)
+        XCTAssertEqual(profile.longestDetour(directMeters: 150, ascentMeters: 37.5), 1150)
     }
 
     func testLooserLimitAcceptsTheSameClimb() async throws {

@@ -80,6 +80,7 @@ final class BRouterParameterTests: XCTestCase {
         let old = #"{"id":"6A1F0C3E-0001-4B2E-9C11-000000000001","name":"Old","brouterProfile":"mtb"}"#
         XCTAssertEqual(try JSONDecoder().decode(RoutingProfile.self, from: Data(old.utf8)).brouterOptions, [:])
         XCTAssertNil(try JSONDecoder().decode(RoutingProfile.self, from: Data(old.utf8)).maxClimbPercent)
+        XCTAssertEqual(try JSONDecoder().decode(RoutingProfile.self, from: Data(old.utf8)).minimumDetourMeters, 1000)
     }
 
     func testAClimbingLimitIsSentAsBRoutersMaximumSlope() throws {

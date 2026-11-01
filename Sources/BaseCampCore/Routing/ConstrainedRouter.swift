@@ -57,8 +57,9 @@ public enum ConstrainedRouter {
                 tried.append(section.center)
                 for radius in Set([smallRadius, radius(for: section)]).sorted() {
                     let area = NoGo(center: section.center, radiusMeters: radius)
-                    // Never put an area over a via point, or the router cannot start or finish there.
-                    guard points.allSatisfy({ Geodesy.distance(from: $0, to: area.center) > area.radiusMeters + 30 }) else { continue }
+                    // Never put an area over a via point, or the router cannot start or finish there. The margin is
+                    // small, for stops put close together either side of a hairpin.
+                    guard points.allSatisfy({ Geodesy.distance(from: $0, to: area.center) > area.radiusMeters + 10 }) else { continue }
                     guard let candidate = try? await source.route(via: points, nogos: nogos + [area]),
                           candidate.lengthMeters <= longestAllowed else { continue }
                     let steep = triggering(

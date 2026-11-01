@@ -14,6 +14,9 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
     public var detoursSteepStretches: Bool
     /// Longest allowed detour, as a percentage of the direct route.
     public var maxDetourPercent: Double
+    /// A detour may always be this much longer, in metres, however short the leg: two stops put either side of a
+    /// hairpin leave a short leg whose percentage would not reach round it.
+    public var minimumDetourMeters: Double
     /// How many avoidance passes to try before keeping the best route found.
     public var maxPasses: Int
     /// A climb only triggers a detour when it is at least this long, in metres, above the grade limit.
@@ -28,6 +31,7 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
     public var brouterOptions: [String: Double]
 
     public static let defaultMinimumClimbMeters = 300.0
+    public static let defaultMinimumDetourMeters = 1000.0
 
     public init(
         id: UUID = UUID(),
@@ -36,6 +40,7 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
         maxGradePercent: Double? = nil,
         detoursSteepStretches: Bool = false,
         maxDetourPercent: Double = 50,
+        minimumDetourMeters: Double = RoutingProfile.defaultMinimumDetourMeters,
         maxPasses: Int = 4,
         minimumClimbMeters: Double = RoutingProfile.defaultMinimumClimbMeters,
         maxClimbPercent: Double? = nil,
@@ -47,6 +52,7 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
         self.maxGradePercent = maxGradePercent
         self.detoursSteepStretches = detoursSteepStretches
         self.maxDetourPercent = maxDetourPercent
+        self.minimumDetourMeters = minimumDetourMeters
         self.maxPasses = maxPasses
         self.minimumClimbMeters = minimumClimbMeters
         self.maxClimbPercent = maxClimbPercent
@@ -54,7 +60,7 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, brouterProfile, maxGradePercent, detoursSteepStretches, maxDetourPercent, maxPasses, minimumClimbMeters, maxClimbPercent, brouterOptions
+        case id, name, brouterProfile, maxGradePercent, detoursSteepStretches, maxDetourPercent, minimumDetourMeters, maxPasses, minimumClimbMeters, maxClimbPercent, brouterOptions
     }
 
     /// Profiles saved before a setting existed still load, with that setting's default.
@@ -66,6 +72,8 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
         maxGradePercent = try values.decodeIfPresent(Double.self, forKey: .maxGradePercent)
         detoursSteepStretches = try values.decodeIfPresent(Bool.self, forKey: .detoursSteepStretches) ?? false
         maxDetourPercent = try values.decodeIfPresent(Double.self, forKey: .maxDetourPercent) ?? 50
+        minimumDetourMeters = try values.decodeIfPresent(Double.self, forKey: .minimumDetourMeters)
+            ?? RoutingProfile.defaultMinimumDetourMeters
         maxPasses = try values.decodeIfPresent(Int.self, forKey: .maxPasses) ?? 4
         minimumClimbMeters = try values.decodeIfPresent(Double.self, forKey: .minimumClimbMeters)
             ?? RoutingProfile.defaultMinimumClimbMeters
@@ -91,10 +99,11 @@ public struct RoutingProfile: Identifiable, Codable, Equatable, Sendable {
 
     /// The longest a route may be when it goes round steep climbs, against the route straight through: longer by
     /// `maxDetourPercent`, and by the length a climb of `ascentMeters` takes at the grade limit, as switchbacks
-    /// need: a road climbing 450 m at 12% is 3.7 km long however short the way straight up.
+    /// need (a road climbing 450 m at 12% is 3.7 km long however short the way straight up); and always by at least
+    /// `minimumDetourMeters`.
     public func longestDetour(directMeters: Double, ascentMeters: Double) -> Double {
         let climb = maxGradePercent.map { ascentMeters / ($0 / 100) } ?? 0
-        return directMeters * (1 + maxDetourPercent / 100) + climb
+        return max(directMeters * (1 + maxDetourPercent / 100) + climb, directMeters + minimumDetourMeters)
     }
 
     /// BRouter's mtb profile counts no climbing by default (`hills` 0). With 1 each metre climbed beyond 3% costs a

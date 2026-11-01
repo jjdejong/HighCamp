@@ -94,11 +94,11 @@ struct RoutingProfileSettings: View {
                     set: { value in planner.updateSelected { $0.maxDetourPercent = (value / 5).rounded() * 5 } }
                 ), in: 10...150, step: 5)
                 .help("How much longer a way round steep climbs may be than the way straight through, besides the length the climb takes at the limit")
-                valueSlider("Detour at least", value: String(format: "%.2g km longer", profile.minimumDetourMeters / 1000), Binding(
+                valueSlider("Always allow", value: String(format: "up to %.2g km", profile.minimumDetourMeters / 1000), Binding(
                     get: { profile.minimumDetourMeters },
                     set: { value in planner.updateSelected { $0.minimumDetourMeters = (value / 250).rounded() * 250 } }
                 ), in: 0...3000, step: 250)
-                .help("A way round may always be this much longer, however short the leg: for stops put either side of a hairpin")
+                .help("A way round may always be up to this much longer, however short the leg, as for stops put either side of a hairpin. Shorter ways round are allowed too")
                 Toggle("Detour round them automatically", isOn: Binding(
                     get: { planner.selectedProfile.detoursSteepStretches },
                     set: { on in planner.updateSelected { $0.detoursSteepStretches = on } }
@@ -261,7 +261,7 @@ struct RoutingProfileSettings: View {
                     .labelsHidden()
                 Text(value)
                     .monospacedDigit()
-                    .frame(width: 84, alignment: .trailing)
+                    .frame(width: 96, alignment: .trailing)
             }
         }
     }

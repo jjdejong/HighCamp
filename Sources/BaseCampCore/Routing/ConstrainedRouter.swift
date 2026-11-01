@@ -15,9 +15,9 @@ public struct ConstrainedRoutePlan: Equatable, Sendable {
 public enum ConstrainedRouter {
     /// Routes through `via`, then, when the profile asks for it, routes around climbs steeper than its threshold.
     ///
-    /// Each pass puts a circle over every steep section and asks the router again. A candidate is kept
-    /// only when it has less steep road and does not exceed the detour limit. The best route found is
-    /// returned, with any sections that could not be avoided.
+    /// Each pass puts a circle over one steep section at a time and asks the router again, and keeps the try with the
+    /// least steep road that does not exceed the detour limit. The best route found is returned, with any sections
+    /// that could not be avoided.
     public static func plan(
         via points: [Coordinate],
         profile: RoutingProfile,
@@ -42,32 +42,39 @@ public enum ConstrainedRouter {
         )
         var nogos: [NoGo] = []
         var passes = 0
+        var tried: [Coordinate] = []
 
+        // Each pass tries going round each steep stretch on its own, first with a small area over its middle, then
+        // with one covering it all, and keeps the try that leaves the least steep length. Going round all of them
+        // at once, or with a large area only, also shut off a way round near the stretch: on Route 180, the road
+        // whose bend a 13% path cuts, 30 m from the path.
         while !bestSteep.isEmpty && passes < profile.maxPasses {
             passes += 1
             progress("Pass \(passes): avoiding \(bestSteep.count) climb(s) above \(Int(maxGrade))%")
 
-            // Never put an area over a via point, or the router cannot start or finish there.
-            let fresh = bestSteep.map { NoGo(center: $0.center, radiusMeters: radius(for: $0)) }
-                .filter { area in points.allSatisfy { Geodesy.distance(from: $0, to: area.center) > area.radiusMeters + 30 } }
-            guard !fresh.isEmpty else { break }
-            nogos += fresh
-
-            let candidate: RouteGeometry
-            do {
-                candidate = try await source.route(via: points, nogos: nogos)
-            } catch RouteError.noRoute {
-                break
+            var bestTry: (route: RouteGeometry, steep: [SteepSection], area: NoGo)?
+            for section in bestSteep where !tried.contains(where: { Geodesy.distance(from: $0, to: section.center) < 30 }) {
+                tried.append(section.center)
+                for radius in Set([smallRadius, radius(for: section)]).sorted() {
+                    let area = NoGo(center: section.center, radiusMeters: radius)
+                    // Never put an area over a via point, or the router cannot start or finish there.
+                    guard points.allSatisfy({ Geodesy.distance(from: $0, to: area.center) > area.radiusMeters + 30 }) else { continue }
+                    guard let candidate = try? await source.route(via: points, nogos: nogos + [area]),
+                          candidate.lengthMeters <= longestAllowed else { continue }
+                    let steep = triggering(
+                        GradeAnalysis.steepSections(in: candidate.points, maxGradePercent: maxGrade),
+                        profile: profile
+                    )
+                    guard totalLength(steep) < totalLength(bestTry?.steep ?? bestSteep)
+                        || (totalLength(steep) == totalLength(bestTry?.steep ?? bestSteep)
+                            && bestTry.map { candidate.lengthMeters < $0.route.lengthMeters } ?? false) else { continue }
+                    bestTry = (candidate, steep, area)
+                }
             }
-            guard candidate.lengthMeters <= longestAllowed else { break }
-
-            let steep = triggering(
-                GradeAnalysis.steepSections(in: candidate.points, maxGradePercent: maxGrade),
-                profile: profile
-            )
-            guard totalLength(steep) < totalLength(bestSteep) else { break }
-            best = candidate
-            bestSteep = steep
+            guard let bestTry else { break }
+            nogos.append(bestTry.area)
+            best = bestTry.route
+            bestSteep = bestTry.steep
         }
 
         return ConstrainedRoutePlan(
@@ -82,6 +89,9 @@ public enum ConstrainedRouter {
     static func triggering(_ sections: [SteepSection], profile: RoutingProfile) -> [SteepSection] {
         sections.filter { $0.lengthMeters >= profile.minimumClimbMeters }
     }
+
+    /// The area tried first over a steep stretch's middle: small enough to leave a road passing close by open.
+    static let smallRadius = 30.0
 
     /// Covers the whole steep section, plus a margin so the router does not skirt its edge.
     static func radius(for section: SteepSection) -> Double {

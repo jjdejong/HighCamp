@@ -316,6 +316,31 @@ final class ConstrainedRouterTests: XCTestCase {
         XCTAssertEqual(plan.geometry, flatDetour())
     }
 
+    func testEachStretchIsTriedOnItsOwnWithASmallAreaFirst() async throws {
+        // Route 180's last leg: a climb that only a small area goes round (a road passes close by), and one that
+        // cannot be gone round within the detour limit.
+        let twoClimbs = geometry(northLine(lengthMeters: 3000) { d in
+            300 + 0.15 * min(max(d - 400, 0), 400) + 0.15 * min(max(d - 2000, 0), 400)
+        })
+        let roadRound = geometry(northLine(lengthMeters: 2900) { d in 360 + 0.15 * min(max(d - 1900, 0), 400) })
+        let farRound = geometry(northLine(lengthMeters: 9000) { _ in 300 })
+        struct Router: RouteSource {
+            let direct, roadRound, farRound: RouteGeometry
+            func route(via points: [Coordinate], nogos: [NoGo]) async throws -> RouteGeometry {
+                guard let area = nogos.last else { return direct }
+                // The first climb's middle is about 600 m along; a large area there shuts the road too.
+                let first = Geodesy.distance(from: area.center, to: Coordinate(latitude: 45 + 600 / 111_320, longitude: 5)) < 50
+                return first && area.radiusMeters <= ConstrainedRouter.smallRadius ? roadRound : farRound
+            }
+        }
+        let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 12, detoursSteepStretches: true,
+                                     maxDetourPercent: 50, minimumClimbMeters: 150)
+        let plan = try await ConstrainedRouter.plan(via: via, profile: profile, source: Router(direct: twoClimbs, roadRound: roadRound, farRound: farRound))
+
+        XCTAssertEqual(plan.geometry, roadRound)
+        XCTAssertEqual(plan.remainingSteepSections.count, 1)
+    }
+
     func testLooserLimitAcceptsTheSameClimb() async throws {
         let router = FakeRouter(direct: steepDirect(), detour: flatDetour())
         let profile = RoutingProfile(name: "test", brouterProfile: "mtb", maxGradePercent: 16, detoursSteepStretches: true)

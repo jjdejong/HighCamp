@@ -398,10 +398,7 @@ struct BaseCampCommands: Commands {
         CommandMenu("Route") {
             Button("Recalculate Route") {
                 guard case .route(let id)? = store.selection else { return }
-                // Clears the route's earlier failures too, so legs the router refused are asked again.
-                if store.markRouteForRecalculation(id, fallbackProfile: planner.selectedProfileID) {
-                    recalculator.retry(id, store: store, planner: planner, settings: routing)
-                }
+                recalculator.recalculate([id], store: store, planner: planner, settings: routing)
             }
             .disabled(!canRecalculateSelection)
             Divider()

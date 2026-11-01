@@ -1244,26 +1244,32 @@ final class LibraryStore {
         }
     }
 
-    /// Sets the routing profile a route's changed legs are recalculated with. Nothing is recalculated by this.
+    /// Sets the routing profile of a route, and marks its legs to be calculated again with it, in the same step.
     func setRouteProfile(_ route: UUID, profileID: UUID?) {
         edit("Change Routing") { library in
-            guard let routeIndex = library.routes.firstIndex(where: { $0.id == route }) else { return }
+            guard let routeIndex = library.routes.firstIndex(where: { $0.id == route }),
+                  library.routes[routeIndex].profileID != profileID else { return }
             library.routes[routeIndex].profileID = profileID
+            _ = library.routes[routeIndex].markAllLegsForRecalculation()
         }
     }
 
-    /// Marks every leg of the route to be calculated again (see `Route.markAllLegsForRecalculation`). A route without
-    /// a profile, such as an imported one, takes `fallbackProfile`, as BaseCamp recalculates with the current
-    /// activity. Returns false when the route has no legs, so nothing would be calculated.
+    /// Marks every leg of the routes to be calculated again (see `Route.markAllLegsForRecalculation`), in one step. A
+    /// route without a profile, such as an imported one, takes `fallbackProfile`, as BaseCamp recalculates with the
+    /// current activity. Returns the routes marked; one without legs is not, as nothing would be calculated.
     @discardableResult
-    func markRouteForRecalculation(_ id: UUID, fallbackProfile: UUID) -> Bool {
-        var marked = false
-        edit("Recalculate Route") { library in
-            guard let index = library.routes.firstIndex(where: { $0.id == id }), !library.routes[index].legs.isEmpty else { return }
-            if library.routes[index].profileID == nil {
-                library.routes[index].profileID = fallbackProfile
+    func markRoutesForRecalculation(_ ids: [UUID], fallbackProfile: UUID) -> [UUID] {
+        var marked: [UUID] = []
+        edit(ids.count > 1 ? "Recalculate Routes" : "Recalculate Route") { library in
+            for id in ids {
+                guard let index = library.routes.firstIndex(where: { $0.id == id }), !library.routes[index].legs.isEmpty else { continue }
+                if library.routes[index].profileID == nil {
+                    library.routes[index].profileID = fallbackProfile
+                }
+                if library.routes[index].markAllLegsForRecalculation() {
+                    marked.append(id)
+                }
             }
-            marked = library.routes[index].markAllLegsForRecalculation()
         }
         return marked
     }

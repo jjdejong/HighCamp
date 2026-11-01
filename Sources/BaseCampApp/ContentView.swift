@@ -15,6 +15,8 @@ struct ContentView: View {
     @Environment(ElevationSettings.self) private var elevation
     @Environment(DisplaySettings.self) private var display
     @State private var isDropTargeted = false
+    /// Routing profiles changed in Settings whose routes are to be calculated again.
+    @State private var editedProfiles: Set<UUID> = []
     @AppStorage("display.profileHeight") private var profileHeight = 260.0
     @State private var showMapList = false
     @State private var showPointTypes = false
@@ -274,6 +276,25 @@ struct ContentView: View {
         }
         .onChange(of: elevation.sources(maps: garminMaps), initial: true) { _, sources in
             store.heightSources = sources
+        }
+        .onChange(of: planner.profiles) { old, new in
+            // A profile's settings changed: its routes are calculated again once the changes pause, so that moving a
+            // slider does not start a calculation at each step. A new name changes no route.
+            let changed = new.filter { profile in
+                guard let before = old.first(where: { $0.id == profile.id }) else { return false }
+                var renamed = before
+                renamed.name = profile.name
+                return renamed != profile
+            }
+            editedProfiles.formUnion(changed.map(\.id))
+        }
+        .task(id: editedProfiles) {
+            guard !editedProfiles.isEmpty else { return }
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            let routes = RouteRecalculator.routes(using: editedProfiles, in: store.library)
+            editedProfiles = []
+            recalculator.recalculate(routes, store: store, planner: planner, settings: routing)
         }
         .task(id: store.revision) {
             // Legs whose stops changed are recalculated with their route's profile, in the background, with

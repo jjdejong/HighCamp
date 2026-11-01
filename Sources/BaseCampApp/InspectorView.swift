@@ -471,7 +471,7 @@ struct InspectorView: View {
         return nil
     }
 
-    /// The routing profile that recalculates a route's changed legs. Choosing one recalculates nothing by itself.
+    /// The routing profile a route is calculated with. Choosing another calculates the route again with it.
     private func routingPicker(_ route: Route) -> some View {
         Picker("Routing", selection: Binding(
             get: { route.profileID },

@@ -9,6 +9,8 @@ import SwiftUI
 struct MapPane: View {
     @Environment(LibraryStore.self) private var store
     @Environment(RoutePlanner.self) private var planner
+    @Environment(RouteRecalculator.self) private var recalculator
+    @Environment(RoutingSettings.self) private var routing
     @Environment(MapLayerSettings.self) private var layers
     @Environment(MapCoverageStore.self) private var coverage
     @Environment(MapSettings.self) private var mapSettings
@@ -428,7 +430,7 @@ struct MapPane: View {
                     store.setRouteLegsStraight(route.id, legs: legs, straight: true)
                 })
             }
-            return items
+            return items + recalculateItems(route.id)
         case .leg(let route, let leg, let coordinate):
             let straight = store.route(route)?.legs[safe: leg]?.keepsStraight ?? false
             return [
@@ -436,7 +438,7 @@ struct MapPane: View {
                 MapMenuItem(title: straight ? "Route This Leg" : "Keep This Leg Straight") {
                     store.setRouteLegsStraight(route, legs: [leg], straight: !straight)
                 },
-            ]
+            ] + recalculateItems(route)
         case .map(let coordinate):
             var items = [
                 MapMenuItem(title: "New Waypoint Here") {
@@ -455,6 +457,13 @@ struct MapPane: View {
             }
             return items
         }
+    }
+
+    /// Recalculate Route, under the other items of a route's menu.
+    private func recalculateItems(_ route: UUID) -> [MapMenuItem] {
+        [.separator, MapMenuItem(title: "Recalculate Route") {
+            recalculator.recalculate([route], store: store, planner: planner, settings: routing)
+        }]
     }
 
     /// The pale halo under a selected line: the same path, four points wider, in white. The item keeps its colour.

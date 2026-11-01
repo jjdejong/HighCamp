@@ -20,6 +20,8 @@ struct ItemsTable: View {
     @Binding var selection: Set<LibraryItem>
     /// Called for a double-click, or Zoom to Selection in a row's menu, with the rows it applies to.
     var onOpen: (Set<LibraryItem>) -> Void = { _ in }
+    /// Called for Recalculate Route in a row's menu, with the rows it applies to.
+    var onRecalculate: (Set<LibraryItem>) -> Void = { _ in }
     @State private var order = [KeyPathComparator(\ItemRow.summary.name)]
 
     var body: some View {
@@ -51,6 +53,10 @@ struct ItemsTable: View {
         .contextMenu(forSelectionType: LibraryItem.self) { items in
             if !items.isEmpty {
                 Button("Zoom to Selection") { onOpen(items) }
+            }
+            let routes = SidebarView.routes(in: items)
+            if !routes.isEmpty {
+                Button(routes.count > 1 ? "Recalculate Routes" : "Recalculate Route") { onRecalculate(items) }
             }
         } primaryAction: { items in
             onOpen(items)

@@ -55,6 +55,20 @@ final class RouteRecalculator {
         check(store: store, planner: planner, settings: settings)
     }
 
+    /// Calculates every leg of the routes again, legs the router refused before too: Recalculate Route, and after
+    /// their routing profile was changed. A route without a profile takes the planner's.
+    func recalculate(_ routes: [UUID], store: LibraryStore, planner: RoutePlanner, settings: RoutingSettings) {
+        let marked = Set(store.markRoutesForRecalculation(routes, fallbackProfile: planner.selectedProfileID))
+        guard !marked.isEmpty else { return }
+        failures = failures.filter { !marked.contains($0.key.route) }
+        check(store: store, planner: planner, settings: settings)
+    }
+
+    /// The routes whose calculated legs depend on these profiles: those that use them.
+    static func routes(using profiles: Set<UUID>, in library: Library) -> [UUID] {
+        library.routes.filter { route in route.profileID.map(profiles.contains) ?? false }.map(\.id)
+    }
+
     /// Looks for waiting legs and works through them. Called after every change to the library.
     func check(store: LibraryStore, planner: RoutePlanner, settings: RoutingSettings) {
         guard !isRunning else { return }

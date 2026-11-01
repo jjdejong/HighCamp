@@ -12,6 +12,9 @@ enum SidebarStyle {
 /// shown as a sortable table instead, and dragged onto a list in the tree.
 struct SidebarView: View {
     @Environment(LibraryStore.self) private var store
+    @Environment(RouteRecalculator.self) private var recalculator
+    @Environment(RoutePlanner.self) private var planner
+    @Environment(RoutingSettings.self) private var routing
     @State private var filter = ""
     /// The figures for the table. Worked out only while the table is shown, and again after each change to the library.
     @State private var summaries: [ItemSummary] = []
@@ -49,7 +52,7 @@ struct SidebarView: View {
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
-                ItemsTable(items: tableItems, selection: $store.selectedItems, onOpen: zoom(to:))
+                ItemsTable(items: tableItems, selection: $store.selectedItems, onOpen: zoom(to:), onRecalculate: recalculate)
                     .onDeleteCommand { store.deleteSelection() }
             } else {
                 ScrollViewReader { proxy in
@@ -163,6 +166,10 @@ struct SidebarView: View {
             Button("Zoom to Selection") { zoom(to: items) }
         }
         let library = items.filter { !store.isOnDevice($0) }
+        let routes = Self.routes(in: library)
+        if !routes.isEmpty {
+            Button(routes.count > 1 ? "Recalculate Routes" : "Recalculate Route") { recalculate(library) }
+        }
         if !library.isEmpty {
             Menu("Add to List") {
                 ForEach(store.listsByPath, id: \.id) { list in
@@ -188,6 +195,17 @@ struct SidebarView: View {
             Button("Copy to Library") { store.copyToLibrary(items) }
             Button("Delete from Device…", role: .destructive) { store.requestDeviceDeletion(items) }
         }
+    }
+
+    /// The routes among the items.
+    static func routes(in items: Set<LibraryItem>) -> [UUID] {
+        items.compactMap { if case .route(let id) = $0 { id } else { nil } }
+    }
+
+    /// Calculates the routes among the items again, with their routing profiles.
+    private func recalculate(_ items: Set<LibraryItem>) {
+        let routes = Self.routes(in: items.filter { !store.isOnDevice($0) })
+        recalculator.recalculate(routes, store: store, planner: planner, settings: routing)
     }
 
     /// Brings an item selected elsewhere, as by clicking it on the map, into view: when the selected node does not

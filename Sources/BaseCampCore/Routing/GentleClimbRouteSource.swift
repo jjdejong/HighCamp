@@ -7,14 +7,17 @@ import Foundation
 /// whichever way, so a 30% ramp costs little more than a long gentle road. Counted only from a little below the
 /// limit, it is paid on the steep stretches alone, and BRouter takes a gentler way where there is one.
 ///
-/// A strong cost can send a leg far round, so the strengths are tried from the strongest down, and the first route
-/// no longer than the profile allows (`RoutingProfile.longestDetour`, against the route without it) is taken; else
-/// that route.
+/// The route without the cost and one for each strength are asked for. Of those no longer than the profile allows
+/// (`RoutingProfile.longestDetour`, against the route without the cost), the one with the least length steeper than
+/// the climbing limit (or else the grade limit) is taken, measured on the heights the routes come with, and of
+/// those as steep the shortest. A stronger cost is not always gentler on those heights: BRouter weighs slopes on its
+/// own coarse heights, and on Route 180's last leg the strongest took 500 m at 21% where the route without the cost
+/// went up by a hairpin, at 13% at most.
 public struct GentleClimbRouteSource: RouteSource {
     /// A route source sending these settings with each request, besides the profile's own.
     public typealias Source = @Sendable (_ options: [String: Double]) -> RouteSource
 
-    /// The climbing costs tried, strongest first. On the user's legs round Grenoble (26 legs, 141 km), from 1000:
+    /// The climbing costs tried. On the user's legs round Grenoble (26 legs, 141 km), from 1000:
     /// the length above 12% fell from 17.3 to 7.0 km and the steepest 100 m from 46% to 23%, several legs getting
     /// shorter too; some legs more than doubled, which the detour limit turns down to a weaker cost.
     public static let strengths: [Double] = [1000, 600, 300]
@@ -46,13 +49,17 @@ public struct GentleClimbRouteSource: RouteSource {
     public func route(via points: [Coordinate], nogos: [NoGo]) async throws -> RouteGeometry {
         let plain = try await source([:]).route(via: points, nogos: nogos)
         let longest = profile.longestDetour(directMeters: plain.lengthMeters, ascentMeters: plain.ascentMeters)
+        var candidates = [plain]
         for strength in Self.strengths {
             let options = Self.options(maxGradePercent: maxGradePercent, strength: strength)
-            guard let gentle = try? await source(options).route(via: points, nogos: nogos) else { continue }
-            if gentle.lengthMeters <= longest {
-                return gentle
+            if let gentle = try? await source(options).route(via: points, nogos: nogos), gentle.lengthMeters <= longest {
+                candidates.append(gentle)
             }
         }
-        return plain
+        let limit = profile.maxClimbPercent ?? maxGradePercent
+        let ranked = candidates.map { route in
+            (route, steep: GradeAnalysis.steepSections(in: route.points, maxGradePercent: limit).reduce(0) { $0 + $1.lengthMeters })
+        }
+        return ranked.min { ($0.steep, $0.0.lengthMeters) < ($1.steep, $1.0.lengthMeters) }!.0
     }
 }

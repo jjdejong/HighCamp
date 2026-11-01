@@ -127,17 +127,16 @@ final class RouteRecalculator {
     }
 
     private func calculate(_ points: [Coordinate], with name: String, profile: RoutingProfile, server: URL, heights: HeightSources?) async throws -> RouteLeg {
-        var client: RouteSource = BRouterClient(baseURL: server, profile: name, options: profile.requestOptions)
-        // With a grade limit, BRouter is asked to keep off steeper climbs; settings the user chose for the profile win.
-        if let gentle = GentleClimbRouteSource(profile: profile, source: { options in
-            BRouterClient(baseURL: server, profile: name, options: profile.requestOptions.merging(options) { own, _ in own })
-        }) {
-            client = gentle
-        }
         // Steep stretches are judged on terrain heights, from one source for the whole leg (never mixed).
-        let source: RouteSource = heights.map { heights in
-            ElevatedRouteSource(base: client) { await heights.heights(for: $0, mixing: false) }
-        } ?? client
+        let elevated = { (options: [String: Double]) -> RouteSource in
+            let client = BRouterClient(baseURL: server, profile: name, options: profile.requestOptions.merging(options) { own, _ in own })
+            return heights.map { heights in
+                ElevatedRouteSource(base: client) { await heights.heights(for: $0, mixing: false) }
+            } ?? client
+        }
+        // With a grade limit, BRouter is asked to keep off steeper climbs, and the routes it gives are judged on the
+        // terrain heights; settings the user chose for the profile win.
+        let source = GentleClimbRouteSource(profile: profile, source: elevated) ?? elevated([:])
         let plan = try await ConstrainedRouter.plan(via: points, profile: profile, source: source)
         let line = plan.geometry.points.map { RoutePoint(coordinate: $0.coordinate, elevation: $0.elevation) }
         return .calculated(line: line, from: points[0], to: points[1], profileID: profile.id, structures: plan.geometry.structures)

@@ -103,7 +103,7 @@ struct RoutingProfileSettings: View {
                     valueSlider("Detour from", value: "\(Int(profile.minimumClimbMeters)) m", Binding(
                         get: { profile.minimumClimbMeters },
                         set: { value in planner.updateSelected { $0.minimumClimbMeters = (value / 50).rounded() * 50 } }
-                    ), in: 100...1000, step: 50)
+                    ), in: 50...1000, step: 50)
                     .help("How long, along the route, a steep stretch must be before a way round it is sought")
                     Stepper(value: Binding(
                         get: { profile.maxPasses },

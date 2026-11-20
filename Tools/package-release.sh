@@ -42,7 +42,9 @@ minimum="$(for file in "$app/Contents/MacOS/BaseCampApp" "$app/Contents/Framewor
 done | sort -V | tail -1)"
 plutil -replace LSMinimumSystemVersion -string "$minimum" "$app/Contents/Info.plist"
 
-# Ad hoc: there is no Developer ID. Each Mac asks once before opening it (Control-click, Open).
+# Ad hoc: there is no Developer ID, so it is not notarized and macOS blocks the first launch. Since macOS 15,
+# Control-click, Open no longer gets past that: open it once, then click Open Anyway in System Settings, Privacy &
+# Security, or remove the quarantine with `xattr -dr com.apple.quarantine HighCamp.app`.
 codesign --force --sign - "$app/Contents/Frameworks/"*
 codesign --force --sign - "$app"
 codesign --verify --deep --strict "$app"
